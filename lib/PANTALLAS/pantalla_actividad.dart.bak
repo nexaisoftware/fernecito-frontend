@@ -1,0 +1,852 @@
+/// Pantalla Actividad - Tokens reales del usuario: asistencias reservadas/aceptadas.
+library;
+
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../core/constants.dart';
+import '../core/supabase_client.dart';
+import 'pantalla_local_perfil.dart';
+import 'pantalla_pools.dart';
+
+/// Flyers mock para miniatura en cards de actividad (mismo estilo que cartelera).
+const List<String> _flyersActividadMock = [
+  'assets/imagenes/mockups/Screenshot_20260202_013949_Instagram.jpg',
+  'assets/imagenes/mockups/Screenshot_20260202_014218_Instagram.jpg',
+  'assets/imagenes/mockups/Screenshot_20260202_014730_Instagram.jpg',
+  'assets/imagenes/mockups/Screenshot_20260202_015122_Instagram.jpg',
+  'assets/imagenes/mockups/WhatsApp Image 2026-02-02 at 03.00.33.jpeg',
+];
+
+/// Avatares de locales para cards de actividad.
+const List<String> _avataresLocalesActividad = [
+  'assets/imagenes/mockups/perfiles_local/Cuatro-Catorce---Blanco.png',
+  'assets/imagenes/mockups/perfiles_local/Logo Caelia 2.png',
+  'assets/imagenes/mockups/perfiles_local/Screenshot_20260202_015301_Google.jpg',
+  'assets/imagenes/mockups/perfiles_local/Screenshot_20260202_020829_Google.jpg',
+  'assets/imagenes/mockups/perfiles_local/Screenshot_20260216_211721_Google.jpg',
+];
+
+/// Estados posibles de la solicitud (mock).
+enum EstadoSolicitud { lista, aceptada, enEspera, rechazada }
+
+/// Mock: 5 eventos de actividad.
+List<Map<String, dynamic>> _eventosActividadMock() {
+  return [
+    {
+      'id': '1',
+      'titulo': 'Noche Fernet en La Cañada',
+      'nombreLocal': 'La Cañada Bar',
+      'descripcion': 'Promo 2x1 en fernet con coca. Música en vivo y patio.',
+      'fechaHora': 'Viernes 14 Feb, 22:00',
+      'estado': EstadoSolicitud.aceptada,
+      'promos': [
+        {
+          'nombre': '2x1 Fernet',
+          'descripcion': 'Dos fernet con coca por el precio de uno. Servido en vaso alto.',
+          'fechaLimite': 'Sábado 15 Feb',
+          'horaLimite': '01:00',
+          'terminos': 'Válido solo con consumición mínima. No acumulable con otras promos. Presentar QR en barra o mencionar código Fernecito al mesero.',
+        },
+        {
+          'nombre': 'Copa gratis',
+          'descripcion': 'Una copa de bienvenida al presentar tu QR.',
+          'fechaLimite': 'Sábado 15 Feb',
+          'horaLimite': '00:30',
+          'terminos': 'Una por persona. Solo para socios Fernecito con reserva confirmada. No transferible.',
+        },
+      ],
+      'nombreEventoPool': 'Noche Fernet en La Cañada',
+    },
+    {
+      'id': '2',
+      'titulo': 'After en Mitre Bar',
+      'nombreLocal': 'Mitre Bar',
+      'descripcion': 'Entrada reducida y tragos seleccionados.',
+      'fechaHora': 'Sábado 15 Feb, 00:00',
+      'estado': EstadoSolicitud.enEspera,
+      'promos': [
+        {
+          'nombre': 'Entrada 50% off',
+          'descripcion': 'Media entrada mostrando tu reserva Fernecito.',
+          'fechaLimite': 'Sábado 15 Feb',
+          'horaLimite': '02:00',
+          'terminos': 'Válido solo con reserva previa por Fernecito. Presentar QR a la entrada. Cupos limitados.',
+        },
+      ],
+      'nombreEventoPool': 'After en Mitre Bar',
+    },
+    {
+      'id': '3',
+      'titulo': 'Brunch Dominguero - Nueva Córdoba',
+      'nombreLocal': 'Café Nueva Córdoba',
+      'descripcion': 'Brunch + mimosa. Cupos limitados.',
+      'fechaHora': 'Domingo 16 Feb, 11:00',
+      'estado': EstadoSolicitud.lista,
+      'promos': [
+        {
+          'nombre': 'Brunch completo',
+          'descripcion': 'Tostadas, huevos, frutas y café incluido.',
+          'fechaLimite': 'Domingo 16 Feb',
+          'horaLimite': '14:00',
+          'terminos': 'Incluye bebida caliente y jugo. Reserva con 24hs de anticipación. No incluye propina.',
+        },
+        {
+          'nombre': 'Mimosa',
+          'descripcion': 'Una mimosa de cortesía con el brunch.',
+          'fechaLimite': 'Domingo 16 Feb',
+          'horaLimite': '13:00',
+          'terminos': 'Una por persona. Solo mayores de 18 años. No acumulable.',
+        },
+      ],
+      'nombreEventoPool': 'Brunch Dominguero',
+    },
+    {
+      'id': '4',
+      'titulo': 'Cerveza artesanal en Antares',
+      'nombreLocal': 'Antares Córdoba',
+      'descripcion': 'Degustación de 4 estilos con tabla.',
+      'fechaHora': 'Jueves 13 Feb, 20:00',
+      'estado': EstadoSolicitud.rechazada,
+      'promos': [],
+      'nombreEventoPool': 'Cerveza artesanal Antares',
+    },
+    {
+      'id': '5',
+      'titulo': 'Karaoke en El Rincón',
+      'nombreLocal': 'El Rincón',
+      'descripcion': 'Noche de karaoke con promo en cerveza.',
+      'fechaHora': 'Sábado 22 Feb, 21:00',
+      'estado': EstadoSolicitud.aceptada,
+      'promos': [
+        {
+          'nombre': 'Pinta 2x1',
+          'descripcion': 'Dos pintas de cerveza por el precio de una durante el karaoke.',
+          'fechaLimite': 'Sábado 22 Feb',
+          'horaLimite': '02:00',
+          'terminos': 'Válido durante el horario del evento de karaoke. Cerveza de barril. Máximo 2 rounds por persona.',
+        },
+      ],
+      'nombreEventoPool': 'Karaoke en El Rincón',
+    },
+  ];
+}
+
+String _estadoTexto(EstadoSolicitud e) {
+  switch (e) {
+    case EstadoSolicitud.lista:
+      return 'Lista';
+    case EstadoSolicitud.aceptada:
+      return 'Aceptada';
+    case EstadoSolicitud.enEspera:
+      return 'En espera';
+    case EstadoSolicitud.rechazada:
+      return 'Rechazada';
+  }
+}
+
+Color _estadoColor(EstadoSolicitud e) {
+  switch (e) {
+    case EstadoSolicitud.lista:
+      return ColoresApp.principalMarca;
+    case EstadoSolicitud.aceptada:
+      return ColoresApp.principalMarca;
+    case EstadoSolicitud.enEspera:
+      return ColoresApp.promoMarca;
+    case EstadoSolicitud.rechazada:
+      return ColoresApp.peligroMarca;
+  }
+}
+
+class PantallaActividad extends StatefulWidget {
+  const PantallaActividad({super.key});
+
+  @override
+  State<PantallaActividad> createState() => _PantallaActividadState();
+}
+
+class _PantallaActividadState extends State<PantallaActividad> {
+  List<Map<String, dynamic>> _tokens = [];
+  bool _cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarActividad();
+  }
+
+  Future<void> _cargarActividad() async {
+    try {
+      final sb = ServicioSupabase().cliente;
+      final userId = sb.auth.currentUser?.id;
+      if (userId == null) { if (mounted) setState(() => _cargando = false); return; }
+
+      final rows = await sb
+          .from('tokens_asistencia')
+          .select(
+            'id_token, codigo_puerta, estado_token, fecha_expiracion, '
+            'eventos!tokens_asistencia_id_evento_fkey('
+              'id_evento, titulo_evento, descripcion_evento, url_flyer, fecha_inicio, fecha_fin, '
+              'id_local, perfiles_locales!eventos_id_local_fkey(id, nombre_local, foto_perfil_url)'
+            ')',
+          )
+          .eq('id_usuario', userId)
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+      final tokens = (rows as List).map((r) {
+        final ev = r['eventos'] as Map<String, dynamic>? ?? {};
+        final perfil = ev['perfiles_locales'] as Map<String, dynamic>?;
+        return {
+          'id_token': r['id_token'],
+          'codigo_puerta': r['codigo_puerta'] ?? '',
+          'estado_token': r['estado_token'] ?? 'pendiente',
+          'titulo': ev['titulo_evento'] ?? 'Evento',
+          'descripcion': ev['descripcion_evento'] ?? '',
+          'flyer': ev['url_flyer'] ?? '',
+          'fechaInicio': ev['fecha_inicio'],
+          'fechaFin': ev['fecha_fin'],
+          'nombreLocal': perfil?['nombre_local'] ?? 'Local',
+          'avatarLocal': perfil?['foto_perfil_url'] ?? '',
+          'idLocal': ev['id_local']?.toString() ?? perfil?['id']?.toString(),
+          'id_evento': ev['id_evento'],
+        };
+      }).toList();
+
+      setState(() { _tokens = tokens; _cargando = false; });
+    } catch (e) {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  String _estadoTextoReal(String estado) {
+    switch (estado) {
+      case 'aceptada': return 'Aceptada';
+      case 'pendiente': return 'En espera';
+      case 'canjeada': return 'Ya ingresaste';
+      case 'rechazada': return 'Rechazada';
+      default: return estado;
+    }
+  }
+
+  Color _estadoColorReal(String estado) {
+    switch (estado) {
+      case 'aceptada': return ColoresApp.principalMarca;
+      case 'pendiente': return ColoresApp.promoMarca;
+      case 'canjeada': return ColoresApp.textoSecundario;
+      case 'rechazada': return ColoresApp.peligroMarca;
+      default: return ColoresApp.textoSecundario;
+    }
+  }
+
+  String _formatearFecha(String? iso) {
+    if (iso == null) return '';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      const dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+      const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+      return '${dias[dt.weekday - 1]} ${dt.day} ${meses[dt.month - 1]}, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) { return ''; }
+  }
+
+  Future<void> _abrirMaps(BuildContext context) async {
+    final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=Cordoba+Argentina');
+    if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+  }
+
+  void _mostrarQR(BuildContext context, Map<String, dynamic> token) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => _BottomSheetContrasenaFernecito(
+        codigo: token['codigo_puerta'] as String? ?? '',
+        tituloEvento: token['titulo'] as String? ?? 'Evento',
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final padding = MediaQuery.of(context).padding;
+
+    return CupertinoPageScaffold(
+      backgroundColor: ColoresApp.fondoPrincipal,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              ColoresApp.fondoPrincipal,
+              Color.lerp(ColoresApp.fondoPrincipal, ColoresApp.principalMarca.withOpacity(0.12), 0.28)!,
+            ],
+          ),
+        ),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(child: SizedBox(height: padding.top)),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Mi actividad', style: GoogleFonts.baloo2(fontSize: 18, fontWeight: FontWeight.w800, color: ColoresApp.textoPrincipal)),
+                    if (!_cargando)
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () { setState(() => _cargando = true); _cargarActividad(); },
+                        child: const Icon(CupertinoIcons.refresh, size: 20, color: ColoresApp.textoSecundario),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            if (_cargando)
+              const SliverFillRemaining(child: Center(child: CupertinoActivityIndicator()))
+            else if (_tokens.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(CupertinoIcons.ticket, size: 64, color: ColoresApp.textoSecundario),
+                      const SizedBox(height: 16),
+                      Text('Todavía no reservaste en ningún evento', style: GoogleFonts.baloo2(fontSize: 16, color: ColoresApp.textoSecundario), textAlign: TextAlign.center),
+                      const SizedBox(height: 8),
+                      Text('Explorá la cartelera y reservá tu lugar', style: GoogleFonts.baloo2(fontSize: 13, color: ColoresApp.textoSecundario), textAlign: TextAlign.center),
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final t = _tokens[index];
+                      final estado = t['estado_token'] as String? ?? 'pendiente';
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: _CardActividad(
+                          evento: t,
+                          flyerUrl: t['flyer'] as String? ?? '',
+                          avatarLocal: t['avatarLocal'] as String? ?? '',
+                          estadoTexto: _estadoTextoReal(estado),
+                          estadoColor: _estadoColorReal(estado),
+                          fechaHora: _formatearFecha(t['fechaInicio'] as String?),
+                          codigoPuerta: t['codigo_puerta'] as String? ?? '',
+                          onAbrirQR: estado == 'aceptada' ? () => _mostrarQR(context, t) : null,
+                          onComoLlegar: () => _abrirMaps(context),
+                          onVerPerfilLocal: () {
+                            Navigator.of(context).push(CupertinoPageRoute(
+                              builder: (_) => PantallaLocalPerfil(
+                                avatarUrl: t['avatarLocal'] as String? ?? '',
+                                nombreLocal: t['nombreLocal'] as String? ?? 'Local',
+                                idLocal: t['idLocal'] as String?,
+                              ),
+                            ));
+                          },
+                        ),
+                      );
+                    },
+                    childCount: _tokens.length,
+                  ),
+                ),
+              ),
+            SliverToBoxAdapter(child: SizedBox(height: padding.bottom)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardActividad extends StatelessWidget {
+  final Map<String, dynamic> evento;
+  final String flyerUrl;
+  final String avatarLocal;
+  final String estadoTexto;
+  final Color estadoColor;
+  final String fechaHora;
+  final String codigoPuerta;
+  final VoidCallback? onAbrirQR;
+  final VoidCallback onComoLlegar;
+  final VoidCallback onVerPerfilLocal;
+
+  const _CardActividad({
+    required this.evento,
+    required this.flyerUrl,
+    required this.avatarLocal,
+    required this.estadoTexto,
+    required this.estadoColor,
+    required this.fechaHora,
+    required this.codigoPuerta,
+    required this.onAbrirQR,
+    required this.onComoLlegar,
+    required this.onVerPerfilLocal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final nombreLocal = evento['nombreLocal'] as String? ?? 'Local';
+    final dpr = MediaQuery.of(context).devicePixelRatio.clamp(1.0, 2.0);
+    final flyerCacheWidth = (80 * dpr).round();
+    final avatarCacheWidth = (20 * dpr).round();
+
+    Widget flyerWidget = flyerUrl.isNotEmpty
+        ? CachedNetworkImage(
+            imageUrl: flyerUrl,
+            fit: BoxFit.cover,
+            memCacheWidth: flyerCacheWidth,
+            width: 80,
+            height: 80 * (16 / 9),
+            placeholder: (_, __) => Container(color: ColoresApp.fondoSuperficie, child: const CupertinoActivityIndicator()),
+            errorWidget: (_, __, ___) => Container(color: ColoresApp.fondoSuperficie, child: const Icon(CupertinoIcons.photo, color: ColoresApp.textoSecundario)),
+          )
+        : Container(width: 80, height: 80 * (16 / 9), color: ColoresApp.fondoSuperficie, child: const Icon(CupertinoIcons.photo, color: ColoresApp.textoSecundario));
+
+    Widget avatarWidget = avatarLocal.isNotEmpty
+        ? CachedNetworkImage(imageUrl: avatarLocal, fit: BoxFit.cover, memCacheWidth: avatarCacheWidth, width: 20, height: 20, errorWidget: (_, __, ___) => const Icon(CupertinoIcons.building_2_fill, size: 12, color: ColoresApp.textoSecundario))
+        : const Icon(CupertinoIcons.building_2_fill, size: 12, color: ColoresApp.textoSecundario);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+      decoration: SuperficiesApp.card(radius: 20, temaTint: 0.2, sombraAlpha: 0.18, sombraBlur: 10, sombraOffsetY: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Miniatura flyer — tap abre QR si está aceptado
+              GestureDetector(
+                onTap: onAbrirQR,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(color: ColoresApp.principalMarca.withOpacity(0.45), blurRadius: 14, spreadRadius: 2),
+                      BoxShadow(color: ColoresApp.principalMarca.withOpacity(0.25), blurRadius: 24, spreadRadius: 4),
+                    ],
+                  ),
+                  child: ClipRRect(borderRadius: BorderRadius.circular(12), child: flyerWidget),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      evento['titulo'] as String? ?? 'Evento',
+                      style: GoogleFonts.baloo2(fontSize: 17, fontWeight: FontWeight.w800, color: ColoresApp.textoPrincipal, height: 1.2),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: onVerPerfilLocal,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: ColoresApp.fondoPrincipal.withOpacity(0.55),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.35)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ClipOval(child: SizedBox(width: 20, height: 20, child: avatarWidget)),
+                            const SizedBox(width: 8),
+                            Flexible(child: Text(nombreLocal, style: GoogleFonts.baloo2(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white, decoration: TextDecoration.underline, decorationColor: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (fechaHora.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: ColoresApp.principalMarca.withOpacity(0.12), borderRadius: BorderRadius.circular(10), border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.35))),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(CupertinoIcons.calendar, size: 14, color: ColoresApp.principalMarca),
+                            const SizedBox(width: 6),
+                            Text(fechaHora, style: GoogleFonts.baloo2(fontSize: 13, fontWeight: FontWeight.w700, color: ColoresApp.textoPrincipal)),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: estadoColor.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                      child: Text(estadoTexto, style: GoogleFonts.baloo2(fontSize: 11, fontWeight: FontWeight.w700, color: estadoColor)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: onComoLlegar,
+                  child: Container(
+                    decoration: BoxDecoration(color: ColoresApp.fondoSuperficie, borderRadius: BorderRadius.circular(50), border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.4))),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(CupertinoIcons.location_fill, size: 15, color: ColoresApp.principalMarca),
+                      const SizedBox(width: 5),
+                      Flexible(child: Text('Cómo llegar', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.baloo2(fontSize: 12, fontWeight: FontWeight.w700, color: ColoresApp.textoPrincipal))),
+                    ]),
+                  ),
+                ),
+              ),
+              if (onAbrirQR != null) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: onAbrirQR,
+                    child: Container(
+                      decoration: BoxDecoration(color: ColoresApp.principalMarca, borderRadius: BorderRadius.circular(50)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        const Icon(CupertinoIcons.qrcode, size: 15, color: Colors.white),
+                        const SizedBox(width: 5),
+                        Flexible(child: Text('Mi QR', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.baloo2(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white))),
+                      ]),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Bottom sheet: QR de ingreso real con codigo_puerta del token.
+class _BottomSheetContrasenaFernecito extends StatelessWidget {
+  final String codigo;
+  final String tituloEvento;
+
+  const _BottomSheetContrasenaFernecito({
+    required this.codigo,
+    this.tituloEvento = '',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+      decoration: SuperficiesApp.bottomSheet(topRadius: 20),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Tu código de ingreso',
+              style: GoogleFonts.baloo2(fontSize: 20, fontWeight: FontWeight.w800, color: ColoresApp.textoPrincipal),
+            ),
+            if (tituloEvento.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(tituloEvento, style: GoogleFonts.baloo2(fontSize: 13, color: ColoresApp.textoSecundario), maxLines: 1, overflow: TextOverflow.ellipsis),
+            ],
+            const SizedBox(height: 6),
+            Text('Mostrá el QR o dictá el código en la entrada', style: GoogleFonts.baloo2(fontSize: 13, color: ColoresApp.textoSecundario)),
+            const SizedBox(height: 20),
+            // QR real
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: ColoresApp.principalMarca.withOpacity(0.3), blurRadius: 20, spreadRadius: 2)],
+              ),
+              child: QrImageView(
+                data: codigo.isNotEmpty ? codigo : 'SIN_CODIGO',
+                version: QrVersions.auto,
+                size: 180,
+                backgroundColor: Colors.white,
+                eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black),
+                dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Código en texto grande
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              decoration: BoxDecoration(
+                color: ColoresApp.fondoPrincipal,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.5)),
+              ),
+              child: Text(
+                codigo.isNotEmpty ? codigo : '--------',
+                style: GoogleFonts.baloo2(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 8, color: ColoresApp.principalMarca),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text('Válido una sola vez', style: GoogleFonts.baloo2(fontSize: 11, color: ColoresApp.textoSecundario)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet: lista de promos con nombre, descripción, fecha límite, términos y botón "Mostrar QR".
+class _BottomSheetPromos extends StatefulWidget {
+  final Map<String, dynamic> evento;
+
+  const _BottomSheetPromos({required this.evento});
+
+  @override
+  State<_BottomSheetPromos> createState() => _BottomSheetPromosState();
+}
+
+class _BottomSheetPromosState extends State<_BottomSheetPromos> {
+  final Set<int> _expandidos = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final promos = List<Map<String, dynamic>>.from(widget.evento['promos'] as List? ?? []);
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      decoration: SuperficiesApp.bottomSheet(topRadius: 20),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 10),
+              decoration: BoxDecoration(
+                color: ColoresApp.textoSecundario.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: Row(
+                children: [
+                  Icon(CupertinoIcons.tag_fill, color: ColoresApp.principalMarca, size: 24),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Promos - ${widget.evento['titulo']}',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: ColoresApp.textoPrincipal,
+                        letterSpacing: -0.5,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                itemCount: promos.length,
+                itemBuilder: (context, index) {
+                  final p = promos[index];
+                  final expandido = _expandidos.contains(index);
+                  final fechaLimite = p['fechaLimite'] as String?;
+                  final horaLimite = p['horaLimite'] as String?;
+                  final terminos = p['terminos'] as String? ?? '';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Container(
+                      decoration: SuperficiesApp.card(
+                        radius: 18,
+                        temaTint: 0.16,
+                        sombraAlpha: 0.12,
+                        sombraBlur: 10,
+                        sombraOffsetY: 4,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  p['nombre'] as String? ?? 'Promo',
+                                  style: GoogleFonts.baloo2(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    color: ColoresApp.textoPrincipal,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  p['descripcion'] as String? ?? '',
+                                  style: GoogleFonts.baloo2(
+                                    fontSize: 14,
+                                    height: 1.4,
+                                    color: ColoresApp.textoSecundario,
+                                  ),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (fechaLimite != null || horaLimite != null) ...[
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: ColoresApp.promoMarca.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: ColoresApp.promoMarca.withOpacity(0.5)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(CupertinoIcons.clock_fill, size: 16, color: ColoresApp.promoMarca),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Válido hasta: ${fechaLimite ?? ''} ${horaLimite != null ? 'a las $horaLimite' : ''}'.trim(),
+                                          style: GoogleFonts.baloo2(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: ColoresApp.textoPrincipal,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                if (terminos.isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Términos y condiciones',
+                                    style: GoogleFonts.baloo2(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: ColoresApp.textoSecundario,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    terminos,
+                                    style: GoogleFonts.baloo2(
+                                      fontSize: 12,
+                                      height: 1.45,
+                                      color: ColoresApp.textoSecundario,
+                                    ),
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                                const SizedBox(height: 16),
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      if (expandido) {
+                                        _expandidos.remove(index);
+                                      } else {
+                                        _expandidos.add(index);
+                                      }
+                                    });
+                                  },
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          ColoresApp.principalMarca,
+                                          ColoresApp.principalMarca.withOpacity(0.85),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(50),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: ColoresApp.principalMarca.withOpacity(0.4),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          expandido ? CupertinoIcons.chevron_up_circle_fill : CupertinoIcons.qrcode,
+                                          size: 20,
+                                          color: Colors.white,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          expandido ? 'Ocultar QR' : 'Mostrar QR',
+                                          style: GoogleFonts.baloo2(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (expandido)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                              child: Container(
+                                width: 130,
+                                height: 130,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.25),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: const Center(
+                                  child: Icon(CupertinoIcons.qrcode, size: 90, color: Colors.black87),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        ),
+      ),
+    );
+  }
+}

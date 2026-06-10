@@ -1,0 +1,18 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "TEAMID.com.example.fernecitoFrontend"
+        ],
+        "components": [
+          {
+            "/": "/share-evento",
+            "comment": "Eventos compartidos: abre app nativa si esta instalada; si no, Vercel cae a PWA."
+          }
+        ]
+      }
+    ]
+  }
+}

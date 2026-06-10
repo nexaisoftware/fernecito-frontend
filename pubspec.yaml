@@ -1,0 +1,186 @@
+name: fernecito_frontend
+description: "A new Flutter project."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.7
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.8
+  
+  # Supabase para backend y autenticación
+  supabase_flutter: ^2.5.0
+  
+  # Variables de entorno (para credenciales de Supabase)
+  flutter_dotenv: ^5.1.0
+  
+  # Google Fonts para tipografía personalizada
+  google_fonts: ^6.1.0
+  
+  # Font Awesome para iconos sociales
+  font_awesome_flutter: ^10.7.0
+  
+  # Animaciones suaves
+  animations: ^2.0.11
+  
+  # Video player para fondo de video
+  video_player: ^2.8.2
+  
+  # Image picker para seleccionar fotos (cámara o galería)
+  image_picker: ^1.0.7
+  
+  # Compresión de imágenes (web + móvil, sin dart:io)
+  image: ^4.2.0
+
+  # Compresión nativa (solo móvil; squads u otros flujos legacy)
+  flutter_image_compress: ^2.1.0
+  
+  # Cache de imágenes de red (para avatares)
+  cached_network_image: ^3.3.1
+  
+  # Marquee para texto con scroll automatico
+  marquee: ^2.3.0
+
+  # Abrir URLs (Google Maps, redes, etc.)
+  url_launcher: ^6.2.5
+
+  # QR para contraseña Fernecito (mostrar código escaneable en el local)
+  qr_flutter: ^4.1.0
+
+  # Escaneo de QR de invitación de RRPP (scanner flotante en cartelera)
+  mobile_scanner: ^7.2.0
+  shared_preferences: ^2.5.4
+
+  # Input OTP de 8 dígitos (recuperación de contraseña)
+  pinput: ^6.0.2
+  app_links: ^6.4.1
+  share_plus: ^13.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  mocktail: ^0.3.0
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^6.0.0
+  
+  # Generador de iconos de app
+  flutter_launcher_icons: ^0.13.1
+  
+  # Generador de splash screen nativo
+  flutter_native_splash: ^2.4.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # Assets de la aplicación
+  assets:
+    - assets/imagenes/
+    - assets/imagenes/mockups/
+    - assets/imagenes/mockups/perfiles_local/
+    - assets/imagenes/mockups/banners&fotos/
+    - assets/videos/
+    - .env
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  # fonts:
+  #   - family: Schyler
+  #     fonts:
+  #       - asset: fonts/Schyler-Regular.ttf
+  #       - asset: fonts/Schyler-Italic.ttf
+  #         style: italic
+  #   - family: Trajan Pro
+  #     fonts:
+  #       - asset: fonts/TrajanPro.ttf
+  #       - asset: fonts/TrajanPro_Bold.ttf
+  #         weight: 700
+  #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/to/font-from-package
+
+# Configuración del icono de la app
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/imagenes/logoiconapp.png"
+  # Configuración específica para iOS
+  ios_content_json: true
+  # Configuración específica para Android
+  adaptive_icon_background: "#1DB954" # Verde brillante de botones
+  adaptive_icon_foreground: "assets/imagenes/logoiconapp.png"
+  # Remover el icono por defecto
+  remove_alpha_ios: true
+
+# Configuración del splash screen nativo
+flutter_native_splash:
+  # Color de fondo (verde brillante de botones)
+  color: "#1DB954"
+  # Imagen del splash (misma que el icono)
+  image: "assets/imagenes/logoiconapp.png"
+  # Configuración para iOS
+  ios: true
+  ios_content_mode: scaleAspectFit
+  # Configuración para Android
+  android: true
+  android_gravity: center
+  # Escala de la imagen para que sea más pequeña
+  image_dark: "assets/imagenes/logoiconapp.png"
+  # Android 12+
+  android_12:
+    image: "assets/imagenes/logoiconapp.png"
+    color: "#1DB954"
+    icon_background_color: "#1DB954"
+  # Hacer la imagen más pequeña (0.4 = 40% del tamaño)
+  web: false
+  fullscreen: true
