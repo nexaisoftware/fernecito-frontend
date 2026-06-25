@@ -142,8 +142,11 @@ class _FiltroUbicacionesSheetState extends State<_FiltroUbicacionesSheet> {
               padding: const EdgeInsets.fromLTRB(20, 4, 16, 8),
               child: Row(
                 children: [
-                  Icon(CupertinoIcons.location_solid,
-                      color: ColoresApp.principalMarca, size: 22),
+                  Icon(
+                    CupertinoIcons.location_solid,
+                    color: ColoresApp.principalMarca,
+                    size: 22,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     '¿Dónde salís?',
@@ -156,8 +159,11 @@ class _FiltroUbicacionesSheetState extends State<_FiltroUbicacionesSheet> {
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(CupertinoIcons.xmark_circle_fill,
-                        color: ColoresApp.textoSecundario, size: 22),
+                    icon: const Icon(
+                      CupertinoIcons.xmark_circle_fill,
+                      color: ColoresApp.textoSecundario,
+                      size: 22,
+                    ),
                   ),
                 ],
               ),
@@ -235,12 +241,14 @@ class _FiltroUbicacionesSheetState extends State<_FiltroUbicacionesSheet> {
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 12),
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                       margin: const EdgeInsets.only(bottom: 4),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(10),
                         color: marcada
-                            ? ColoresApp.principalMarca.withOpacity(0.12)
+                            ? ColoresApp.principalMarca.withValues(alpha: 0.12)
                             : Colors.transparent,
                       ),
                       child: Row(
@@ -275,10 +283,10 @@ class _FiltroUbicacionesSheetState extends State<_FiltroUbicacionesSheet> {
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
               decoration: BoxDecoration(
-                color: ColoresApp.fondoPrincipal.withOpacity(0.92),
+                color: ColoresApp.fondoPrincipal.withValues(alpha: 0.92),
                 border: Border(
                   top: BorderSide(
-                    color: ColoresApp.textoSecundario.withOpacity(0.15),
+                    color: ColoresApp.textoSecundario.withValues(alpha: 0.15),
                     width: 1,
                   ),
                 ),
@@ -331,7 +339,10 @@ class _SelectorUbicacionPerfilSheet extends StatefulWidget {
       _SelectorUbicacionPerfilSheetState();
 }
 
-class _SelectorUbicacionPerfilSheetState extends State<_SelectorUbicacionPerfilSheet> {
+class _SelectorUbicacionPerfilSheetState
+    extends State<_SelectorUbicacionPerfilSheet> {
+  static const double _kAlturaNavbarUI = 58.0;
+
   late String _provincia;
   String? _ciudad;
 
@@ -347,124 +358,135 @@ class _SelectorUbicacionPerfilSheetState extends State<_SelectorUbicacionPerfilS
   Widget build(BuildContext context) {
     final ciudades = UbicacionesData.ciudadesDe(_provincia);
     final altura = MediaQuery.of(context).size.height * 0.62;
+    final marginNavbar =
+        _kAlturaNavbarUI + MediaQuery.of(context).padding.bottom + 4;
 
-    return Container(
-      height: altura,
-      margin: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-      decoration: BoxDecoration(
-        color: ColoresApp.fondoPrincipal,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 200),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + marginNavbar,
       ),
-      child: Column(
-        children: [
-          const SizedBox(height: 10),
-          _HandleBar(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-            child: Text(
-              'Tu ubicación',
-              style: GoogleFonts.baloo2(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: ColoresApp.textoPrincipal,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(
-              'Así te muestran la cartelera y te encuentran en la app.',
-              style: GoogleFonts.baloo2(
-                fontSize: 13,
-                color: ColoresApp.textoSecundario,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: _DropdownProvincia(
-              valor: _provincia,
-              onChanged: (p) {
-                if (p == null) return;
-                setState(() {
-                  _provincia = p;
-                  _ciudad = null;
-                });
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: ciudades.length,
-              itemBuilder: (context, i) {
-                final c = ciudades[i];
-                final sel = _ciudad == c;
-                return CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  onPressed: () => setState(() => _ciudad = c),
-                  child: Row(
-                    children: [
-                      Icon(
-                        sel
-                            ? CupertinoIcons.checkmark_circle_fill
-                            : CupertinoIcons.circle,
-                        color: sel
-                            ? ColoresApp.principalMarca
-                            : ColoresApp.textoSecundario,
-                        size: 22,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          c,
-                          style: GoogleFonts.baloo2(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: ColoresApp.textoPrincipal,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: ColoresApp.principalMarca,
-                disabledBackgroundColor:
-                    ColoresApp.principalMarca.withValues(alpha: 0.35),
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+      child: Container(
+        height: altura,
+        decoration: BoxDecoration(
+          color: ColoresApp.fondoPrincipal,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            _HandleBar(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+              child: Text(
+                'Tu ubicación',
+                style: GoogleFonts.baloo2(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: ColoresApp.textoPrincipal,
                 ),
               ),
-              onPressed: _ciudad == null
-                  ? null
-                  : () => Navigator.pop(
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                'Así te muestran la cartelera y te encuentran en la app.',
+                style: GoogleFonts.baloo2(
+                  fontSize: 13,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _DropdownProvincia(
+                valor: _provincia,
+                onChanged: (p) {
+                  if (p == null) return;
+                  setState(() {
+                    _provincia = p;
+                    _ciudad = null;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: ciudades.length,
+                itemBuilder: (context, i) {
+                  final c = ciudades[i];
+                  final sel = _ciudad == c;
+                  return CupertinoButton(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    onPressed: () => setState(() => _ciudad = c),
+                    child: Row(
+                      children: [
+                        Icon(
+                          sel
+                              ? CupertinoIcons.checkmark_circle_fill
+                              : CupertinoIcons.circle,
+                          color: sel
+                              ? ColoresApp.principalMarca
+                              : ColoresApp.textoSecundario,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            c,
+                            style: GoogleFonts.baloo2(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: ColoresApp.textoPrincipal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: ColoresApp.principalMarca,
+                  disabledBackgroundColor: ColoresApp.principalMarca.withValues(
+                    alpha: 0.35,
+                  ),
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: _ciudad == null
+                    ? null
+                    : () => Navigator.pop(
                         context,
                         ResultadoUbicacionPerfil(
                           provincia: _provincia,
                           ciudad: _ciudad!,
                         ),
                       ),
-              child: Text(
-                'Guardar ubicación',
-                style: GoogleFonts.baloo2(
-                  color: Colors.black,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
+                child: Text(
+                  'Guardar ubicación',
+                  style: GoogleFonts.baloo2(
+                    color: Colors.black,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -478,7 +500,7 @@ class _HandleBar extends StatelessWidget {
         width: 38,
         height: 4,
         decoration: BoxDecoration(
-          color: ColoresApp.textoSecundario.withOpacity(0.35),
+          color: ColoresApp.textoSecundario.withValues(alpha: 0.35),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -496,10 +518,10 @@ class _DropdownProvincia extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: ColoresApp.fondoSuperficie.withOpacity(0.85),
+        color: ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: ColoresApp.textoSecundario.withOpacity(0.18),
+          color: ColoresApp.textoSecundario.withValues(alpha: 0.18),
         ),
       ),
       child: DropdownButtonHideUnderline(
@@ -507,8 +529,11 @@ class _DropdownProvincia extends StatelessWidget {
           isExpanded: true,
           dropdownColor: ColoresApp.fondoSuperficie,
           value: valor,
-          icon: const Icon(CupertinoIcons.chevron_down,
-              size: 16, color: ColoresApp.textoSecundario),
+          icon: const Icon(
+            CupertinoIcons.chevron_down,
+            size: 16,
+            color: ColoresApp.textoSecundario,
+          ),
           style: GoogleFonts.baloo2(
             color: ColoresApp.textoPrincipal,
             fontSize: 15,
@@ -518,12 +543,14 @@ class _DropdownProvincia extends StatelessWidget {
             for (final p in UbicacionesData.provincias)
               DropdownMenuItem<String>(
                 value: p,
-                child: Text(p,
-                    style: GoogleFonts.baloo2(
-                      color: ColoresApp.textoPrincipal,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    )),
+                child: Text(
+                  p,
+                  style: GoogleFonts.baloo2(
+                    color: ColoresApp.textoPrincipal,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
           ],
           onChanged: onChanged,

@@ -89,66 +89,91 @@ class SkeletonPantallaCartelera extends StatelessWidget {
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
+            // Header: logo + nombre
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                 child: Row(
                   children: [
                     ShimmerBox(width: 40, height: 40, borderRadius: 12),
                     const SizedBox(width: 12),
-                    ShimmerLine(width: 120, height: 28),
+                    ShimmerLine(width: 120, height: 26),
                   ],
                 ),
               ),
             ),
+            // Fila de búsqueda: buscador (38h) + chips "Plan" / "Cuándo"
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                child: Row(
                   children: [
-                    ShimmerBox(width: double.infinity, height: 42, borderRadius: 50),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        ShimmerBox(width: 70, height: 32, borderRadius: 50),
-                        const SizedBox(width: 8),
-                        ShimmerBox(width: 80, height: 32, borderRadius: 50),
-                        const SizedBox(width: 8),
-                        ShimmerBox(width: 60, height: 32, borderRadius: 50),
-                      ],
+                    Expanded(
+                      child: ShimmerBox(
+                        width: double.infinity,
+                        height: 38,
+                        borderRadius: 19,
+                      ),
                     ),
+                    const SizedBox(width: 8),
+                    ShimmerBox(width: 64, height: 38, borderRadius: 19),
+                    const SizedBox(width: 8),
+                    ShimmerBox(width: 74, height: 38, borderRadius: 19),
                   ],
                 ),
               ),
             ),
+            // Sección TOP: título + carrusel de cards GRANDES (380h)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-                child: ShimmerLine(width: 100, height: 18),
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
+                child: ShimmerLine(width: 90, height: 16),
               ),
             ),
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 280,
+                height: 380,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: 6,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: ShimmerBox(
-                        width: 160,
-                        height: 260,
-                        borderRadius: 16,
-                      ),
-                    );
-                  },
+                  itemCount: 4,
+                  itemBuilder: (context, index) => Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: ShimmerBox(
+                      width: 240,
+                      height: 360,
+                      borderRadius: 18,
+                    ),
+                  ),
                 ),
               ),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 32)),
+            // Sección recomendados/normal: título + carrusel de cards MEDIANAS
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
+                child: ShimmerLine(width: 150, height: 16),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 285,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: 5,
+                  itemBuilder: (context, index) => Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: ShimmerBox(
+                      width: 175,
+                      height: 265,
+                      borderRadius: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
           ],
         ),
       ),

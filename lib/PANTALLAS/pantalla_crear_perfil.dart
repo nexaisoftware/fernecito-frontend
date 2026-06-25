@@ -10,6 +10,7 @@
 /// - perfil_completo = true cuando username + nombre existen
 library;
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
@@ -24,6 +25,41 @@ import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import 'pantalla_home.dart';
+
+// Textos legales mostrados en el modal de "Términos y Privacidad".
+// BORRADOR de partida — revisar con criterio legal antes de producción.
+const String _kTextoTerminos =
+    'Al crear tu perfil aceptás usar Fernecito de forma responsable.\n\n'
+    'Fernecito solo difunde eventos de terceros: no los organizamos ni nos '
+    'responsabilizamos por ellos, por las decisiones del local (como el '
+    'ingreso) ni por lo que ocurra en ellos.\n\n'
+    '• Debés brindar información veraz y tener la edad mínima requerida para usar '
+    'la app y para asistir a los eventos que reserves.\n\n'
+    '• Te comprometés a respetar a los demás usuarios y a no usar la app para '
+    'acoso, spam, estafas, suplantación de identidad ni contenido ilegal o que '
+    'infrinja derechos de terceros.\n\n'
+    '• Podemos suspender o eliminar cuentas que incumplan estas normas o que '
+    'reciban reportes fundados.\n\n'
+    '• El servicio se ofrece "tal cual", sin garantías de disponibilidad '
+    'ininterrumpida.\n\n'
+    '• Podemos actualizar estos términos; te avisaremos de los cambios '
+    'importantes dentro de la app.';
+
+const String _kTextoPrivacidad =
+    'Tu privacidad nos importa.\n\n'
+    '• Datos que usamos: nombre o apodo, edad, ciudad y provincia, foto de '
+    'perfil, email de tu cuenta y, solo si lo permitís, tus redes sociales y una '
+    'ubicación aproximada.\n\n'
+    '• Para qué los usamos: mostrar tu perfil, armar la cartelera de tu zona, '
+    'gestionar tus reservas y conectarte con otras personas y eventos.\n\n'
+    '• No vendemos tus datos a terceros. Usamos proveedores de infraestructura '
+    '(como Supabase) únicamente para operar el servicio.\n\n'
+    '• Tu perfil público muestra solo lo que elegís; podés ponerlo privado '
+    'cuando quieras.\n\n'
+    '• Podés editar tus datos o eliminar tu cuenta en cualquier momento desde '
+    '"Mi Perfil".\n\n'
+    '• Por dudas o para ejercer tus derechos sobre tus datos, escribinos desde '
+    '"Ayuda y soporte".';
 
 class PantallaCrearPerfil extends StatefulWidget {
   const PantallaCrearPerfil({super.key});
@@ -40,18 +76,24 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
   final TextEditingController _controladorTikTok = TextEditingController();
 
   // Estado
-  int? _edadSeleccionada; // Opcional
+  int? _edadSeleccionada; // Obligatorio
   Uint8List? _imagenBytes;
   bool _perfilPublico = false;
   bool _validandoUsername = false;
   bool _usernameDisponible = false;
   bool _usernameValidado = false;
   bool _guardandoPerfil = false;
+  bool _aceptoPoliticas = false; // obligatorio para crear el perfil
+
+  // Auto-validación de username (debounce + estado inline, sin diálogos).
+  Timer? _debounceUsername;
+  String? _usernameMsg;
 
   final ImagePicker _picker = ImagePicker();
 
   @override
   void dispose() {
+    _debounceUsername?.cancel();
     _controladorUsername.dispose();
     _controladorNombre.dispose();
     _controladorInstagram.dispose();
@@ -59,58 +101,65 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     super.dispose();
   }
 
-  // Validar si el username está disponible
-  Future<void> _validarUsername() async {
+  // Se llama en cada cambio del campo username. Debounce 450ms → chequeo inline.
+  void _onUsernameChanged(String _) {
+    _debounceUsername?.cancel();
+    setState(() {
+      _usernameValidado = false;
+      _usernameDisponible = false;
+      _usernameMsg = null;
+    });
+    final u = _controladorUsername.text.trim();
+    if (u.isEmpty) return;
+    _debounceUsername = Timer(
+      const Duration(milliseconds: 450),
+      _chequearUsernameInline,
+    );
+  }
+
+  // Valida formato + disponibilidad, mostrando el estado inline (sin diálogos).
+  Future<void> _chequearUsernameInline() async {
     final username = _controladorUsername.text.trim();
-
-    if (username.isEmpty) {
-      _mostrarError('Por favor ingresa un username');
-      return;
-    }
-
     if (username.length < 3) {
-      _mostrarError('El username debe tener al menos 3 caracteres');
+      setState(() {
+        _usernameValidado = true;
+        _usernameDisponible = false;
+        _usernameMsg = 'Mínimo 3 caracteres';
+      });
       return;
     }
-
     if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(username)) {
-      _mostrarError('Solo letras, números y guión bajo (_)');
+      setState(() {
+        _usernameValidado = true;
+        _usernameDisponible = false;
+        _usernameMsg = 'Solo letras, números y _';
+      });
       return;
     }
-
     setState(() {
       _validandoUsername = true;
-      _usernameValidado = false;
+      _usernameMsg = null;
     });
-
     try {
       final supabase = ServicioSupabase();
-
-      final respuesta = await supabase.cliente
+      final existe = await supabase.cliente
           .from('perfiles_usuarios')
           .select('username')
           .eq('username', username.toLowerCase())
           .maybeSingle();
-
-      if (respuesta == null) {
-        setState(() {
-          _usernameDisponible = true;
-          _usernameValidado = true;
-        });
-        _mostrarExito('¡Username disponible! 🎉');
-      } else {
-        setState(() {
-          _usernameDisponible = false;
-          _usernameValidado = true;
-        });
-        _mostrarError('Este username ya está en uso 😔');
-      }
-    } catch (error) {
-      print('❌ Error validando username: $error');
-      _mostrarError('Error al validar username. Intenta de nuevo.');
-    } finally {
+      if (!mounted) return;
       setState(() {
         _validandoUsername = false;
+        _usernameValidado = true;
+        _usernameDisponible = existe == null;
+        _usernameMsg = existe == null ? '¡Disponible!' : 'Ya está en uso';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _validandoUsername = false;
+        _usernameValidado = false;
+        _usernameMsg = 'No se pudo verificar, reintentá';
       });
     }
   }
@@ -235,6 +284,11 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     final nombreIngresado = _controladorNombre.text.trim();
     if (nombreIngresado.isEmpty) {
       _mostrarError('Por favor ingresa tu nombre o apodo');
+      return;
+    }
+
+    if (_edadSeleccionada == null) {
+      _mostrarError('Elegí tu edad para continuar');
       return;
     }
 
@@ -497,605 +551,378 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     );
   }
 
-  // Mostrar éxito
-  void _mostrarExito(String mensaje) {
-    showCupertinoDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => CupertinoAlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              CupertinoIcons.check_mark_circled,
-              color: ColoresApp.principalMarca,
-            ),
-            const SizedBox(width: 8),
-            const Text('Éxito'),
-          ],
-        ),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 8.0),
-          child: Text(mensaje),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Continuar'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.of(context).padding;
+    final size = MediaQuery.of(context).size;
+    final avatarSize = (size.width * 0.30).clamp(100.0, 132.0).toDouble();
+    final marca = ColoresApp.principalMarca;
+    final nombreOk = _controladorNombre.text.trim().isNotEmpty;
+    final puedeGuardar = _usernameValidado &&
+        _usernameDisponible &&
+        nombreOk &&
+        _edadSeleccionada != null &&
+        _aceptoPoliticas &&
+        !_guardandoPerfil;
+
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
       child: FondoGradienteFernecito(
         corto: true,
-        child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(24, padding.top + 24, 24, padding.bottom + 24),
+        child: SafeArea(
+          bottom: false,
           child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+            children: [
+              // ── Header ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(6, 4, 6, 2),
+                child: Row(
                   children: [
                     CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Icon(CupertinoIcons.back, color: ColoresApp.principalMarca),
+                      padding: const EdgeInsets.all(8),
+                      minimumSize: Size.zero,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      child: Icon(CupertinoIcons.back, color: marca),
                     ),
                     Expanded(
                       child: Text(
-                        'Crear Perfil',
-                        style: GoogleFonts.baloo2(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: ColoresApp.principalMarca,
-                        ),
+                        'Tu perfil',
                         textAlign: TextAlign.center,
+                        style: GoogleFonts.baloo2(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: ColoresApp.textoPrincipal,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 44),
                   ],
                 ),
-                const SizedBox(height: 16),
-                _construirSelectorTemaRapido(),
-                const SizedBox(height: 16),
-                // Título principal
-                Center(
-                  child: Text(
-                    'Completá tu perfil',
-                    style: GoogleFonts.baloo2(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: ColoresApp.textoPrincipal,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-
-                const SizedBox(height: 8),
-
-                // Subtítulo
-                Center(
-                  child: Text(
-                    'Solo username y nombre son obligatorios\nLo demás es opcional',
-                    style: GoogleFonts.baloo2(
-                      fontSize: 14,
-                      color: ColoresApp.textoSecundario,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // PASO 1: Usuario y Nombre (OBLIGATORIOS)
-                _construirSeccionTitulo('1. Tu identidad ⭐'),
-
-                const SizedBox(height: 16),
-
-                _construirCampoUsername(),
-
-                const SizedBox(height: 16),
-
-                _construirCampoNombre(),
-
-                const SizedBox(height: 32),
-
-                // PASO 2: Edad y Foto (OPCIONALES)
-                _construirSeccionTitulo('2. Edad y foto (opcional)'),
-
-                const SizedBox(height: 16),
-
-                _construirSelectorEdad(),
-
-                const SizedBox(height: 16),
-
-                _construirSelectorFoto(),
-
-                const SizedBox(height: 32),
-
-                // PASO 3: Perfil Público y Redes (OPCIONALES)
-                _construirSeccionTitulo('3. Perfil público (opcional)'),
-
-                const SizedBox(height: 16),
-
-                _construirSwitchPerfilPublico(),
-
-                // Campos de redes sociales (solo si perfil es público)
-                if (_perfilPublico) ...[
-                  const SizedBox(height: 16),
-                  _construirCampoInstagram(),
-                  const SizedBox(height: 16),
-                  _construirCampoTikTok(),
-                ],
-
-                const SizedBox(height: 40),
-
-                // Botón Crear Perfil
-                _construirBotonCrearPerfil(),
-
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _construirSeccionTitulo(String titulo) {
-    return Text(
-      titulo,
-      style: GoogleFonts.baloo2(
-        fontSize: 18,
-        fontWeight: FontWeight.w700,
-        color: ColoresApp.principalMarca,
-      ),
-    );
-  }
-
-  Widget _construirSelectorTemaRapido() {
-    final tema = TemaFernecito.instancia;
-    return Center(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(5, (i) {
-          final seleccionado = tema.indiceActual == i;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: GestureDetector(
-              onTap: () async {
-                await tema.establecerIndice(i);
-                if (mounted) setState(() {});
-              },
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: TemaFernecito.colores[i],
-                  border: Border.all(
-                    color: seleccionado ? Colors.white : Colors.transparent,
-                    width: 2,
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(child: _avatar(avatarSize)),
+                      const SizedBox(height: 8),
+                      Center(
+                        child: Text(
+                          _imagenBytes == null
+                              ? 'Tocá para agregar tu foto'
+                              : 'Tocá para cambiar la foto',
+                          style: GoogleFonts.baloo2(
+                            fontSize: 13,
+                            color: ColoresApp.textoSecundario,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      _seccionTema(),
+                      const SizedBox(height: 22),
+                      _label('Tu identidad'),
+                      const SizedBox(height: 8),
+                      _card([
+                        _campoUsername(),
+                        _hairline(),
+                        _campoTexto(
+                          controller: _controladorNombre,
+                          placeholder: 'Tu nombre o apodo',
+                          icono: Icon(CupertinoIcons.person_fill,
+                              size: 18, color: marca),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ]),
+                      const SizedBox(height: 18),
+                      _label('Tu edad'),
+                      const SizedBox(height: 8),
+                      _card([_filaEdad()]),
+                      const SizedBox(height: 18),
+                      _label('Privacidad'),
+                      const SizedBox(height: 8),
+                      _card([
+                        _filaSwitchPublico(),
+                        if (_perfilPublico) ...[
+                          _hairline(),
+                          _campoTexto(
+                            controller: _controladorInstagram,
+                            placeholder: 'Instagram (link o usuario)',
+                            icono: const FaIcon(FontAwesomeIcons.instagram,
+                                size: 18, color: Color(0xFFE1306C)),
+                          ),
+                          _hairline(),
+                          _campoTexto(
+                            controller: _controladorTikTok,
+                            placeholder: 'TikTok (link o usuario)',
+                            icono: const FaIcon(FontAwesomeIcons.tiktok,
+                                size: 18, color: Color(0xFF00F2EA)),
+                          ),
+                        ],
+                      ]),
+                    ],
                   ),
                 ),
               ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _construirCampoUsername() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Elige un username único',
-          style: GoogleFonts.baloo2(
-            fontSize: 14,
-            color: ColoresApp.textoSecundario,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                height: 50,
+              // ── Barra inferior con el botón (siempre visible) ──
+              Container(
+                padding: EdgeInsets.fromLTRB(20, 10, 20, padding.bottom + 12),
                 decoration: BoxDecoration(
-                  color: ColoresApp.fondoSuperficie,
-                  borderRadius: BorderRadius.circular(25),
+                  color: ColoresApp.fondoPrincipal,
+                  border: Border(
+                    top: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                  ),
                 ),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SizedBox(width: 16),
-                    Text(
-                      '@',
-                      style: GoogleFonts.baloo2(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: ColoresApp.principalMarca,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: CupertinoTextField(
-                        controller: _controladorUsername,
-                        placeholder: 'usuario',
-                        placeholderStyle: TextStyle(
-                          color: ColoresApp.textoSecundario,
-                        ),
-                        style: const TextStyle(
-                          color: ColoresApp.textoPrincipal,
-                          fontSize: 16,
-                        ),
-                        decoration: const BoxDecoration(),
-                        onChanged: (_) {
-                          setState(() {
-                            _usernameValidado = false;
-                            _usernameDisponible = false;
-                          });
-                        },
-                      ),
-                    ),
+                    _filaPoliticas(),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                  width: double.infinity,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    color: marca,
+                    disabledColor: marca.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(50),
+                    onPressed: puedeGuardar ? _crearPerfil : null,
+                    child: _guardandoPerfil
+                        ? const CupertinoActivityIndicator(color: Colors.white)
+                        : Text(
+                            'Crear mi perfil',
+                            style: GoogleFonts.baloo2(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: _validandoUsername ? null : _validarUsername,
-              child: Container(
-                width: 100,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: _validandoUsername
-                      ? ColoresApp.principalMarca.withOpacity(0.5)
-                      : ColoresApp.principalMarca,
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                child: Center(
-                  child: _validandoUsername
-                      ? const CupertinoActivityIndicator(
-                          color: ColoresApp.textoPrincipal,
-                        )
-                      : Text(
-                          'Validar',
-                          style: GoogleFonts.baloo2(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: ColoresApp.textoPrincipal,
-                          ),
-                        ),
-                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Checkbox de aceptación de políticas ──
+  Widget _filaPoliticas() {
+    final marca = ColoresApp.principalMarca;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => setState(() => _aceptoPoliticas = !_aceptoPoliticas),
+          child: Container(
+            width: 22,
+            height: 22,
+            margin: const EdgeInsets.only(top: 1),
+            decoration: BoxDecoration(
+              color: _aceptoPoliticas ? marca : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: _aceptoPoliticas
+                    ? marca
+                    : ColoresApp.textoSecundario.withValues(alpha: 0.5),
+                width: 2,
               ),
             ),
-          ],
+            child: _aceptoPoliticas
+                ? const Icon(CupertinoIcons.checkmark,
+                    size: 15, color: Colors.white)
+                : null,
+          ),
         ),
-        if (_usernameValidado)
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0, left: 16),
-            child: Row(
-              children: [
-                Icon(
-                  _usernameDisponible
-                      ? CupertinoIcons.checkmark_circle_fill
-                      : CupertinoIcons.xmark_circle_fill,
-                  color: _usernameDisponible
-                      ? ColoresApp.principalMarca
-                      : ColoresApp.peligroMarca,
-                  size: 16,
+        const SizedBox(width: 10),
+        Expanded(
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Acepto los ',
+                style: GoogleFonts.baloo2(
+                  fontSize: 12.5,
+                  color: ColoresApp.textoSecundario,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  _usernameDisponible ? '¡Disponible!' : 'Ya está en uso',
+              ),
+              GestureDetector(
+                onTap: _mostrarPoliticas,
+                child: Text(
+                  'Términos y la Política de Privacidad',
                   style: GoogleFonts.baloo2(
-                    fontSize: 13,
-                    color: _usernameDisponible
-                        ? ColoresApp.principalMarca
-                        : ColoresApp.peligroMarca,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: marca,
+                    decoration: TextDecoration.underline,
+                    decorationColor: marca,
+                  ),
+                ),
+              ),
+              Text(
+                ' de Fernecito.',
+                style: GoogleFonts.baloo2(
+                  fontSize: 12.5,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _mostrarPoliticas() {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) {
+        final marca = ColoresApp.principalMarca;
+        Widget seccion(String titulo, String cuerpo) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                titulo,
+                style: GoogleFonts.baloo2(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: ColoresApp.textoPrincipal,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                cuerpo,
+                style: GoogleFonts.baloo2(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          );
+        }
+
+        return Container(
+          height: MediaQuery.of(ctx).size.height * 0.82,
+          decoration: BoxDecoration(
+            color: ColoresApp.fondoPrincipal,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: ColoresApp.textoSecundario.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Términos y Privacidad',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: ColoresApp.textoPrincipal,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(22, 4, 22, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        seccion('Términos y Condiciones', _kTextoTerminos),
+                        seccion('Política de Privacidad', _kTextoPrivacidad),
+                        Text(
+                          'Última actualización: junio 2026.',
+                          style: GoogleFonts.baloo2(
+                            fontSize: 11,
+                            color: ColoresApp.textoSecundario
+                                .withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      color: marca,
+                      borderRadius: BorderRadius.circular(50),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(
+                        'Entendido',
+                        style: GoogleFonts.baloo2(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-      ],
+        );
+      },
     );
   }
 
-  Widget _construirCampoNombre() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Tu nombre o apodo',
-          style: GoogleFonts.baloo2(
-            fontSize: 14,
-            color: ColoresApp.textoSecundario,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: ColoresApp.fondoSuperficie,
-            borderRadius: BorderRadius.circular(25),
-          ),
-          child: CupertinoTextField(
-            controller: _controladorNombre,
-            placeholder: 'Nombre',
-            placeholderStyle: TextStyle(color: ColoresApp.textoSecundario),
-            style: const TextStyle(
-              color: ColoresApp.textoPrincipal,
-              fontSize: 16,
+  // ── Avatar editable ──
+  Widget _avatar(double size) {
+    final marca = ColoresApp.principalMarca;
+    return GestureDetector(
+      onTap: _mostrarOpcionesFoto,
+      child: Stack(
+        children: [
+          Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: ColoresApp.fondoSuperficie,
+              border: Border.all(color: marca.withValues(alpha: 0.5), width: 2),
             ),
-            decoration: const BoxDecoration(),
+            clipBehavior: Clip.antiAlias,
+            child: _imagenBytes != null
+                ? Image.memory(_imagenBytes!, fit: BoxFit.cover)
+                : Icon(CupertinoIcons.person_fill,
+                    size: size * 0.5,
+                    color: ColoresApp.textoSecundario.withValues(alpha: 0.7)),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _construirSelectorEdad() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Tu edad',
-              style: GoogleFonts.baloo2(
-                fontSize: 14,
-                color: ColoresApp.textoSecundario,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: ColoresApp.promoMarca.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'opcional',
-                style: GoogleFonts.baloo2(
-                  fontSize: 11,
-                  color: ColoresApp.promoMarca,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: ColoresApp.fondoSuperficie,
-            borderRadius: BorderRadius.circular(25),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _edadSeleccionada != null
-                    ? '$_edadSeleccionada años'
-                    : 'No especificada',
-                style: GoogleFonts.baloo2(
-                  fontSize: 16,
-                  color: _edadSeleccionada != null
-                      ? ColoresApp.textoPrincipal
-                      : ColoresApp.textoSecundario,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                child: Icon(
-                  CupertinoIcons.chevron_down,
-                  color: ColoresApp.principalMarca,
-                ),
-                onPressed: () {
-                  showCupertinoModalPopup(
-                    context: context,
-                    builder: (_) => Container(
-                      height: 250,
-                      color: ColoresApp.fondoSuperficie,
-                      child: Column(
-                        children: [
-                          Container(
-                            height: 44,
-                            color: ColoresApp.fondoPrincipal,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                CupertinoButton(
-                                  child: Text(
-                                    'Cancelar',
-                                    style: GoogleFonts.baloo2(
-                                      color: ColoresApp.principalMarca,
-                                    ),
-                                  ),
-                                  onPressed: () => Navigator.pop(context),
-                                ),
-                                CupertinoButton(
-                                  child: Text(
-                                    'Listo',
-                                    style: GoogleFonts.baloo2(
-                                      color: ColoresApp.principalMarca,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  onPressed: () => Navigator.pop(context),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: CupertinoPicker(
-                              scrollController: FixedExtentScrollController(
-                                initialItem: _edadSeleccionada != null
-                                    ? _edadSeleccionada! - 1
-                                    : 17,
-                              ),
-                              itemExtent: 32,
-                              onSelectedItemChanged: (int index) {
-                                setState(() {
-                                  _edadSeleccionada = index + 1;
-                                });
-                              },
-                              children: List<Widget>.generate(100, (int index) {
-                                return Center(
-                                  child: Text(
-                                    '${index + 1} años',
-                                    style: GoogleFonts.baloo2(
-                                      color: ColoresApp.textoPrincipal,
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _construirSelectorFoto() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Foto de perfil',
-              style: GoogleFonts.baloo2(
-                fontSize: 14,
-                color: ColoresApp.textoSecundario,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: ColoresApp.promoMarca.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'opcional',
-                style: GoogleFonts.baloo2(
-                  fontSize: 11,
-                  color: ColoresApp.promoMarca,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Center(
-          child: GestureDetector(
-            onTap: _mostrarOpcionesFoto,
+          Positioned(
+            right: 0,
+            bottom: 0,
             child: Container(
-              width: 120,
-              height: 120,
+              width: size * 0.3,
+              height: size * 0.3,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: ColoresApp.fondoSuperficie,
-                border: Border.all(color: ColoresApp.principalMarca, width: 3),
+                color: marca,
+                border:
+                    Border.all(color: ColoresApp.fondoPrincipal, width: 2.5),
               ),
-              child: _imagenBytes != null
-                  ? ClipOval(
-                      child: Image.memory(
-                        _imagenBytes!,
-                        fit: BoxFit.cover,
-                        width: 120,
-                        height: 120,
-                      ),
-                    )
-                  : Icon(
-                      CupertinoIcons.camera,
-                      size: 50,
-                      color: ColoresApp.principalMarca,
-                    ),
-            ),
-          ),
-        ),
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 12.0),
-            child: Text(
-              _imagenBytes == null
-                  ? 'Toca para elegir una foto'
-                  : 'Toca para cambiar',
-              style: GoogleFonts.baloo2(
-                fontSize: 13,
-                color: ColoresApp.textoSecundario,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _construirSwitchPerfilPublico() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: ColoresApp.fondoSuperficie,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Perfil público?',
-                style: GoogleFonts.baloo2(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: ColoresApp.textoPrincipal,
-                ),
-              ),
-              CupertinoSwitch(
-                value: _perfilPublico,
-                activeTrackColor: ColoresApp.principalMarca,
-                onChanged: (valor) {
-                  setState(() {
-                    _perfilPublico = valor;
-                  });
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Explorá quiénes van a los lugares que visitás y conocé gente nueva.',
-            style: GoogleFonts.baloo2(
-              fontSize: 12,
-              color: ColoresApp.textoSecundario,
+              child: Icon(CupertinoIcons.camera_fill,
+                  size: size * 0.15, color: Colors.white),
             ),
           ),
         ],
@@ -1103,141 +930,320 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     );
   }
 
-  Widget _construirCampoInstagram() {
+  // ── "Elegí tu color" ──
+  Widget _seccionTema() {
+    final tema = TemaFernecito.instancia;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Instagram (opcional)',
-          style: GoogleFonts.baloo2(
-            fontSize: 14,
-            color: ColoresApp.textoSecundario,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: ColoresApp.fondoSuperficie,
-            borderRadius: BorderRadius.circular(25),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                FontAwesomeIcons.instagram,
-                color: ColoresApp.principalMarca,
-                size: 18,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: CupertinoTextField(
-                  controller: _controladorInstagram,
-                  placeholder: 'URL de perfil',
-                  placeholderStyle: const TextStyle(
-                    color: ColoresApp.textoSecundario,
-                    fontSize: 14,
+        _label('Elegí tu color'),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: List.generate(TemaFernecito.colores.length, (i) {
+            final color = TemaFernecito.colores[i];
+            final sel = tema.indiceActual == i;
+            return GestureDetector(
+              onTap: () async {
+                await tema.establecerIndice(i);
+                if (mounted) setState(() {});
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: sel ? 40 : 34,
+                height: sel ? 40 : 34,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color,
+                  border: Border.all(
+                    color: sel ? Colors.white : Colors.transparent,
+                    width: 3,
                   ),
-                  style: const TextStyle(
-                    color: ColoresApp.textoPrincipal,
-                    fontSize: 14,
-                  ),
-                  decoration: const BoxDecoration(),
+                  boxShadow: sel
+                      ? [
+                          BoxShadow(
+                            color: color.withValues(alpha: 0.5),
+                            blurRadius: 10,
+                          ),
+                        ]
+                      : null,
                 ),
+                child: sel
+                    ? const Icon(CupertinoIcons.checkmark_alt,
+                        size: 18, color: Colors.white)
+                    : null,
               ),
-            ],
-          ),
+            );
+          }),
         ),
       ],
     );
   }
 
-  Widget _construirCampoTikTok() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'TikTok (opcional)',
-          style: GoogleFonts.baloo2(
-            fontSize: 14,
-            color: ColoresApp.textoSecundario,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: ColoresApp.fondoSuperficie,
-            borderRadius: BorderRadius.circular(25),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                FontAwesomeIcons.tiktok,
-                color: ColoresApp.principalMarca,
-                size: 18,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: CupertinoTextField(
-                  controller: _controladorTikTok,
-                  placeholder: 'URL de perfil',
-                  placeholderStyle: const TextStyle(
-                    color: ColoresApp.textoSecundario,
-                    fontSize: 14,
-                  ),
-                  style: const TextStyle(
-                    color: ColoresApp.textoPrincipal,
-                    fontSize: 14,
-                  ),
-                  decoration: const BoxDecoration(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+  // ── Helpers de layout ──
+  Widget _label(String texto) {
+    return Text(
+      texto,
+      style: GoogleFonts.baloo2(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        color: ColoresApp.textoSecundario,
+        letterSpacing: 0.3,
+      ),
     );
   }
 
-  Widget _construirBotonCrearPerfil() {
-    return Center(
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: _guardandoPerfil ? null : _crearPerfil,
-        child: Container(
-          width: MediaQuery.of(context).size.width * 0.85,
-          height: 56,
-          decoration: BoxDecoration(
-            color: _guardandoPerfil
-                ? ColoresApp.principalMarca.withOpacity(0.5)
-                : ColoresApp.principalMarca,
-            borderRadius: BorderRadius.circular(50),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.5),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-                spreadRadius: 2,
+  Widget _card(List<Widget> children) {
+    return Container(
+      decoration: BoxDecoration(
+        color: ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _hairline() => Container(
+        height: 1,
+        margin: const EdgeInsets.only(left: 48),
+        color: Colors.white.withValues(alpha: 0.06),
+      );
+
+  // ── Campo de texto genérico (una fila dentro de la card) ──
+  Widget _campoTexto({
+    required TextEditingController controller,
+    required String placeholder,
+    required Widget icono,
+    ValueChanged<String>? onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(width: 24, child: Center(child: icono)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: CupertinoTextField(
+              controller: controller,
+              placeholder: placeholder,
+              onChanged: onChanged,
+              placeholderStyle:
+                  TextStyle(color: ColoresApp.textoSecundario, fontSize: 15),
+              style: GoogleFonts.baloo2(
+                  fontSize: 15, color: ColoresApp.textoPrincipal),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: const BoxDecoration(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Campo username con auto-validación inline ──
+  Widget _campoUsername() {
+    final marca = ColoresApp.principalMarca;
+    Widget? trailing;
+    if (_validandoUsername) {
+      trailing = const CupertinoActivityIndicator(radius: 9);
+    } else if (_usernameValidado) {
+      trailing = Icon(
+        _usernameDisponible
+            ? CupertinoIcons.checkmark_circle_fill
+            : CupertinoIcons.xmark_circle_fill,
+        color: _usernameDisponible ? marca : ColoresApp.peligroMarca,
+        size: 20,
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 24,
+                child: Center(
+                  child: Text('@',
+                      style: GoogleFonts.baloo2(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: marca)),
+                ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: CupertinoTextField(
+                  controller: _controladorUsername,
+                  placeholder: 'username',
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  onChanged: _onUsernameChanged,
+                  placeholderStyle: TextStyle(
+                      color: ColoresApp.textoSecundario, fontSize: 15),
+                  style: GoogleFonts.baloo2(
+                      fontSize: 15, color: ColoresApp.textoPrincipal),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: const BoxDecoration(),
+                ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing,
+              ],
             ],
           ),
-          child: Center(
-            child: _guardandoPerfil
-                ? const CupertinoActivityIndicator(
-                    color: ColoresApp.textoPrincipal,
-                  )
-                : Text(
-                    'Crear Perfil',
+          if (_usernameMsg != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 34, bottom: 6),
+              child: Text(
+                _usernameMsg!,
+                style: GoogleFonts.baloo2(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _usernameDisponible
+                      ? marca
+                      : ColoresApp.peligroMarca,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Fila de edad (obligatoria) ──
+  Widget _filaEdad() {
+    final puesta = _edadSeleccionada != null;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _abrirSelectorEdad,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              child: Center(
+                child: FaIcon(FontAwesomeIcons.cakeCandles,
+                    size: 16, color: ColoresApp.principalMarca),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                puesta ? '$_edadSeleccionada años' : 'Elegí tu edad',
+                style: GoogleFonts.baloo2(
+                  fontSize: 15,
+                  fontWeight: puesta ? FontWeight.w700 : FontWeight.w500,
+                  color: puesta
+                      ? ColoresApp.textoPrincipal
+                      : ColoresApp.textoSecundario,
+                ),
+              ),
+            ),
+            Icon(CupertinoIcons.chevron_right,
+                size: 16, color: ColoresApp.textoSecundario),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _abrirSelectorEdad() {
+    int seleccion = (_edadSeleccionada ?? 18) - 16;
+    if (seleccion < 0) seleccion = 0;
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 280,
+        color: ColoresApp.fondoSuperficie,
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('Cancelar',
+                      style: GoogleFonts.baloo2(
+                          color: ColoresApp.textoSecundario)),
+                ),
+                CupertinoButton(
+                  onPressed: () {
+                    setState(() => _edadSeleccionada = seleccion + 16);
+                    Navigator.pop(ctx);
+                  },
+                  child: Text('Listo',
+                      style: GoogleFonts.baloo2(
+                          fontWeight: FontWeight.w800,
+                          color: ColoresApp.principalMarca)),
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoPicker(
+                scrollController:
+                    FixedExtentScrollController(initialItem: seleccion),
+                itemExtent: 40,
+                onSelectedItemChanged: (i) => seleccion = i,
+                children: List.generate(
+                  84,
+                  (i) => Center(
+                    child: Text('${i + 16} años',
+                        style: GoogleFonts.baloo2(
+                            fontSize: 20,
+                            color: ColoresApp.textoPrincipal)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Switch perfil público ──
+  Widget _filaSwitchPublico() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 24,
+            child: Center(
+              child: Icon(CupertinoIcons.globe,
+                  size: 18, color: ColoresApp.principalMarca),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Perfil público',
                     style: GoogleFonts.baloo2(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: ColoresApp.textoPrincipal,
-                    ),
-                  ),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: ColoresApp.textoPrincipal)),
+                Text(
+                  'Otros pueden verte y sumarte. Si no, solo te encuentran por @username.',
+                  style: GoogleFonts.baloo2(
+                      fontSize: 12, color: ColoresApp.textoSecundario),
+                ),
+              ],
+            ),
           ),
-        ),
+          const SizedBox(width: 8),
+          CupertinoSwitch(
+            value: _perfilPublico,
+            activeTrackColor: ColoresApp.principalMarca,
+            onChanged: (v) => setState(() => _perfilPublico = v),
+          ),
+        ],
       ),
     );
   }

@@ -5,9 +5,9 @@
     ],
     "target": {
       "namespace": "android_app",
-      "package_name": "com.example.fernecito_frontend",
+      "package_name": "com.nexaisoftware.fernecitoapp",
       "sha256_cert_fingerprints": [
-        "REEMPLAZAR_CON_SHA256_DEL_CERTIFICADO_RELEASE"
+        "3E:77:29:14:E3:7D:17:D1:5B:95:11:85:C5:99:02:D3:D3:22:BD:8F:06:0D:BF:E8:F2:3E:18:DA:6A:EB:94:78"
       ]
     }
   }

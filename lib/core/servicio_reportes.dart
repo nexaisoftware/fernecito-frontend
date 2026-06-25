@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_client.dart';
@@ -30,16 +31,33 @@ class ServicioReportes {
     required String targetId,
     required String motivo,
   }) async {
-    final res = await _sb.functions.invoke(
-      'reportar_cuenta',
-      body: {
-        'reportante_tipo': reportanteTipo,
-        'target_tipo': targetTipo,
-        'target_id': targetId,
-        'motivo': motivo,
-      },
+    // Pasamos el access token EXPLÍCITO: en sesiones restauradas (cold start)
+    // functions.invoke a veces manda la anon key y el edge responde 401.
+    final session = _sb.auth.currentSession;
+    debugPrint(
+      '🚩 reporte → session=${session != null} '
+      'tokenLen=${session?.accessToken.length ?? 0} '
+      'target=$targetTipo:$targetId',
     );
-    if (res.data is Map) return Map<String, dynamic>.from(res.data as Map);
-    return {'ok': false, 'error': 'Respuesta invalida'};
+    try {
+      final res = await _sb.functions.invoke(
+        'reportar_cuenta',
+        body: {
+          'reportante_tipo': reportanteTipo,
+          'target_tipo': targetTipo,
+          'target_id': targetId,
+          'motivo': motivo,
+        },
+        headers: session != null
+            ? {'Authorization': 'Bearer ${session.accessToken}'}
+            : null,
+      );
+      debugPrint('🚩 reporte ✓ status=${res.status} data=${res.data}');
+      if (res.data is Map) return Map<String, dynamic>.from(res.data as Map);
+      return {'ok': false, 'error': 'Respuesta invalida'};
+    } on FunctionException catch (e) {
+      debugPrint('🚩 reporte ✗ status=${e.status} details=${e.details}');
+      rethrow;
+    }
   }
 }

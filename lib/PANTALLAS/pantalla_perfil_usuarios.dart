@@ -14,7 +14,7 @@ import '../core/privacidad_perfil.dart';
 import '../core/servicio_amigos.dart';
 import '../core/rompehielo_navegacion.dart';
 import '../core/servicio_perfil_usuario.dart';
-import '../core/servicio_reportes.dart';
+import '../core/flujo_reporte.dart';
 import '../core/servicio_squads.dart';
 import '../core/supabase_client.dart';
 import '../models/rompehielo.dart';
@@ -23,7 +23,6 @@ import '../widgets/avatar_usuario.dart';
 import '../widgets/boton_rompehielo.dart';
 import '../widgets/burbuja_estado.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
-import '../widgets/icono_local.dart';
 import '../widgets/social_ui.dart';
 import 'pantalla_rompehielo.dart' show TipoContraparte;
 
@@ -187,44 +186,23 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     await _cargarDetalle();
   }
 
-  Future<void> _reportarUsuario() async {
+  /// Menú "3 puntitos" del perfil. Por ahora solo Reportar (oculto a la vista).
+  void _abrirMenuUsuario() {
     final id = _idUsuario;
-    if (id == null || id.isEmpty || _procesando) return;
-    final motivo = await _elegirMotivoReporte();
-    if (motivo == null) return;
-    setState(() => _procesando = true);
-    try {
-      final res = await ServicioReportes().reportarCuenta(
-        reportanteTipo: 'usuario',
-        targetTipo: 'usuario',
-        targetId: id,
-        motivo: motivo.codigo,
-      );
-      if (!mounted) return;
-      _mostrarAvisoReporte(
-        res['ok'] == true
-            ? 'Gracias. Vamos a revisar este perfil.'
-            : (res['error']?.toString() ?? 'No se pudo enviar el reporte.'),
-      );
-    } finally {
-      if (mounted) setState(() => _procesando = false);
-    }
-  }
-
-  Future<MotivoReporte?> _elegirMotivoReporte() {
-    return showCupertinoModalPopup<MotivoReporte>(
+    if (id == null || id.isEmpty) return;
+    showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => CupertinoActionSheet(
-        title: const Text('Reportar perfil'),
-        message: const Text('Elegí el motivo principal del reporte.'),
-        actions: motivosReporteCuenta
-            .map(
-              (m) => CupertinoActionSheetAction(
-                onPressed: () => Navigator.pop(ctx, m),
-                child: Text(m.label),
-              ),
-            )
-            .toList(),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _reportarUsuario();
+            },
+            child: const Text('Reportar perfil'),
+          ),
+        ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(ctx),
           child: const Text('Cancelar'),
@@ -233,20 +211,14 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     );
   }
 
-  void _mostrarAvisoReporte(String mensaje) {
-    showCupertinoDialog<void>(
+  Future<void> _reportarUsuario() async {
+    final id = _idUsuario;
+    if (id == null || id.isEmpty) return;
+    await mostrarFlujoReporte(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Reporte enviado'),
-        content: Text(mensaje),
-        actions: [
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+      entidad: 'este perfil',
+      targetTipo: 'usuario',
+      targetId: id,
     );
   }
 
@@ -351,8 +323,8 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
         !_cargandoDetalle && (_detalle?['puede_ver'] as bool? ?? false);
     final bloqueada =
         !_cargandoDetalle && (_detalle?['bloqueada'] as bool? ?? false);
-    final esAmigoDetalle = _detalle?['es_amigo'] == true ||
-        _estado == EstadoRelacionUsuario.amigo;
+    final esAmigoDetalle =
+        _detalle?['es_amigo'] == true || _estado == EstadoRelacionUsuario.amigo;
     final nombreVisible = puedeVer
         ? ((_detalle?['nombre'] ?? usuario['nombre'])?.toString() ?? 'Usuario')
         : PrivacidadPerfil.tituloPerfilPrivado;
@@ -424,16 +396,13 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                   ),
                   if (_idUsuario != null && _idUsuario!.isNotEmpty)
                     CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      minimumSize: const Size(0, 30),
-                      onPressed: _procesando ? null : _reportarUsuario,
-                      child: Text(
-                        'Reportar',
-                        style: GoogleFonts.baloo2(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: ColoresApp.textoSecundario,
-                        ),
+                      padding: const EdgeInsets.all(6),
+                      minimumSize: const Size(0, 34),
+                      onPressed: _procesando ? null : _abrirMenuUsuario,
+                      child: Icon(
+                        CupertinoIcons.ellipsis,
+                        size: 21,
+                        color: ColoresApp.textoSecundario,
                       ),
                     ),
                 ],
@@ -468,22 +437,29 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                 Center(
                   child: Column(
                     children: [
+                      // Avatar como héroe (arriba)
+                      AvatarUsuario(
+                        avatar: avatar,
+                        size: 116,
+                        onTap: () => _abrirVisualizadorAvatar(context, avatar),
+                      ),
+                      const SizedBox(height: 14),
                       Text(
                         nombreVisible,
                         textAlign: TextAlign.center,
                         style: GoogleFonts.baloo2(
-                          fontSize: 24,
+                          fontSize: 23,
                           fontWeight: FontWeight.w900,
                           color: ColoresApp.textoPrincipal,
                           height: 1.1,
                         ),
                       ),
                       if (_estado == EstadoRelacionUsuario.amigo) ...[
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 5),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 3,
+                            horizontal: 11,
+                            vertical: 4,
                           ),
                           decoration: BoxDecoration(
                             color: ColoresApp.principalMarca.withValues(
@@ -491,17 +467,28 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                             ),
                             borderRadius: BorderRadius.circular(50),
                           ),
-                          child: Text(
-                            'Amigos',
-                            style: GoogleFonts.baloo2(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: ColoresApp.principalMarca,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                CupertinoIcons.checkmark_seal_fill,
+                                size: 13,
+                                color: ColoresApp.principalMarca,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Amigos',
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: ColoresApp.principalMarca,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ] else if (sinActividad) ...[
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 5),
                         Text(
                           'Nuevo en Fernecito',
                           style: GoogleFonts.baloo2(
@@ -511,13 +498,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 12),
-                      AvatarUsuario(
-                        avatar: avatar,
-                        size: 112,
-                        onTap: () => _abrirVisualizadorAvatar(context, avatar),
-                      ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 7),
                       ConstrainedBox(
                         constraints: BoxConstraints(
                           maxWidth: MediaQuery.sizeOf(context).width * 0.88,
@@ -859,87 +840,6 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     );
   }
 
-  static const double _alturaCeldaActividad = 92;
-
-  Widget _celdaMetricaGrilla({
-    IconData? icono,
-    Widget? iconoWidget,
-    required String etiqueta,
-    required String valor,
-  }) {
-    final iconChild =
-        iconoWidget ?? Icon(icono, size: 20, color: ColoresApp.principalMarca);
-
-    return SizedBox(
-      height: _alturaCeldaActividad,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          iconChild,
-          const SizedBox(height: 8),
-          Text(
-            valor,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.baloo2(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: ColoresApp.textoPrincipal,
-              height: 1.05,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            etiqueta,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.baloo2(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: ColoresApp.textoSecundario,
-              height: 1.15,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _badgeUbicacion(String ubicacion) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: ColoresApp.fondoSuperficie.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            CupertinoIcons.location_solid,
-            size: 12,
-            color: ColoresApp.textoSecundario.withValues(alpha: 0.9),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            ubicacion,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.baloo2(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: ColoresApp.textoSecundario,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSeccionActividad({
     required String nombre,
     required bool puedeVer,
@@ -981,68 +881,112 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       ubicacion = provincia;
     }
 
-    final celdas = <Widget>[
-      _celdaMetricaGrilla(
-        icono: CupertinoIcons.person_2_fill,
-        etiqueta: 'Amigos',
-        valor: '$cantidadAmigos',
-      ),
-    ];
+    final chips = <Widget>[];
     if (edadInt != null && edadInt > 0) {
-      celdas.add(
-        _celdaMetricaGrilla(
-          icono: CupertinoIcons.person_fill,
-          etiqueta: 'Edad',
-          valor: '$edadInt años',
-        ),
-      );
+      chips.add(_chipInfoPerfil(FontAwesomeIcons.cakeCandles, '$edadInt años'));
     }
-    if (locales > 0) {
-      celdas.add(
-        _celdaMetricaGrilla(
-          iconoWidget: IconoLocal(size: 20, color: ColoresApp.principalMarca),
-          etiqueta: 'Locales visitados',
-          valor: '$locales',
-        ),
-      );
-    }
-    if (eventos > 0) {
-      celdas.add(
-        _celdaMetricaGrilla(
-          icono: CupertinoIcons.ticket_fill,
-          etiqueta: 'Eventos vividos',
-          valor: '$eventos',
-        ),
-      );
+    if (ubicacion.isNotEmpty) {
+      chips.add(_chipInfoPerfil(CupertinoIcons.location_solid, ubicacion));
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = 10.0;
-        final anchoCelda = (constraints.maxWidth - gap) / 2;
-        return Column(
-          children: [
-            Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              alignment: WrapAlignment.center,
-              children: celdas
-                  .map(
-                    (c) => SizedBox(
-                      width: anchoCelda,
-                      height: _alturaCeldaActividad,
-                      child: c,
-                    ),
-                  )
-                  .toList(),
+    return Column(
+      children: [
+        // Strip de stats (Amigos · Eventos · Locales), estilo iOS / Instagram
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: ColoresApp.principalMarca.withValues(alpha: 0.12),
             ),
-            if (ubicacion.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Center(child: _badgeUbicacion(ubicacion)),
+          ),
+          child: Row(
+            children: [
+              Expanded(child: _statInline('$cantidadAmigos', 'Amigos')),
+              _divisorStat(),
+              Expanded(child: _statInline('$eventos', 'Eventos')),
+              _divisorStat(),
+              Expanded(child: _statInline('$locales', 'Locales')),
             ],
-          ],
-        );
-      },
+          ),
+        ),
+        if (chips.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: chips,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _statInline(String valor, String etiqueta) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          valor,
+          style: GoogleFonts.baloo2(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: ColoresApp.textoPrincipal,
+            height: 1,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          etiqueta,
+          style: GoogleFonts.baloo2(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: ColoresApp.textoSecundario,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _divisorStat() {
+    return Container(
+      width: 1,
+      height: 30,
+      color: ColoresApp.textoSecundario.withValues(alpha: 0.18),
+    );
+  }
+
+  Widget _chipInfoPerfil(IconData icono, String texto) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(50),
+        border: Border.all(
+          color: ColoresApp.principalMarca.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icono, size: 13, color: ColoresApp.principalMarca),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              texto,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.baloo2(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: ColoresApp.textoPrincipal,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

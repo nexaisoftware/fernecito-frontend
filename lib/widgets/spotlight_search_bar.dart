@@ -106,7 +106,7 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
       builder: (context, _) {
         final t = Curves.easeOutCubic.transform(_anim.value);
         return SizedBox(
-          height: 44,
+          height: 38,
           child: Row(
             children: [
               // === Lupa / TextField expandible ===
@@ -146,8 +146,8 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
     return GestureDetector(
       onTap: _expandir,
       child: Container(
-        width: 44,
-        height: 44,
+        width: 38,
+        height: 38,
         decoration: BoxDecoration(
           color: ColoresApp.fondoSuperficie.withOpacity(0.85),
           shape: BoxShape.circle,
@@ -166,7 +166,7 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
         child: const Icon(
           CupertinoIcons.search,
           color: ColoresApp.textoPrincipal,
-          size: 20,
+          size: 18,
         ),
       ),
     );
@@ -174,11 +174,11 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
 
   Widget _buildTextFieldExpandido(double t) {
     return Container(
-      height: 44,
+      height: 38,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(19),
         border: Border.all(
           color: ColoresApp.principalMarca.withOpacity(0.45 * t),
           width: 1,
@@ -243,7 +243,7 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
         ? (activos.length == 1
             ? (TiposEventoData.desdeSlug(activos.first)?.label ?? 'Plan')
             : '${activos.length} planes')
-        : 'Cuál es tu plan';
+        : 'Plan';
     return _Pildora(
       icono: CupertinoIcons.ticket_fill,
       label: label,
@@ -256,7 +256,7 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
     final activo = widget.filtroTiempo != FiltroTiempo.todos;
     return _Pildora(
       icono: CupertinoIcons.calendar,
-      label: widget.filtroTiempo.label,
+      label: activo ? widget.filtroTiempo.label : 'Cuándo',
       activo: activo,
       onTap: _abrirSheetTiempo,
     );
@@ -437,11 +437,11 @@ class _Pildora extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        height: 44,
+        height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: ColoresApp.fondoSuperficie.withOpacity(0.85),
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(19),
           border: Border.all(
             color: color.withOpacity(activo ? 0.55 : 0.18),
             width: 1,

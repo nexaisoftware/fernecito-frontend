@@ -117,10 +117,10 @@ flutter:
   # Assets de la aplicación
   assets:
     - assets/imagenes/
-    - assets/imagenes/mockups/
-    - assets/imagenes/mockups/perfiles_local/
-    - assets/imagenes/mockups/banners&fotos/
     - assets/videos/
+    # .env (solo config PÚBLICA del cliente: URL + anon key + URL share).
+    # Permite que flutter_dotenv lo cargue en debug sin pasar flags.
+    # En release, --dart-define-from-file=.env tiene prioridad igual.
     - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see

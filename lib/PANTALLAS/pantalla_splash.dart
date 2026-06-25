@@ -7,16 +7,12 @@
 library;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import '../core/constants.dart';
+import '../widgets/splash_carga_fernecito.dart';
 
 class PantallaSplash extends StatefulWidget {
   final VoidCallback onFinished;
 
-  const PantallaSplash({
-    super.key,
-    required this.onFinished,
-  });
+  const PantallaSplash({super.key, required this.onFinished});
 
   @override
   State<PantallaSplash> createState() => _PantallaSplashState();
@@ -43,25 +39,15 @@ class _PantallaSplashState extends State<PantallaSplash>
     );
 
     // Fade: de 0 a 1 con curva elegante
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(
-          0.0,
-          0.7,
-          curve: Curves.easeOut,
-        ),
+        curve: const Interval(0.0, 0.7, curve: Curves.easeOut),
       ),
     );
 
     // Scale: de 0.5 a 1.0 con bounce suave
-    _scaleAnimation = Tween<double>(
-      begin: 0.5,
-      end: 1.0,
-    ).animate(
+    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(
@@ -97,58 +83,45 @@ class _PantallaSplashState extends State<PantallaSplash>
     return Directionality(
       textDirection: TextDirection.ltr,
       child: CupertinoPageScaffold(
-        backgroundColor: ColoresApp.principalMarca, // Verde Fernet
+        backgroundColor: kVerdeSplashFernecito,
         child: Center(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return FadeTransition(
-              opacity: _fadeAnimation,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: child,
-              ),
-            );
-          },
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo principal con sombra suave
-              Container(
-                width: 160,
-                height: 160,
-                padding: const EdgeInsets.all(20), // Padding interno para que el logo sea más pequeño
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 40,
-                      offset: const Offset(0, 20),
-                      spreadRadius: 5,
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              return FadeTransition(
+                opacity: _fadeAnimation,
+                child: ScaleTransition(scale: _scaleAnimation, child: child),
+              );
+            },
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Logo principal con sombra suave
+                Container(
+                  width: 160,
+                  height: 160,
+                  padding: const EdgeInsets.all(
+                    20,
+                  ), // Padding interno para que el logo sea más pequeño
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.asset(
+                      'assets/imagenes/logoiconapp.png',
+                      fit: BoxFit.contain,
                     ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Image.asset(
-                    'assets/imagenes/logoiconapp.png',
-                    fit: BoxFit.contain,
                   ),
                 ),
-              ),
-              
-              const SizedBox(height: 60),
-              
-              // Indicador de carga elegante
-              const CupertinoActivityIndicator(
-                color: ColoresApp.textoPrincipal,
-                radius: 16,
-              ),
-            ],
+
+                const SizedBox(height: 60),
+
+                const SplashCargaFernecitoBarra(),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }

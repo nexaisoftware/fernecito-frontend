@@ -26,11 +26,12 @@ import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
 import '../core/ubicaciones_data.dart';
 import 'pantalla_cambiar_contrasena.dart';
+import 'pantalla_eliminar_todo.dart';
+import 'pantalla_soporte.dart';
 import 'pantalla_social.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/burbuja_estado.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
-import '../widgets/icono_local.dart';
 import '../widgets/skeleton_pantallas.dart';
 
 class PantallaMiPerfil extends StatefulWidget {
@@ -75,7 +76,6 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   int _cantidadAmigos = 0;
   int _localesVisitados = 0;
   int _eventosAsistidos = 0;
-  bool _cargandoMetricas = true;
 
   final ImagePicker _picker = ImagePicker();
   final ServicioPerfilUsuario _srvPerfil = ServicioPerfilUsuario();
@@ -425,14 +425,12 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   }
 
   Future<void> _cargarMetricasPerfil(String idUsuario) async {
-    setState(() => _cargandoMetricas = true);
     final detFuture = _srvPerfil.detalle(idUsuario);
     final amistadesFuture = ServicioAmigos().listar();
     final det = await detFuture;
     final amistades = await amistadesFuture;
     if (!mounted) return;
     setState(() {
-      _cargandoMetricas = false;
       // Misma fuente que la pestaña Social (amistad_listar).
       _cantidadAmigos = amistades.amigos.length;
       if (det != null) {
@@ -648,50 +646,98 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     }
   }
 
-  // Eliminar cuenta
+  // Eliminar cuenta — el usuario elige el alcance.
   Future<void> _eliminarCuenta() async {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('Eliminar cuenta'),
+        message: const Text('Elegí qué querés eliminar. Esta acción no se puede deshacer.'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _confirmarSoloUsuario();
+            },
+            child: const Text('Eliminar solo mi cuenta de usuario'),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (_) => const PantallaEliminarTodo(),
+                ),
+              );
+            },
+            child: const Text('Eliminar TODO mi Fernecito (usuario + locales + staff)'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+  }
+
+  // Opción 1: borra SOLO la cuenta de usuario. Mantiene el auth y, si tenés un
+  // local o sos staff con el mismo email, eso sigue funcionando.
+  Future<void> _confirmarSoloUsuario() async {
     final confirmado = await _mostrarDialogoConfirmacion(
-      titulo: '¿Eliminar cuenta?',
+      titulo: '¿Eliminar tu cuenta de usuario?',
       mensaje:
-          'Esta acción no se puede deshacer. Se eliminarán todos tus datos de forma permanente.',
+          'Se borrarán tu perfil, amigos, squads, reservas y rompehielos.\n\n'
+          'Si también tenés un local o sos staff con este mismo email, esos '
+          'seguirán funcionando (no se tocan).',
       textoConfirmar: 'Eliminar',
       esDestructivo: true,
     );
-
     if (confirmado != true) return;
+    await _ejecutarEliminacion('solo_usuario');
+  }
 
+  // (El borrado TOTAL ahora vive en PantallaEliminarTodo — más robusto.)
+
+  // Invoca el edge con service_role; al terminar, signOut → AuthGate va a Login.
+  Future<void> _ejecutarEliminacion(String modo) async {
+    // Overlay de carga (no descartable) para que NO parezca tildado.
+    showCupertinoDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CupertinoActivityIndicator(radius: 18)),
+    );
     try {
-      print('🗑️ Eliminando cuenta...');
-      
       final supabase = ServicioSupabase();
-      final usuario = supabase.usuarioActual;
-
-      if (usuario == null) {
-        throw Exception('No hay usuario autenticado');
+      final session = supabase.cliente.auth.currentSession;
+      if (session == null) {
+        throw Exception('No hay sesión activa');
       }
-
-      // 1. Eliminar registro de perfiles_usuarios
-      print('🗑️ Eliminando perfil de DB...');
-      await supabase.cliente
-          .from('perfiles_usuarios')
-          .delete()
-          .eq('id', usuario.id);
-
-      print('✅ Perfil eliminado de DB');
-
-      // 2. Cerrar sesión (esto también elimina la sesión de Auth)
-      print('🔓 Cerrando sesión...');
+      print('🗑️ Invocando eliminar_cuenta_usuario (modo=$modo)...');
+      final res = await supabase.cliente.functions
+          .invoke(
+            'eliminar_cuenta_usuario',
+            body: {'modo': modo},
+            headers: {'Authorization': 'Bearer ${session.accessToken}'},
+          )
+          .timeout(const Duration(seconds: 40));
+      print('🗑️ Respuesta edge: status=${res.status} data=${res.data}');
+      final data = res.data;
+      final ok = data is Map && data['ok'] == true;
+      if (!ok) {
+        throw Exception('Respuesta no OK (status ${res.status}): ${res.data}');
+      }
+      print('✅ Cuenta eliminada ($modo). Cerrando sesión...');
+      if (mounted) Navigator.of(context, rootNavigator: true).pop(); // cierra loader
       await supabase.cliente.auth.signOut();
-
-      print('✅ Cuenta eliminada y sesión cerrada');
-      print('⏳ AuthGate manejará la navegación a Login automáticamente');
-
-      // NO navegar manualmente - AuthGate se encarga
-      // El evento signedOut será detectado y navegará a PantallaLogin
+      // AuthGate detecta signedOut y navega a Login.
     } catch (error) {
-      print('❌ Error eliminando cuenta: $error');
+      print('❌ Error eliminando cuenta ($modo): $error');
       if (mounted) {
-        _mostrarError('Error al eliminar cuenta.\n\nIntentá de nuevo.');
+        Navigator.of(context, rootNavigator: true).pop(); // cierra loader
+        _mostrarError('No se pudo eliminar la cuenta.\n\nDetalle: $error');
       }
     }
   }
@@ -703,32 +749,14 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     required String placeholder,
     TextInputType tipoTeclado = TextInputType.text,
   }) {
-    final controller = TextEditingController(text: valorActual);
-
     return showCupertinoDialog<String>(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text(titulo),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 16.0),
-          child: CupertinoTextField(
-            controller: controller,
-            placeholder: placeholder,
-            keyboardType: tipoTeclado,
-            autofocus: true,
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Cancelar'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Guardar'),
-          ),
-        ],
+      barrierDismissible: true,
+      builder: (ctx) => _DialogoEditarCampoPerfil(
+        titulo: titulo,
+        valorActual: valorActual,
+        placeholder: placeholder,
+        tipoTeclado: tipoTeclado,
       ),
     );
   }
@@ -823,6 +851,182 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     return '${texto.substring(0, maxLength)}...';
   }
 
+  // ── Helpers para el layout "espejo del perfil público" ──
+
+  /// Strip de stats (Amigos · Eventos · Locales), igual que ve otro usuario.
+  Widget _statStripMiPerfil() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: ColoresApp.principalMarca.withValues(alpha: 0.12),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _statInlineMP('$_cantidadAmigos', 'Amigos')),
+          _divisorStatMP(),
+          Expanded(child: _statInlineMP('$_eventosAsistidos', 'Eventos')),
+          _divisorStatMP(),
+          Expanded(child: _statInlineMP('$_localesVisitados', 'Locales')),
+        ],
+      ),
+    );
+  }
+
+  Widget _statInlineMP(String valor, String etiqueta) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          valor,
+          style: GoogleFonts.baloo2(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: ColoresApp.textoPrincipal,
+            height: 1,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          etiqueta,
+          style: GoogleFonts.baloo2(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: ColoresApp.textoSecundario,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _divisorStatMP() {
+    return Container(
+      width: 1,
+      height: 30,
+      color: ColoresApp.textoSecundario.withValues(alpha: 0.18),
+    );
+  }
+
+  /// Chip de info editable (edad / ubicación). Lápiz = editable; al tocar edita.
+  Widget _chipEditableMP({
+    required IconData icono,
+    required String texto,
+    required VoidCallback onEditar,
+  }) {
+    return GestureDetector(
+      onTap: onEditar,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(50),
+          border: Border.all(
+            color: ColoresApp.principalMarca.withValues(alpha: 0.18),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, size: 13, color: ColoresApp.principalMarca),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                texto,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.baloo2(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: ColoresApp.textoPrincipal,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              CupertinoIcons.pencil,
+              size: 12,
+              color: ColoresApp.principalMarca,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Lápiz chico para señalizar que un elemento (nombre / estado) es editable.
+  Widget _hintLapiz() {
+    return Icon(
+      CupertinoIcons.pencil,
+      size: 15,
+      color: ColoresApp.principalMarca,
+    );
+  }
+
+  /// Card de Ayuda y soporte → navega a la pantalla de soporte.
+  Widget _cardSoporte() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(
+        CupertinoPageRoute(builder: (_) => const PantallaSoporte()),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: SuperficiesApp.card(radius: 18, temaTint: 0.16),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: ColoresApp.principalMarca.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                CupertinoIcons.question_circle_fill,
+                size: 20,
+                color: ColoresApp.principalMarca,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ayuda y soporte',
+                    style: GoogleFonts.baloo2(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: ColoresApp.textoPrincipal,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Contactanos si tenés un problema',
+                    style: GoogleFonts.baloo2(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: ColoresApp.textoSecundario,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 16,
+              color: ColoresApp.textoSecundario.withValues(alpha: 0.6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_cargando) {
@@ -857,29 +1061,105 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                 ),
                 const SizedBox(height: 12),
 
-                // Nombre inline editable
+                // ── HERO: tal como te ve otro usuario, pero editable ──
                 Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          '¿Cómo te llamamos?',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.baloo2(
-                            fontSize: 12,
-                            color: ColoresApp.textoSecundario,
+                  child: Column(
+                    children: [
+                      // Avatar (tocar foto = fullscreen; lápiz = cambiar)
+                      Stack(
+                        children: [
+                          GestureDetector(
+                            onTap: _fotoPerfilUrl != null
+                                ? () => _mostrarFotoFullscreen()
+                                : null,
+                            child: Container(
+                              width: 116,
+                              height: 116,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: ColoresApp.principalMarca,
+                                  width: 3,
+                                ),
+                              ),
+                              child: ClipOval(
+                                child: _subiendoFoto
+                                    ? Center(
+                                        child: CupertinoActivityIndicator(
+                                          color: ColoresApp.principalMarca,
+                                        ),
+                                      )
+                                    : _fotoPerfilUrl != null
+                                        ? CachedNetworkImage(
+                                            imageUrl: _fotoPerfilUrl!,
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) =>
+                                                Container(
+                                              color: ColoresApp.fondoSuperficie,
+                                              child: Center(
+                                                child:
+                                                    CupertinoActivityIndicator(
+                                                  color:
+                                                      ColoresApp.principalMarca,
+                                                ),
+                                              ),
+                                            ),
+                                            errorWidget:
+                                                (context, url, error) =>
+                                                    const Icon(
+                                              CupertinoIcons.person_circle_fill,
+                                              size: 80,
+                                              color: ColoresApp.textoSecundario,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            CupertinoIcons.person_circle_fill,
+                                            size: 80,
+                                            color: ColoresApp.textoSecundario,
+                                          ),
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        SizedBox(
-                          height: 40,
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: _mostrarOpcionesFoto,
+                              child: Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: ColoresApp.principalMarca,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: ColoresApp.fondoPrincipal,
+                                    width: 3,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  CupertinoIcons.pencil,
+                                  size: 17,
+                                  color: ColoresApp.textoPrincipal,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Nombre + lápiz (inline edit al tocar)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 360),
+                        child: SizedBox(
+                          height: 38,
                           child: Stack(
                             children: [
                               Positioned.fill(
                                 child: Padding(
-                                  padding: EdgeInsets.only(right: _editandoNombreInline ? 92 : 0),
+                                  padding: EdgeInsets.only(
+                                    right: _editandoNombreInline ? 92 : 0,
+                                  ),
                                   child: Center(
                                     child: _editandoNombreInline
                                         ? CupertinoTextField(
@@ -888,13 +1168,15 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                                             enabled: true,
                                             textAlign: TextAlign.center,
                                             placeholder: 'Tu nombre o apodo',
-                                            placeholderStyle: GoogleFonts.baloo2(
-                                              fontSize: 22,
-                                              color: ColoresApp.textoSecundario.withOpacity(0.7),
+                                            placeholderStyle:
+                                                GoogleFonts.baloo2(
+                                              fontSize: 20,
+                                              color: ColoresApp.textoSecundario
+                                                  .withOpacity(0.7),
                                             ),
                                             style: GoogleFonts.baloo2(
-                                              fontSize: 26,
-                                              fontWeight: FontWeight.w800,
+                                              fontSize: 23,
+                                              fontWeight: FontWeight.w900,
                                               color: ColoresApp.textoPrincipal,
                                             ),
                                             decoration: null,
@@ -902,21 +1184,48 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                                           )
                                         : GestureDetector(
                                             onTap: () {
-                                              setState(() => _editandoNombreInline = true);
-                                              Future.microtask(() => FocusScope.of(context).requestFocus(_focusNombre));
+                                              setState(() =>
+                                                  _editandoNombreInline = true);
+                                              Future.microtask(() =>
+                                                  FocusScope.of(context)
+                                                      .requestFocus(
+                                                          _focusNombre));
                                             },
-                                            child: Text(
-                                              _controladorNombre.text.trim().isEmpty
-                                                  ? 'Tu nombre o apodo'
-                                                  : _controladorNombre.text.trim(),
-                                              textAlign: TextAlign.center,
-                                              style: GoogleFonts.baloo2(
-                                                fontSize: 26,
-                                                fontWeight: FontWeight.w800,
-                                                color: _controladorNombre.text.trim().isEmpty
-                                                    ? ColoresApp.textoSecundario.withOpacity(0.7)
-                                                    : ColoresApp.textoPrincipal,
-                                              ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    _controladorNombre.text
+                                                            .trim()
+                                                            .isEmpty
+                                                        ? 'Tu nombre o apodo'
+                                                        : _controladorNombre
+                                                            .text
+                                                            .trim(),
+                                                    textAlign: TextAlign.center,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: GoogleFonts.baloo2(
+                                                      fontSize: 23,
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                      color: _controladorNombre
+                                                              .text
+                                                              .trim()
+                                                              .isEmpty
+                                                          ? ColoresApp
+                                                              .textoSecundario
+                                                              .withOpacity(0.7)
+                                                          : ColoresApp
+                                                              .textoPrincipal,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 7),
+                                                _hintLapiz(),
+                                              ],
                                             ),
                                           ),
                                   ),
@@ -929,12 +1238,16 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                                   bottom: 0,
                                   child: Center(
                                     child: CupertinoButton(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 8),
                                       color: ColoresApp.principalMarca,
                                       borderRadius: BorderRadius.circular(20),
-                                      onPressed: _guardando ? null : _guardarNombreInline,
+                                      onPressed: _guardando
+                                          ? null
+                                          : _guardarNombreInline,
                                       child: _guardando
-                                          ? const CupertinoActivityIndicator(color: Colors.white)
+                                          ? const CupertinoActivityIndicator(
+                                              color: Colors.white)
                                           : Text(
                                               'Guardar',
                                               style: GoogleFonts.baloo2(
@@ -949,258 +1262,185 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Avatar circular con botón de editar (debajo del nombre)
-                Center(
-                  child: Stack(
-                    children: [
-                      GestureDetector(
-                        onTap: _fotoPerfilUrl != null
-                            ? () => _mostrarFotoFullscreen()
-                            : null,
-                        child: Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: ColoresApp.principalMarca,
-                              width: 3,
-                            ),
-                          ),
-                          child: ClipOval(
-                            child: _subiendoFoto
-                                ? Center(
-                                    child: CupertinoActivityIndicator(
-                                      color: ColoresApp.principalMarca,
-                                    ),
-                                  )
-                                : _fotoPerfilUrl != null
-                                    ? CachedNetworkImage(
-                                        imageUrl: _fotoPerfilUrl!,
-                                        fit: BoxFit.cover,
-                                        placeholder: (context, url) => Container(
-                                          color: ColoresApp.fondoSuperficie,
-                                          child: Center(
-                                            child: CupertinoActivityIndicator(
-                                              color: ColoresApp.principalMarca,
-                                            ),
-                                          ),
-                                        ),
-                                        errorWidget: (context, url, error) =>
-                                            const Icon(
-                                          CupertinoIcons.person_circle_fill,
-                                          size: 80,
-                                          color: ColoresApp.textoSecundario,
-                                        ),
-                                      )
-                                    : const Icon(
-                                        CupertinoIcons.person_circle_fill,
-                                        size: 80,
-                                        color: ColoresApp.textoSecundario,
-                                      ),
-                          ),
-                        ),
                       ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: GestureDetector(
-                          onTap: _mostrarOpcionesFoto,
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: ColoresApp.principalMarca,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: ColoresApp.fondoPrincipal,
-                                width: 3,
+                      const SizedBox(height: 4),
+
+                      // @username + copiar
+                      GestureDetector(
+                        onTap: _copiarUsername,
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '@$_username',
+                              style: GoogleFonts.baloo2(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: ColoresApp.textoSecundario,
                               ),
                             ),
-                            child: const Icon(
-                              CupertinoIcons.pencil,
-                              size: 18,
-                              color: ColoresApp.textoPrincipal,
+                            const SizedBox(width: 6),
+                            Icon(
+                              CupertinoIcons.doc_on_doc,
+                              size: 14,
+                              color: ColoresApp.principalMarca,
                             ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Estado + lápiz (inline edit al tocar)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 360),
+                        child: SizedBox(
+                          height: 54,
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: Padding(
+                                  padding: EdgeInsets.only(
+                                      right: _editandoEstadoInline ? 88 : 0),
+                                  child: Center(
+                                    child: _editandoEstadoInline
+                                        ? Container(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                12, 10, 12, 8),
+                                            decoration: BoxDecoration(
+                                              color: ColoresApp.fondoSuperficie,
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              border: Border.all(
+                                                  color: ColoresApp
+                                                      .principalMarca
+                                                      .withOpacity(0.28)),
+                                            ),
+                                            child: CupertinoTextField(
+                                              controller: _controladorEstado,
+                                              focusNode: _focusEstado,
+                                              enabled: true,
+                                              placeholder:
+                                                  'Escribe un estado divertido.',
+                                              maxLength: 50,
+                                              maxLines: 2,
+                                              textAlign: TextAlign.center,
+                                              style: GoogleFonts.baloo2(
+                                                color: ColoresApp.textoPrincipal,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                              decoration: null,
+                                              padding: EdgeInsets.zero,
+                                            ),
+                                          )
+                                        : GestureDetector(
+                                            onTap: () {
+                                              setState(() =>
+                                                  _editandoEstadoInline = true);
+                                              Future.microtask(() =>
+                                                  FocusScope.of(context)
+                                                      .requestFocus(
+                                                          _focusEstado));
+                                            },
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Flexible(
+                                                  child: BurbujaEstado(
+                                                    texto: _controladorEstado
+                                                        .text
+                                                        .trim(),
+                                                    fontSize: 14,
+                                                    ajustarAnchoAlTexto: true,
+                                                    maxLines: 2,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 7),
+                                                _hintLapiz(),
+                                              ],
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ),
+                              if (_editandoEstadoInline)
+                                Positioned(
+                                  right: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: Center(
+                                    child: CupertinoButton(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 6),
+                                      color: ColoresApp.principalMarca,
+                                      borderRadius: BorderRadius.circular(18),
+                                      onPressed: _guardando
+                                          ? null
+                                          : _guardarEstadoInline,
+                                      child: _guardando
+                                          ? const CupertinoActivityIndicator(
+                                              color: Colors.white)
+                                          : Text(
+                                              'Guardar',
+                                              style: GoogleFonts.baloo2(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 22),
+
+                // Strip de stats (igual que ve otro usuario)
+                _statStripMiPerfil(),
                 const SizedBox(height: 12),
-
-                // Burbuja de estado (centrada) + acción pegada al borde derecho del contenedor
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    child: SizedBox(
-                      height: 54,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: Padding(
-                              padding: EdgeInsets.only(right: _editandoEstadoInline ? 88 : 0),
-                              child: Center(
-                                child: _editandoEstadoInline
-                                    ? Container(
-                                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                                        decoration: BoxDecoration(
-                                          color: ColoresApp.fondoSuperficie,
-                                          borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.28)),
-                                        ),
-                                        child: CupertinoTextField(
-                                          controller: _controladorEstado,
-                                          focusNode: _focusEstado,
-                                          enabled: true,
-                                          placeholder: 'Escribe un estado divertido.',
-                                          maxLength: 50,
-                                          maxLines: 2,
-                                          textAlign: TextAlign.center,
-                                          style: GoogleFonts.baloo2(
-                                            color: ColoresApp.textoPrincipal,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                          decoration: null,
-                                          padding: EdgeInsets.zero,
-                                        ),
-                                      )
-                                    : GestureDetector(
-                                        onTap: () {
-                                          setState(() => _editandoEstadoInline = true);
-                                          Future.microtask(() => FocusScope.of(context).requestFocus(_focusEstado));
-                                        },
-                                        child: BurbujaEstado(
-                                          texto: _controladorEstado.text.trim(),
-                                          fontSize: 14,
-                                          ajustarAnchoAlTexto: true,
-                                          maxLines: 2,
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ),
-                          if (_editandoEstadoInline)
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              bottom: 0,
-                              child: Center(
-                                child: CupertinoButton(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  color: ColoresApp.principalMarca,
-                                  borderRadius: BorderRadius.circular(18),
-                                  onPressed: _guardando ? null : _guardarEstadoInline,
-                                  child: _guardando
-                                      ? const CupertinoActivityIndicator(color: Colors.white)
-                                      : Text(
-                                          'Guardar',
-                                          style: GoogleFonts.baloo2(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _perfilPublico
-                      ? 'Tu estado se muestra en Explorar, pools y tu perfil.'
-                      : 'Con perfil privado tu estado no se muestra a otros.',
-                  style: GoogleFonts.baloo2(
-                    fontSize: 11,
-                    color: ColoresApp.textoSecundario,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-
-                // Chip username + acción copiar (debajo del estado)
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: ColoresApp.fondoSuperficie.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(50),
-                      border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.35)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Mi username: @$_username',
-                          style: GoogleFonts.baloo2(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: ColoresApp.textoPrincipal,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: _copiarUsername,
-                          child: Icon(
-                            CupertinoIcons.doc_on_doc,
-                            size: 16,
-                            color: ColoresApp.principalMarca,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // Sección: Información Personal + actividad informativa
-                _construirSeccion(
-                  titulo: 'Información personal',
-                  icono: CupertinoIcons.person_circle,
+                // Chips editables: edad + ubicación
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
                   children: [
-                    _construirBloqueActividadInformativa(),
-                    const SizedBox(height: 18),
-                    _construirCampoEditable(
-                      etiqueta: 'Ubicación',
-                      valor: _textoUbicacion,
-                      iconoLeading: CupertinoIcons.location_solid,
-                      onEditar: _editarUbicacion,
+                    _chipEditableMP(
+                      icono: CupertinoIcons.gift_fill,
+                      texto: _edad != null ? '${_edad!} años' : 'Tu edad',
+                      onEditar: _actualizarEdad,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Usamos tu ciudad para la cartelera y para que otros te encuentren.',
-                      style: GoogleFonts.baloo2(
-                        fontSize: 11,
-                        color: ColoresApp.textoSecundario,
-                      ),
+                    _chipEditableMP(
+                      icono: CupertinoIcons.location_solid,
+                      texto: _textoUbicacion.isEmpty
+                          ? 'Tu ubicación'
+                          : _textoUbicacion,
+                      onEditar: _editarUbicacion,
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
 
-                // Sección: Social (incluye perfil público, redes y mi estado)
+                // Visibilidad (perfil público / privado + redes + squads)
                 _construirSeccionSocial(),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
 
-                // Selector de tema
+                // Tema de la app
                 _construirSelectorTema(),
 
-                const SizedBox(height: 40),
+                const SizedBox(height: 24),
+
+                // Ayuda y soporte
+                _cardSoporte(),
+
+                const SizedBox(height: 28),
 
                 // Danger Zone
                 Container(
@@ -1340,40 +1580,6 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
               );
             }),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _construirSeccion({
-    required String titulo,
-    IconData? icono,
-    required List<Widget> children,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: SuperficiesApp.card(radius: 20, temaTint: 0.18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (icono != null) ...[
-                Icon(icono, color: ColoresApp.textoPrincipal, size: 20),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                titulo,
-                style: GoogleFonts.baloo2(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: ColoresApp.principalMarca,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ...children,
         ],
       ),
     );
@@ -1632,224 +1838,6 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     );
   }
 
-  static const double _alturaCeldaActividad = 88;
-
-  Widget _construirBloqueActividadInformativa() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            const gap = 10.0;
-            final ancho = (constraints.maxWidth - gap) / 2;
-            return Wrap(
-              spacing: gap,
-              runSpacing: gap,
-              children: [
-                SizedBox(
-                  width: ancho,
-                  height: _alturaCeldaActividad,
-                  child: _celdaMetricaInformativa(
-                    icono: CupertinoIcons.person_fill,
-                    etiqueta: 'Edad',
-                    valor: _edad != null ? '${_edad!} años' : '—',
-                    onEditar: _actualizarEdad,
-                  ),
-                ),
-                SizedBox(
-                  width: ancho,
-                  height: _alturaCeldaActividad,
-                  child: _cargandoMetricas
-                      ? _celdaMetricaCargando()
-                      : _celdaMetricaInformativa(
-                          icono: CupertinoIcons.person_2_fill,
-                          etiqueta: 'Amigos',
-                          valor: '$_cantidadAmigos',
-                        ),
-                ),
-                SizedBox(
-                  width: ancho,
-                  height: _alturaCeldaActividad,
-                  child: _cargandoMetricas
-                      ? _celdaMetricaCargando()
-                      : _celdaMetricaInformativa(
-                          iconoWidget: IconoLocal(
-                            size: 20,
-                            color: ColoresApp.principalMarca,
-                          ),
-                          etiqueta: 'Locales visitados',
-                          valor: '$_localesVisitados',
-                        ),
-                ),
-                SizedBox(
-                  width: ancho,
-                  height: _alturaCeldaActividad,
-                  child: _cargandoMetricas
-                      ? _celdaMetricaCargando()
-                      : _celdaMetricaInformativa(
-                          icono: CupertinoIcons.ticket_fill,
-                          etiqueta: 'Eventos vividos',
-                          valor: '$_eventosAsistidos',
-                        ),
-                ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _celdaMetricaCargando() {
-    return Container(
-      decoration: BoxDecoration(
-        color: ColoresApp.fondoPrincipal.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: ColoresApp.principalMarca.withValues(alpha: 0.1),
-        ),
-      ),
-      child: const Center(
-        child: CupertinoActivityIndicator(radius: 10),
-      ),
-    );
-  }
-
-  Widget _celdaMetricaInformativa({
-    IconData? icono,
-    Widget? iconoWidget,
-    required String etiqueta,
-    required String valor,
-    VoidCallback? onEditar,
-  }) {
-    final iconChild = iconoWidget ??
-        Icon(icono, size: 20, color: ColoresApp.principalMarca);
-
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          width: double.infinity,
-          height: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          decoration: BoxDecoration(
-            color: ColoresApp.fondoPrincipal.withValues(alpha: 0.45),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: ColoresApp.principalMarca.withValues(alpha: 0.1),
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              iconChild,
-              const SizedBox(height: 6),
-              Text(
-                valor,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.baloo2(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: ColoresApp.textoPrincipal,
-                  height: 1.05,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                etiqueta,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.baloo2(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: ColoresApp.textoSecundario,
-                  height: 1.15,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (onEditar != null)
-          Positioned(
-            top: 6,
-            right: 6,
-            child: GestureDetector(
-              onTap: onEditar,
-              behavior: HitTestBehavior.opaque,
-              child: Icon(
-                CupertinoIcons.pencil,
-                size: 16,
-                color: ColoresApp.principalMarca,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _construirCampoEditable({
-    required String etiqueta,
-    required String valor,
-    required VoidCallback onEditar,
-    IconData? iconoLeading,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(
-          child: Row(
-            children: [
-              if (iconoLeading != null) ...[
-                Icon(
-                  iconoLeading,
-                  size: 18,
-                  color: ColoresApp.principalMarca.withValues(alpha: 0.9),
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      etiqueta,
-                      style: GoogleFonts.baloo2(
-                        fontSize: 13,
-                        color: ColoresApp.textoSecundario,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      valor,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.baloo2(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: ColoresApp.textoPrincipal,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: onEditar,
-          child: Icon(
-            CupertinoIcons.pencil,
-            color: ColoresApp.principalMarca,
-            size: 22,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _construirCampoRedModerno({
     required IconData icono,
     required String etiqueta,
@@ -1967,6 +1955,79 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Diálogo para editar un campo de texto del perfil. Devuelve el nuevo valor
+/// (String) al confirmar, o null al cancelar.
+class _DialogoEditarCampoPerfil extends StatefulWidget {
+  final String titulo;
+  final String valorActual;
+  final String placeholder;
+  final TextInputType tipoTeclado;
+
+  const _DialogoEditarCampoPerfil({
+    required this.titulo,
+    required this.valorActual,
+    required this.placeholder,
+    this.tipoTeclado = TextInputType.text,
+  });
+
+  @override
+  State<_DialogoEditarCampoPerfil> createState() =>
+      _DialogoEditarCampoPerfilState();
+}
+
+class _DialogoEditarCampoPerfilState extends State<_DialogoEditarCampoPerfil> {
+  late final TextEditingController _ctrl;
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.valorActual);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoAlertDialog(
+      title: Text(
+        widget.titulo,
+        style: GoogleFonts.baloo2(fontWeight: FontWeight.w800),
+      ),
+      content: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: CupertinoTextField(
+          controller: _ctrl,
+          focusNode: _focus,
+          keyboardType: widget.tipoTeclado,
+          placeholder: widget.placeholder,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+        ),
+      ),
+      actions: [
+        CupertinoDialogAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        CupertinoDialogAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(_ctrl.text.trim()),
+          child: const Text('Guardar'),
+        ),
+      ],
     );
   }
 }

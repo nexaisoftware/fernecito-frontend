@@ -11,7 +11,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
-import '../core/servicio_reportes.dart';
+import '../core/flujo_reporte.dart';
 import '../core/supabase_client.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import 'pantalla_resenas_locales.dart';
@@ -36,11 +36,8 @@ class PantallaLocalPerfil extends StatefulWidget {
   State<PantallaLocalPerfil> createState() => _PantallaLocalPerfilState();
 }
 
-class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
-    with SingleTickerProviderStateMixin {
-  bool _infoExpandida = false;
-  AnimationController? _breathController;
-  Animation<double>? _breathScale;
+class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
+  bool _infoExpandida = true; // info del lugar desplegada por defecto
 
   // Loading state
   bool _cargando = true;
@@ -57,6 +54,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
   String? _urlMaps;
   List<String> _rubros = [];
   bool _verificado = false;
+  bool _mostrarCalificaciones = true;
   double? _calificacionPromedio;
   int _calificacionCantidad = 0;
   String? _bannerUrl;
@@ -68,21 +66,8 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
   @override
   void initState() {
     super.initState();
-    _breathController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
-    _breathScale = Tween<double>(begin: 0.98, end: 1.02).animate(
-      CurvedAnimation(parent: _breathController!, curve: Curves.easeInOut),
-    );
     _avatarEffective = widget.avatarUrl;
     _cargarDatos();
-  }
-
-  @override
-  void dispose() {
-    _breathController?.dispose();
-    super.dispose();
   }
 
   /// Resuelve una path de storage a URL pública. Si ya es http, la devuelve tal cual.
@@ -108,6 +93,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
             'url_instagram, url_tiktok, url_website, '
             'ciudad, provincia, direccion, url_maps, rubro, '
             'local_verificado, calificacion_promedio, calificacion_cantidad, '
+            'mostrar_calificaciones, '
             'foto_perfil_url, url_foto_banner, estado_cuenta, '
             'foto_local_1, foto_local_2, foto_local_3, foto_local_4, foto_local_5',
           )
@@ -257,6 +243,8 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
         _urlMaps = local['url_maps']?.toString();
         _rubros = rubrosList;
         _verificado = local['local_verificado'] == true;
+        // Switch del local: si lo apagó, no mostramos su calificación.
+        _mostrarCalificaciones = local['mostrar_calificaciones'] != false;
         _calificacionPromedio = (calNum != null && calNum > 0) ? calNum : null;
         _calificacionCantidad = calCantInt;
         _bannerUrl = bannerEff.isNotEmpty ? bannerEff : null;
@@ -322,15 +310,6 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
     );
   }
 
-  /// Label cualitativa del rating.
-  String _labelRating(double r) {
-    if (r >= 4.5) return 'Excelente';
-    if (r >= 4.0) return 'Muy bueno';
-    if (r >= 3.5) return 'Bueno';
-    if (r >= 3.0) return 'Regular';
-    return 'Bajo';
-  }
-
   Future<void> _abrirUbicacion(BuildContext context) async {
     // Si el local cargó url_maps, lo usamos directo (Google Maps / Maps app).
     if (_urlMaps != null && _urlMaps!.isNotEmpty) {
@@ -361,53 +340,37 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
     }
   }
 
-  Future<void> _reportarLocal() async {
-    final id = widget.idLocal;
-    if (id == null || id.isEmpty) return;
-    final motivo = await showCupertinoModalPopup<MotivoReporte>(
+  /// Menú "3 puntitos" del local. Por ahora solo Reportar (oculto a la vista).
+  void _abrirMenuLocal() {
+    showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => CupertinoActionSheet(
-        title: const Text('Reportar local'),
-        message: const Text('Elegí el motivo principal del reporte.'),
-        actions: motivosReporteCuenta
-            .map(
-              (m) => CupertinoActionSheetAction(
-                onPressed: () => Navigator.pop(ctx, m),
-                child: Text(m.label),
-              ),
-            )
-            .toList(),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _reportarLocal();
+            },
+            child: const Text('Reportar local'),
+          ),
+        ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(ctx),
           child: const Text('Cancelar'),
         ),
       ),
     );
-    if (motivo == null) return;
-    final res = await ServicioReportes().reportarCuenta(
-      reportanteTipo: 'usuario',
+  }
+
+  Future<void> _reportarLocal() async {
+    final id = widget.idLocal;
+    if (id == null || id.isEmpty) return;
+    await mostrarFlujoReporte(
+      context: context,
+      entidad: 'este local',
       targetTipo: 'local',
       targetId: id,
-      motivo: motivo.codigo,
-    );
-    if (!mounted) return;
-    showCupertinoDialog<void>(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Reporte enviado'),
-        content: Text(
-          res['ok'] == true
-              ? 'Gracias. Vamos a revisar este local.'
-              : (res['error']?.toString() ?? 'No se pudo enviar el reporte.'),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -432,8 +395,10 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,
                     onPressed: () => Navigator.of(context).pop(),
-                    child: Icon(CupertinoIcons.back,
-                        color: ColoresApp.principalMarca),
+                    child: Icon(
+                      CupertinoIcons.back,
+                      color: ColoresApp.principalMarca,
+                    ),
                   ),
                 ),
               ),
@@ -451,16 +416,18 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
                             shape: BoxShape.circle,
                             color: ColoresApp.fondoSuperficie,
                             border: Border.all(
-                              color: ColoresApp.textoSecundario
-                                  .withValues(alpha: 0.3),
+                              color: ColoresApp.textoSecundario.withValues(
+                                alpha: 0.3,
+                              ),
                               width: 2,
                             ),
                           ),
                           child: Icon(
                             CupertinoIcons.building_2_fill,
                             size: 50,
-                            color:
-                                ColoresApp.textoSecundario.withValues(alpha: 0.7),
+                            color: ColoresApp.textoSecundario.withValues(
+                              alpha: 0.7,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -476,14 +443,18 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
                         const SizedBox(height: 18),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 16),
+                            horizontal: 18,
+                            vertical: 16,
+                          ),
                           decoration: BoxDecoration(
-                            color:
-                                ColoresApp.fondoSuperficie.withValues(alpha: 0.6),
+                            color: ColoresApp.fondoSuperficie.withValues(
+                              alpha: 0.6,
+                            ),
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: ColoresApp.textoSecundario
-                                  .withValues(alpha: 0.18),
+                              color: ColoresApp.textoSecundario.withValues(
+                                alpha: 0.18,
+                              ),
                             ),
                           ),
                           child: Column(
@@ -700,150 +671,104 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-                                _breathScale != null
-                                    ? ScaleTransition(
-                                        scale: _breathScale!,
-                                        child: FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Text(
-                                            nombreLocal,
-                                            style: GoogleFonts.baloo2(
-                                              fontSize: isNarrow ? 18 : 22,
-                                              fontWeight: FontWeight.w800,
-                                              color: ColoresApp.textoPrincipal,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      )
-                                    : FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Text(
-                                          nombreLocal,
-                                          style: GoogleFonts.baloo2(
-                                            fontSize: isNarrow ? 18 : 22,
-                                            fontWeight: FontWeight.w800,
-                                            color: ColoresApp.textoPrincipal,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                                if (_verificado) ...[
-                                  const SizedBox(height: 6),
-                                  Row(
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(
-                                        CupertinoIcons.checkmark_seal_fill,
-                                        size: 14,
-                                        color: ColoresApp.principalMarca,
-                                      ),
-                                      const SizedBox(width: 4),
                                       Text(
-                                        'Verificado',
+                                        nombreLocal,
                                         style: GoogleFonts.baloo2(
-                                          fontSize: 11.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: ColoresApp.principalMarca,
-                                          letterSpacing: 0.3,
+                                          fontSize: isNarrow ? 21 : 26,
+                                          fontWeight: FontWeight.w800,
+                                          color: ColoresApp.textoPrincipal,
                                         ),
+                                        textAlign: TextAlign.center,
                                       ),
+                                      if (_verificado) ...[
+                                        SizedBox(width: isNarrow ? 5 : 7),
+                                        Icon(
+                                          CupertinoIcons.checkmark_seal_fill,
+                                          size: isNarrow ? 20 : 24,
+                                          color: ColoresApp.principalMarca,
+                                        ),
+                                      ],
                                     ],
                                   ),
-                                ],
-                                const SizedBox(height: 8),
-                                GestureDetector(
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      CupertinoPageRoute(
-                                        builder: (_) => PantallaResenasLocales(
-                                          nombreLocal: nombreLocal,
-                                          idLocal: widget.idLocal,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(100),
-                                    child: BackdropFilter(
-                                      filter: ImageFilter.blur(
-                                        sigmaX: 2.1,
-                                        sigmaY: 2.1,
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                            100,
-                                          ),
-                                          border: Border.all(
-                                            color: ColoresApp.principalMarca
-                                                .withOpacity(0.45),
-                                          ),
-                                          gradient: RadialGradient(
-                                            center: Alignment.center,
-                                            radius: 1.2,
-                                            colors: [
-                                              ColoresApp.principalMarca
-                                                  .withOpacity(0.28),
-                                              ColoresApp.principalMarca
-                                                  .withOpacity(0.08),
-                                            ],
-                                          ),
-                                        ),
-                                        child: _calificacionPromedio == null
-                                            ? Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    CupertinoIcons.star,
-                                                    color: ColoresApp
-                                                        .principalMarca,
-                                                    size: 18,
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    'Sin calificaciones aún',
-                                                    style: GoogleFonts.baloo2(
-                                                      fontSize: 14,
-                                                      color: ColoresApp
-                                                          .principalMarca,
-                                                    ),
-                                                  ),
-                                                ],
-                                              )
-                                            : Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    CupertinoIcons.star_fill,
-                                                    color: ColoresApp
-                                                        .principalMarca,
-                                                    size: 18,
-                                                  ),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    '${_calificacionPromedio!.toStringAsFixed(1)} • ${_labelRating(_calificacionPromedio!)}'
-                                                    '${_calificacionCantidad > 0 ? '  ·  $_calificacionCantidad' : ''}',
-                                                    style: GoogleFonts.baloo2(
-                                                      fontSize: 14,
-                                                      color: ColoresApp
-                                                          .principalMarca,
-                                                    ),
-                                                  ),
-                                                ],
+                                ),
+                                if (_mostrarCalificaciones)
+                                  const SizedBox(height: 8),
+                                if (_mostrarCalificaciones)
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        CupertinoPageRoute(
+                                          builder: (_) =>
+                                              PantallaResenasLocales(
+                                                nombreLocal: nombreLocal,
+                                                idLocal: widget.idLocal,
                                               ),
+                                        ),
+                                      );
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
                                       ),
+                                      child: _calificacionPromedio == null
+                                          ? Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const _EstrellasRating(
+                                                  valor: null,
+                                                  size: 16,
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  'Sin calificaciones aún',
+                                                  style: GoogleFonts.baloo2(
+                                                    fontSize: 12.5,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: ColoresApp
+                                                        .textoSecundario,
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                          : Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  _calificacionPromedio!
+                                                      .toStringAsFixed(1),
+                                                  style: GoogleFonts.baloo2(
+                                                    fontSize: 36,
+                                                    fontWeight: FontWeight.w900,
+                                                    height: 0.95,
+                                                    letterSpacing: -0.5,
+                                                    color: ColoresApp
+                                                        .textoPrincipal,
+                                                  ),
+                                                ),
+                                                _EstrellasRating(
+                                                  valor: _calificacionPromedio,
+                                                  size: 15,
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  '$_calificacionCantidad ${_calificacionCantidad == 1 ? 'calificación' : 'calificaciones'}',
+                                                  style: GoogleFonts.baloo2(
+                                                    fontSize: 12.5,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: ColoresApp
+                                                        .textoSecundario,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                     ),
                                   ),
-                                ),
                                 SizedBox(height: isNarrow ? 14 : 18),
                                 // Fila de iconos modernos sin contenedor (solo glow)
                                 SingleChildScrollView(
@@ -852,46 +777,71 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
                                   padding: EdgeInsets.symmetric(
                                     horizontal: isNarrow ? 4 : 8,
                                   ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _IconoEnlace(
-                                        icon: CupertinoIcons.location_solid,
-                                        onTap: () => _abrirUbicacion(context),
-                                        size: isNarrow ? 24 : 28,
-                                      ),
-                                      if (_instagramUrl != null &&
-                                          _instagramUrl!.isNotEmpty) ...[
-                                        SizedBox(width: isNarrow ? 22 : 28),
-                                        _IconoEnlace(
-                                          icon: FontAwesomeIcons.instagram,
-                                          useFontAwesome: true,
-                                          onTap: () =>
-                                              _abrirUrl(_instagramUrl!),
-                                          size: isNarrow ? 24 : 28,
-                                        ),
-                                      ],
-                                      if (_tiktokUrl != null &&
-                                          _tiktokUrl!.isNotEmpty) ...[
-                                        SizedBox(width: isNarrow ? 22 : 28),
-                                        _IconoEnlace(
-                                          icon: FontAwesomeIcons.tiktok,
-                                          useFontAwesome: true,
-                                          onTap: () => _abrirUrl(_tiktokUrl!),
-                                          size: isNarrow ? 24 : 28,
-                                        ),
-                                      ],
-                                      if (_sitioWebUrl != null &&
-                                          _sitioWebUrl!.isNotEmpty) ...[
-                                        SizedBox(width: isNarrow ? 22 : 28),
-                                        _IconoEnlace(
-                                          icon: CupertinoIcons.globe,
-                                          onTap: () => _abrirUrl(_sitioWebUrl!),
-                                          size: isNarrow ? 24 : 28,
-                                        ),
-                                      ],
-                                    ],
+                                  child: Builder(
+                                    builder: (_) {
+                                      final sz = isNarrow ? 24.0 : 28.0;
+                                      final sep = SizedBox(
+                                        width: isNarrow ? 22 : 28,
+                                      );
+                                      final igOk =
+                                          _instagramUrl != null &&
+                                          _instagramUrl!.isNotEmpty;
+                                      final ttOk =
+                                          _tiktokUrl != null &&
+                                          _tiktokUrl!.isNotEmpty;
+                                      final webOk =
+                                          _sitioWebUrl != null &&
+                                          _sitioWebUrl!.isNotEmpty;
+                                      final ubiOk =
+                                          _ubicacionTextoComputed.isNotEmpty ||
+                                          (_direccion ?? '').isNotEmpty ||
+                                          (_urlMaps ?? '').isNotEmpty;
+                                      return Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          _IconoEnlace(
+                                            icon: CupertinoIcons.location_solid,
+                                            activo: ubiOk,
+                                            onTap: ubiOk
+                                                ? () => _abrirUbicacion(context)
+                                                : null,
+                                            size: sz,
+                                          ),
+                                          sep,
+                                          _IconoEnlace(
+                                            icon: FontAwesomeIcons.instagram,
+                                            useFontAwesome: true,
+                                            activo: igOk,
+                                            onTap: igOk
+                                                ? () =>
+                                                      _abrirUrl(_instagramUrl!)
+                                                : null,
+                                            size: sz,
+                                          ),
+                                          sep,
+                                          _IconoEnlace(
+                                            icon: FontAwesomeIcons.tiktok,
+                                            useFontAwesome: true,
+                                            activo: ttOk,
+                                            onTap: ttOk
+                                                ? () => _abrirUrl(_tiktokUrl!)
+                                                : null,
+                                            size: sz,
+                                          ),
+                                          sep,
+                                          _IconoEnlace(
+                                            icon: CupertinoIcons.globe,
+                                            activo: webOk,
+                                            onTap: webOk
+                                                ? () => _abrirUrl(_sitioWebUrl!)
+                                                : null,
+                                            size: sz,
+                                          ),
+                                        ],
+                                      );
+                                    },
                                   ),
                                 ),
                               ],
@@ -901,22 +851,16 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
                       ),
                     ),
                     Positioned(
-                      top: padding.top + 10,
-                      right: horizontalPadding,
+                      top: padding.top + 6,
+                      right: horizontalPadding - 4,
                       child: CupertinoButton(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        minimumSize: const Size(0, 30),
-                        onPressed: _reportarLocal,
-                        child: Text(
-                          'Reportar',
-                          style: GoogleFonts.baloo2(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: ColoresApp.textoSecundario,
-                          ),
+                        padding: const EdgeInsets.all(8),
+                        minimumSize: const Size(0, 36),
+                        onPressed: _abrirMenuLocal,
+                        child: Icon(
+                          CupertinoIcons.ellipsis,
+                          size: 22,
+                          color: ColoresApp.textoSecundario,
                         ),
                       ),
                     ),
@@ -1275,9 +1219,9 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil>
                   ),
                   child: Column(
                     children: [
-                      for (final loc in _lugaresPopulares)
+                      for (final loc in _lugaresPopulares.take(6))
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.only(bottom: 8),
                           child: _CardLugarPopular(
                             idLocal: loc['id'] as String? ?? '',
                             nombre: loc['nombre'] as String? ?? 'Local',
@@ -1327,19 +1271,58 @@ class _EventoPlaceholder extends StatelessWidget {
   }
 }
 
+/// Fila de 5 estrellas pintadas según el promedio (con medias estrellas).
+/// `valor` null => todas vacías (sin calificaciones).
+class _EstrellasRating extends StatelessWidget {
+  final double? valor;
+  final double size;
+  const _EstrellasRating({required this.valor, this.size = 15});
+
+  @override
+  Widget build(BuildContext context) {
+    const dorado = Color(0xFFFFC107);
+    final apagado = ColoresApp.textoSecundario.withValues(alpha: 0.45);
+    final v = valor;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (i) {
+        final pos = i + 1;
+        IconData icono;
+        Color color;
+        if (v == null || v < pos - 0.5) {
+          icono = CupertinoIcons.star;
+          color = apagado;
+        } else if (v >= pos) {
+          icono = CupertinoIcons.star_fill;
+          color = dorado;
+        } else {
+          icono = CupertinoIcons.star_lefthalf_fill;
+          color = dorado;
+        }
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: size * 0.07),
+          child: Icon(icono, size: size, color: color),
+        );
+      }),
+    );
+  }
+}
+
 /// Icono moderno sin contenedor, con glow sutil. Reemplaza el botón circular antiguo.
 /// Se usa para ubicación, Instagram, TikTok, sitio web en el banner del local.
 class _IconoEnlace extends StatefulWidget {
   final IconData icon;
   final bool useFontAwesome;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final double size;
+  final bool activo;
 
   const _IconoEnlace({
     required this.icon,
-    required this.onTap,
+    this.onTap,
     this.useFontAwesome = false,
     this.size = 28,
+    this.activo = true,
   });
 
   @override
@@ -1351,6 +1334,18 @@ class _IconoEnlaceState extends State<_IconoEnlace> {
 
   @override
   Widget build(BuildContext context) {
+    // Desactivado (el local no cargó este enlace): icono apagado, sin glow ni tap.
+    if (!widget.activo) {
+      return Opacity(
+        opacity: 0.25,
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: widget.useFontAwesome
+              ? FaIcon(widget.icon, size: widget.size, color: Colors.white)
+              : Icon(widget.icon, size: widget.size, color: Colors.white),
+        ),
+      );
+    }
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: (_) => setState(() => _pressed = true),

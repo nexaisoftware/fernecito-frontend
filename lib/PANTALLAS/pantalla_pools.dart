@@ -1,7 +1,6 @@
 /// Pantalla Pool de un evento - Banner flyer, squads y personas en grid estilo burbujas.
 library;
 
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -17,8 +16,8 @@ import 'pantalla_local_perfil.dart';
 import 'pantalla_perfil_squads.dart';
 import 'pantalla_perfil_usuarios.dart';
 
-/// Flyer por defecto para el banner.
-const String _flyerMockDefault = 'assets/imagenes/mockups/Screenshot_20260202_013949_Instagram.jpg';
+/// Fallback propio de marca cuando el evento no trae flyer.
+const String _flyerDefault = 'assets/imagenes/logoiconapp.png';
 
 bool _esAsset(String url) => url.startsWith('assets/');
 
@@ -33,7 +32,9 @@ Future<void> _abrirUrl(String raw) async {
   if (uri == null) return;
   try {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
-  } catch (_) {/* silencioso */}
+  } catch (_) {
+    /* silencioso */
+  }
 }
 
 class PantallaPools extends StatefulWidget {
@@ -49,7 +50,7 @@ class PantallaPools extends StatefulWidget {
     required this.nombreEvento,
     this.flyerUrl,
     this.nombreLocal = 'Local',
-    this.avatarLocal = 'assets/imagenes/mockups/perfiles_local/Screenshot_20260202_015301_Google.jpg',
+    this.avatarLocal = 'assets/imagenes/logoiconapp.png',
   });
 
   @override
@@ -83,7 +84,7 @@ class _PantallaPoolsState extends State<PantallaPools> {
     final personas = _data.personas;
     final padding = MediaQuery.of(context).padding;
     final size = MediaQuery.of(context).size;
-    final flyer = widget.flyerUrl ?? _flyerMockDefault;
+    final flyer = widget.flyerUrl ?? _flyerDefault;
     final nombreEvento = widget.nombreEvento;
     final nombreLocal = widget.nombreLocal;
     final avatarLocal = widget.avatarLocal;
@@ -125,7 +126,8 @@ class _PantallaPoolsState extends State<PantallaPools> {
                               fit: BoxFit.cover,
                               cacheWidth: 800,
                               cacheHeight: 800,
-                              errorBuilder: (_, __, ___) => _placeholderBanner(),
+                              errorBuilder: (_, __, ___) =>
+                                  _placeholderBanner(),
                             )
                           : CachedNetworkImage(
                               imageUrl: flyer,
@@ -144,158 +146,184 @@ class _PantallaPoolsState extends State<PantallaPools> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text(
-                  'Personas que irán a',
-                  style: GoogleFonts.baloo2(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: ColoresApp.textoSecundario,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  nombreEvento,
-                  style: GoogleFonts.baloo2(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: ColoresApp.textoPrincipal,
-                    letterSpacing: -0.5,
-                    height: 1.15,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                GestureDetector(
-                  onTap: () => Navigator.of(context).push(
-                    CupertinoPageRoute(
-                      builder: (_) => PantallaLocalPerfil(
-                        avatarUrl: avatarLocal,
-                        nombreLocal: nombreLocal,
+                    Text(
+                      'Personas que irán a',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: ColoresApp.textoSecundario,
                       ),
                     ),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: ColoresApp.fondoSuperficie,
-                      borderRadius: BorderRadius.circular(50),
-                      border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.5)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.5)),
-                          ),
-                          child: ClipOval(
-                            child: _esAsset(avatarLocal)
-                                ? Image.asset(avatarLocal, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _iconLocal())
-                                : CachedNetworkImage(imageUrl: avatarLocal, fit: BoxFit.cover, errorWidget: (_, __, ___) => _iconLocal()),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          nombreLocal,
-                          style: GoogleFonts.baloo2(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: ColoresApp.textoPrincipal,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(CupertinoIcons.chevron_right, size: 16, color: ColoresApp.textoSecundario),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                if (_cargando)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 60),
-                    child: Center(
-                      child: CupertinoActivityIndicator(
-                        color: ColoresApp.principalMarca,
-                        radius: 16,
+                    const SizedBox(height: 6),
+                    Text(
+                      nombreEvento,
+                      style: GoogleFonts.baloo2(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: ColoresApp.textoPrincipal,
+                        letterSpacing: -0.5,
+                        height: 1.15,
                       ),
                     ),
-                  )
-                else if (personas.isEmpty && squads.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 50),
-                    child: Center(
-                      child: Column(
-                        children: [
-                          Icon(CupertinoIcons.person_2,
-                              size: 48, color: ColoresApp.textoSecundario),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Todavía no hay nadie confirmado',
-                            style: GoogleFonts.baloo2(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: ColoresApp.textoPrincipal,
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        CupertinoPageRoute(
+                          builder: (_) => PantallaLocalPerfil(
+                            avatarUrl: avatarLocal,
+                            nombreLocal: nombreLocal,
+                          ),
+                        ),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: ColoresApp.fondoSuperficie,
+                          borderRadius: BorderRadius.circular(50),
+                          border: Border.all(
+                            color: ColoresApp.principalMarca.withOpacity(0.5),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: ColoresApp.principalMarca.withOpacity(
+                                    0.5,
+                                  ),
+                                ),
+                              ),
+                              child: ClipOval(
+                                child: _esAsset(avatarLocal)
+                                    ? Image.asset(
+                                        avatarLocal,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) =>
+                                            _iconLocal(),
+                                      )
+                                    : CachedNetworkImage(
+                                        imageUrl: avatarLocal,
+                                        fit: BoxFit.cover,
+                                        errorWidget: (_, __, ___) =>
+                                            _iconLocal(),
+                                      ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '¡Sé el primero en sumarte al pool!',
-                            style: GoogleFonts.baloo2(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                            const SizedBox(width: 10),
+                            Text(
+                              nombreLocal,
+                              style: GoogleFonts.baloo2(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: ColoresApp.textoPrincipal,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Icon(
+                              CupertinoIcons.chevron_right,
+                              size: 16,
                               color: ColoresApp.textoSecundario,
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else ...[
-                  // Sección Personas que van a este evento
-                  if (personas.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(left: 2, bottom: 12),
-                      child: Text(
-                        'Personas que van a este evento',
-                        style: GoogleFonts.baloo2(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: ColoresApp.textoPrincipal,
+                          ],
                         ),
                       ),
                     ),
-                    _GridPersonasAlternado(
-                      personas: personas,
-                      onTap: (p) => _mostrarBottomSheetPersona(context, p),
-                    ),
-                    const SizedBox(height: 32),
-                  ],
-                  // Sección Squads (más relevancia)
-                  if (squads.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(left: 2, bottom: 12),
-                      child: Row(
-                        children: [
-                          Text(
-                            '👥 Squads del evento',
+                    const SizedBox(height: 20),
+                    if (_cargando)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 60),
+                        child: Center(
+                          child: CupertinoActivityIndicator(
+                            color: ColoresApp.principalMarca,
+                            radius: 16,
+                          ),
+                        ),
+                      )
+                    else if (personas.isEmpty && squads.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 50),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(
+                                CupertinoIcons.person_2,
+                                size: 48,
+                                color: ColoresApp.textoSecundario,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Todavía no hay nadie confirmado',
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: ColoresApp.textoPrincipal,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '¡Sé el primero en sumarte al pool!',
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: ColoresApp.textoSecundario,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else ...[
+                      // Sección Personas que van a este evento
+                      if (personas.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2, bottom: 12),
+                          child: Text(
+                            'Personas que van a este evento',
                             style: GoogleFonts.baloo2(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
                               color: ColoresApp.textoPrincipal,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    _GridSquadsAlternado(
-                      squads: squads,
-                      onTap: (s) => _mostrarBottomSheetSquad(context, s),
-                    ),
-                  ],
-                ],
+                        ),
+                        _GridPersonasAlternado(
+                          personas: personas,
+                          onTap: (p) => _mostrarBottomSheetPersona(context, p),
+                        ),
+                        const SizedBox(height: 32),
+                      ],
+                      // Sección Squads (más relevancia)
+                      if (squads.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2, bottom: 12),
+                          child: Row(
+                            children: [
+                              Text(
+                                '👥 Squads del evento',
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  color: ColoresApp.textoPrincipal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _GridSquadsAlternado(
+                          squads: squads,
+                          onTap: (s) => _mostrarBottomSheetSquad(context, s),
+                        ),
+                      ],
+                    ],
                   ],
                 ),
               ),
@@ -306,14 +334,25 @@ class _PantallaPoolsState extends State<PantallaPools> {
     );
   }
 
-  Widget _iconLocal() => Icon(CupertinoIcons.building_2_fill, size: 16, color: ColoresApp.textoSecundario);
+  Widget _iconLocal() => Icon(
+    CupertinoIcons.building_2_fill,
+    size: 16,
+    color: ColoresApp.textoSecundario,
+  );
 
   Widget _placeholderBanner() => Container(
-        color: ColoresApp.fondoSuperficie,
-        child: Icon(CupertinoIcons.photo, size: 64, color: ColoresApp.textoSecundario),
-      );
+    color: ColoresApp.fondoSuperficie,
+    child: Icon(
+      CupertinoIcons.photo,
+      size: 64,
+      color: ColoresApp.textoSecundario,
+    ),
+  );
 
-  void _mostrarBottomSheetSquad(BuildContext context, Map<String, dynamic> squad) {
+  void _mostrarBottomSheetSquad(
+    BuildContext context,
+    Map<String, dynamic> squad,
+  ) {
     showCupertinoModalPopup(
       context: context,
       builder: (ctx) => _BottomSheetSquad(
@@ -324,7 +363,10 @@ class _PantallaPoolsState extends State<PantallaPools> {
     );
   }
 
-  void _mostrarBottomSheetPersona(BuildContext context, Map<String, dynamic> persona) {
+  void _mostrarBottomSheetPersona(
+    BuildContext context,
+    Map<String, dynamic> persona,
+  ) {
     showCupertinoModalPopup(
       context: context,
       builder: (ctx) => _BottomSheetPersona(
@@ -379,7 +421,9 @@ class _GridPersonasAlternado extends StatelessWidget {
             children: indices.map((idx) {
               final p = personas[idx];
               return Padding(
-                padding: EdgeInsets.only(right: idx < indices.length - 1 ? _gridEspaciado : 0),
+                padding: EdgeInsets.only(
+                  right: idx < indices.length - 1 ? _gridEspaciado : 0,
+                ),
                 child: SizedBox(
                   width: tamCelda,
                   height: _gridCeldaAltura,
@@ -432,15 +476,25 @@ class _CeldaPersonaSoloAvatar extends StatelessWidget {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxWidth: maxBurbuja),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: ColoresApp.principalMarca.withOpacity(0.14),
                       borderRadius: BorderRadius.circular(50),
-                      border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.4), width: 1),
+                      border: Border.all(
+                        color: ColoresApp.principalMarca.withOpacity(0.4),
+                        width: 1,
+                      ),
                     ),
                     child: Text(
                       username,
-                      style: GoogleFonts.baloo2(fontSize: 11, fontWeight: FontWeight.w700, color: ColoresApp.principalMarca),
+                      style: GoogleFonts.baloo2(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: ColoresApp.principalMarca,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
@@ -453,7 +507,10 @@ class _CeldaPersonaSoloAvatar extends StatelessWidget {
               height: avatarSize,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.6), width: 2),
+                border: Border.all(
+                  color: ColoresApp.principalMarca.withOpacity(0.6),
+                  width: 2,
+                ),
               ),
               child: _AvatarRed(url: avatar, size: avatarSize),
             ),
@@ -515,7 +572,9 @@ class _GridSquadsAlternado extends StatelessWidget {
             children: indices.map((idx) {
               final s = squads[idx];
               return Padding(
-                padding: EdgeInsets.only(right: idx < indices.length - 1 ? _gridEspaciado : 0),
+                padding: EdgeInsets.only(
+                  right: idx < indices.length - 1 ? _gridEspaciado : 0,
+                ),
                 child: SizedBox(
                   width: tamCelda,
                   height: _gridCeldaAltura,
@@ -548,7 +607,9 @@ class _CeldaSquadGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final miembros = List<Map<String, dynamic>>.from(squad['miembros'] as List? ?? []);
+    final miembros = List<Map<String, dynamic>>.from(
+      squad['miembros'] as List? ?? [],
+    );
     const mostrar = 3;
     final visible = miembros.length > mostrar ? mostrar : miembros.length;
     final overflow = miembros.length - visible;
@@ -573,7 +634,11 @@ class _CeldaSquadGrid extends StatelessWidget {
                   constraints: BoxConstraints(maxWidth: maxBurbuja),
                   child: Text(
                     nombre,
-                    style: GoogleFonts.baloo2(fontSize: 14, fontWeight: FontWeight.w700, color: ColoresApp.textoPrincipal),
+                    style: GoogleFonts.baloo2(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: ColoresApp.textoPrincipal,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -588,55 +653,61 @@ class _CeldaSquadGrid extends StatelessWidget {
                 height: avatarStackSize + 8,
                 child: Stack(
                   clipBehavior: Clip.none,
-                children: [
-                  for (var i = visible - 1; i >= 0; i--)
-                    Positioned(
-                      left: i * 20.0,
-                      child: Container(
-                        width: avatarStackSize,
-                        height: avatarStackSize,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: ColoresApp.fondoPrincipal, width: 2.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.25),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
+                  children: [
+                    for (var i = visible - 1; i >= 0; i--)
+                      Positioned(
+                        left: i * 20.0,
+                        child: Container(
+                          width: avatarStackSize,
+                          height: avatarStackSize,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: ColoresApp.fondoPrincipal,
+                              width: 2.5,
                             ),
-                          ],
-                        ),
-                        child: _AvatarRed(
-                          url: miembros[i]['avatar'] as String? ?? '',
-                          size: avatarStackSize,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.25),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: _AvatarRed(
+                            url: miembros[i]['avatar'] as String? ?? '',
+                            size: avatarStackSize,
+                          ),
                         ),
                       ),
-                    ),
-                  if (overflow > 0)
-                    Positioned(
-                      left: 64,
-                      top: 8,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: ColoresApp.fondoPrincipal,
-                          border: Border.all(color: ColoresApp.fondoPrincipal, width: 2.5),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '+$overflow',
-                            style: GoogleFonts.baloo2(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                              color: ColoresApp.principalMarca,
+                    if (overflow > 0)
+                      Positioned(
+                        left: 64,
+                        top: 8,
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: ColoresApp.fondoPrincipal,
+                            border: Border.all(
+                              color: ColoresApp.fondoPrincipal,
+                              width: 2.5,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '+$overflow',
+                              style: GoogleFonts.baloo2(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: ColoresApp.principalMarca,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
                 ),
               ),
             ),
@@ -684,9 +755,13 @@ class _AvatarRed extends StatelessWidget {
   }
 
   Widget _placeholder() => Container(
-        color: ColoresApp.fondoSuperficie,
-        child: Icon(CupertinoIcons.person_fill, size: size * 0.5, color: ColoresApp.textoSecundario),
-      );
+    color: ColoresApp.fondoSuperficie,
+    child: Icon(
+      CupertinoIcons.person_fill,
+      size: size * 0.5,
+      color: ColoresApp.textoSecundario,
+    ),
+  );
 }
 
 class _BottomSheetSquad extends StatelessWidget {
@@ -725,15 +800,23 @@ class _BottomSheetSquad extends StatelessWidget {
 
   void _verSquad(BuildContext context) {
     final s = squad;
-    final miembros = List<Map<String, dynamic>>.from(s['miembros'] as List? ?? []);
+    final miembros = List<Map<String, dynamic>>.from(
+      s['miembros'] as List? ?? [],
+    );
     final avatares = miembros.map((m) => m['avatar'] as String? ?? '').toList();
     final squadParaPerfil = {
       ...s,
       'miembros': miembros.length,
       'miembrosAvatares': avatares,
       'descripcion': s['descripcion'] ?? 'Grupo del pool del evento',
-      'avatar': s['avatar'] ?? (miembros.isNotEmpty ? miembros.first['avatar'] : 'https://i.pravatar.cc/200?img=30'),
-      'username': s['username'] ?? '@${(s['nombre'] as String? ?? 'squad').toLowerCase().replaceAll(RegExp(r'[^\w]'), '_')}',
+      'avatar':
+          s['avatar'] ??
+          (miembros.isNotEmpty
+              ? miembros.first['avatar']
+              : 'https://i.pravatar.cc/200?img=30'),
+      'username':
+          s['username'] ??
+          '@${(s['nombre'] as String? ?? 'squad').toLowerCase().replaceAll(RegExp(r'[^\w]'), '_')}',
     };
     final navigator = Navigator.of(context);
     navigator.pop();
@@ -752,7 +835,9 @@ class _BottomSheetSquad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final miembros = List<Map<String, dynamic>>.from(squad['miembros'] as List? ?? []);
+    final miembros = List<Map<String, dynamic>>.from(
+      squad['miembros'] as List? ?? [],
+    );
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
@@ -796,11 +881,17 @@ class _BottomSheetSquad extends StatelessWidget {
                     GestureDetector(
                       onTap: () => _verSquad(context),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.transparent,
                           borderRadius: BorderRadius.circular(50),
-                          border: Border.all(color: ColoresApp.principalMarca, width: 2),
+                          border: Border.all(
+                            color: ColoresApp.principalMarca,
+                            width: 2,
+                          ),
                         ),
                         child: Text(
                           'Ver squad',
@@ -846,11 +937,16 @@ class _BottomSheetSquad extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: ColoresApp.fondoPrincipal,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.white.withOpacity(0.08)),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.08),
+                            ),
                           ),
                           child: Row(
                             children: [
-                              _AvatarRed(url: m['avatar'] as String? ?? '', size: 48),
+                              _AvatarRed(
+                                url: m['avatar'] as String? ?? '',
+                                size: 48,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -964,7 +1060,10 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                       height: 100,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: ColoresApp.principalMarca, width: 3),
+                        border: Border.all(
+                          color: ColoresApp.principalMarca,
+                          width: 3,
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color: ColoresApp.principalMarca.withOpacity(0.3),
@@ -973,7 +1072,10 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                           ),
                         ],
                       ),
-                      child: _AvatarRed(url: persona['avatar'] as String? ?? '', size: 100),
+                      child: _AvatarRed(
+                        url: persona['avatar'] as String? ?? '',
+                        size: 100,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     BurbujaEstado(
@@ -1010,11 +1112,17 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                         );
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.transparent,
                           borderRadius: BorderRadius.circular(50),
-                          border: Border.all(color: ColoresApp.principalMarca, width: 2),
+                          border: Border.all(
+                            color: ColoresApp.principalMarca,
+                            width: 2,
+                          ),
                         ),
                         child: Text(
                           'Ver perfil',
@@ -1037,11 +1145,16 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                     ),
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: ColoresApp.fondoPrincipal,
                         borderRadius: BorderRadius.circular(50),
-                        border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.2),
+                        ),
                       ),
                       child: Text(
                         '${persona['edad'] ?? '—'} años',
@@ -1055,15 +1168,24 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                     if (persona['esDeSquad'] == true) ...[
                       const SizedBox(height: 10),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: ColoresApp.promoMarca.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(50),
-                          border: Border.all(color: ColoresApp.promoMarca.withOpacity(0.5)),
+                          border: Border.all(
+                            color: ColoresApp.promoMarca.withOpacity(0.5),
+                          ),
                         ),
                         child: Text(
                           'Squad: ${persona['squad']}',
-                          style: GoogleFonts.baloo2(fontSize: 13, fontWeight: FontWeight.w600, color: ColoresApp.promoMarca),
+                          style: GoogleFonts.baloo2(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: ColoresApp.promoMarca,
+                          ),
                         ),
                       ),
                     ],
@@ -1071,110 +1193,161 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                 ),
               ),
               const Divider(height: 1, color: Colors.white12),
-              Builder(builder: (context) {
-                final tiktokUrl = (persona['tiktok_url'] as String?)?.trim() ?? '';
-                final igUrl = (persona['instagram_url'] as String?)?.trim() ?? '';
-                final tieneId = (persona['id_usuario']?.toString() ?? '').isNotEmpty;
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                  child: Column(
-                    children: [
-                      if (tiktokUrl.isNotEmpty) ...[
-                        GestureDetector(
-                          onTap: () => _abrirUrl(tiktokUrl),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: ColoresApp.fondoPrincipal,
-                              borderRadius: BorderRadius.circular(50),
-                              border: Border.all(color: _tiktokColor, width: 2),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                FaIcon(FontAwesomeIcons.tiktok, size: 20, color: _tiktokColor),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'Ver TikTok',
-                                  style: GoogleFonts.baloo2(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.textoPrincipal),
+              Builder(
+                builder: (context) {
+                  final tiktokUrl =
+                      (persona['tiktok_url'] as String?)?.trim() ?? '';
+                  final igUrl =
+                      (persona['instagram_url'] as String?)?.trim() ?? '';
+                  final tieneId =
+                      (persona['id_usuario']?.toString() ?? '').isNotEmpty;
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    child: Column(
+                      children: [
+                        if (tiktokUrl.isNotEmpty) ...[
+                          GestureDetector(
+                            onTap: () => _abrirUrl(tiktokUrl),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: ColoresApp.fondoPrincipal,
+                                borderRadius: BorderRadius.circular(50),
+                                border: Border.all(
+                                  color: _tiktokColor,
+                                  width: 2,
                                 ),
-                              ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  FaIcon(
+                                    FontAwesomeIcons.tiktok,
+                                    size: 20,
+                                    color: _tiktokColor,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Ver TikTok',
+                                    style: GoogleFonts.baloo2(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: ColoresApp.textoPrincipal,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-                      if (igUrl.isNotEmpty) ...[
-                        GestureDetector(
-                          onTap: () => _abrirUrl(igUrl),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: ColoresApp.fondoPrincipal,
-                              borderRadius: BorderRadius.circular(50),
-                              border: Border.all(color: _igColor, width: 2),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                FaIcon(FontAwesomeIcons.instagram, size: 20, color: _igColor),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'Ver Instagram',
-                                  style: GoogleFonts.baloo2(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.textoPrincipal),
-                                ),
-                              ],
+                          const SizedBox(height: 10),
+                        ],
+                        if (igUrl.isNotEmpty) ...[
+                          GestureDetector(
+                            onTap: () => _abrirUrl(igUrl),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: ColoresApp.fondoPrincipal,
+                                borderRadius: BorderRadius.circular(50),
+                                border: Border.all(color: _igColor, width: 2),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  FaIcon(
+                                    FontAwesomeIcons.instagram,
+                                    size: 20,
+                                    color: _igColor,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Ver Instagram',
+                                    style: GoogleFonts.baloo2(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: ColoresApp.textoPrincipal,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                      ],
-                      if (tieneId)
-                        GestureDetector(
-                          onTap: (_solicitudEnviada || _enviando) ? null : _agregarAmigo,
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: _solicitudEnviada ? Colors.transparent : ColoresApp.principalMarca,
-                              borderRadius: BorderRadius.circular(50),
-                              border: Border.all(color: ColoresApp.principalMarca, width: 2),
-                            ),
-                            child: _enviando
-                                ? Center(
-                                    child: CupertinoActivityIndicator(color: ColoresApp.principalMarca),
-                                  )
-                                : _solicitudEnviada
-                                    ? Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(CupertinoIcons.checkmark_circle_fill, size: 20, color: ColoresApp.principalMarca),
-                                          const SizedBox(width: 10),
-                                          Text(
-                                            'Solicitud enviada',
-                                            style: GoogleFonts.baloo2(fontSize: 15, fontWeight: FontWeight.w700, color: ColoresApp.principalMarca),
-                                          ),
-                                        ],
-                                      )
-                                    : Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(CupertinoIcons.person_add, size: 20, color: Colors.white),
-                                          const SizedBox(width: 10),
-                                          Text(
-                                            'Agregar amigo',
-                                            style: GoogleFonts.baloo2(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
-                                          ),
-                                        ],
+                          const SizedBox(height: 14),
+                        ],
+                        if (tieneId)
+                          GestureDetector(
+                            onTap: (_solicitudEnviada || _enviando)
+                                ? null
+                                : _agregarAmigo,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: _solicitudEnviada
+                                    ? Colors.transparent
+                                    : ColoresApp.principalMarca,
+                                borderRadius: BorderRadius.circular(50),
+                                border: Border.all(
+                                  color: ColoresApp.principalMarca,
+                                  width: 2,
+                                ),
+                              ),
+                              child: _enviando
+                                  ? Center(
+                                      child: CupertinoActivityIndicator(
+                                        color: ColoresApp.principalMarca,
                                       ),
+                                    )
+                                  : _solicitudEnviada
+                                  ? Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          CupertinoIcons.checkmark_circle_fill,
+                                          size: 20,
+                                          color: ColoresApp.principalMarca,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          'Solicitud enviada',
+                                          style: GoogleFonts.baloo2(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            color: ColoresApp.principalMarca,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          CupertinoIcons.person_add,
+                                          size: 20,
+                                          color: Colors.white,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          'Agregar amigo',
+                                          style: GoogleFonts.baloo2(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-                );
-              }),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         ),

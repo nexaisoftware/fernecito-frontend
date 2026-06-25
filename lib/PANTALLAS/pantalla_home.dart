@@ -22,6 +22,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -35,8 +36,9 @@ import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
 import '../core/ubicaciones_data.dart';
 import '../widgets/cards_cartelera.dart';
+import '../widgets/carrusel_auto_scroll.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
-import '../widgets/skeleton_pantallas.dart';
+import '../widgets/splash_carga_fernecito.dart';
 import '../widgets/spotlight_search_bar.dart';
 import '../widgets/top_ultra_stories_overlay.dart';
 import 'pantalla_actividad.dart';
@@ -300,7 +302,7 @@ class _GlassTabBar extends StatelessWidget {
           // Capa de blur con gradiente más sutil (vibe iOS 18)
           ClipRect(
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -310,12 +312,6 @@ class _GlassTabBar extends StatelessWidget {
                       ColoresApp.fondoSuperficie.withOpacity(0.78),
                       ColoresApp.fondoSuperficie.withOpacity(0.94),
                     ],
-                  ),
-                  border: Border(
-                    top: BorderSide(
-                      color: ColoresApp.principalMarca.withOpacity(0.18),
-                      width: 0.6,
-                    ),
                   ),
                 ),
               ),
@@ -819,14 +815,29 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     if (!refrescando) setState(() => _cargando = true);
     try {
       final sb = ServicioSupabase().cliente;
-      final idsConPromo = await _obtenerEventosConPromosActivas(sb);
-      final rows = await _consultarEventosPublicados(sb);
+      // Promos (Q1) y eventos (Q2) son independientes → se piden EN PARALELO.
+      final promosFut = _obtenerEventosConPromosActivas(sb);
+      final rowsFut = _consultarEventosPublicados(sb);
+      final idsConPromo = await promosFut;
+      final rows = await rowsFut;
       final idsLocales = rows
           .map((r) => r['id_local']?.toString().trim() ?? '')
           .where((id) => id.isNotEmpty)
           .toSet()
           .toList();
-      final localesPorId = await _obtenerLocalesPorIds(sb, idsLocales);
+      // El embed de Q2 YA trae el perfil del local (perfiles_locales!inner).
+      // Solo si cayó al fallback sin-embed pedimos los locales aparte: así
+      // evitamos una consulta redundante que repetía todos los perfiles.
+      final usoEmbed =
+          rows.isNotEmpty && _perfilEmbeddedDesdeFila(rows.first) != null;
+      final localesPorIdFut = usoEmbed
+          ? Future<Map<String, Map<String, dynamic>>>.value(
+              const <String, Map<String, dynamic>>{},
+            )
+          : _obtenerLocalesPorIds(sb, idsLocales);
+      // Lugares populares (Q4) arranca EN PARALELO con lo anterior.
+      final localesPopFut = _cargarLocalesPopulares(sb, idsLocales);
+      final localesPorId = await localesPorIdFut;
 
       final eventos = rows
           .map<Map<String, dynamic>?>((r) {
@@ -897,7 +908,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           .whereType<Map<String, dynamic>>()
           .toList();
 
-      final locales = await _cargarLocalesPopulares(sb, idsLocales);
+      final locales = await localesPopFut;
 
       if (!mounted) return;
       setState(() {
@@ -1290,9 +1301,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   @override
   Widget build(BuildContext context) {
     if (_cargando) {
-      // El skeleton ya trae su propio Scaffold+SafeArea+CustomScrollView,
-      // así que lo devolvemos tal cual (no lo envolvemos).
-      return const SkeletonPantallaCartelera();
+      return const SplashCargaFernecito();
     }
     return Scaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
@@ -1389,20 +1398,32 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           eventos: topsTotales,
           porFila: CapacidadCartelera.topPorFila,
           variante: _Variante.grande,
+          sentidoBase: false, // TOP: hacia la derecha
         ),
       // RECOMENDADO FERNECITO
       if (recos.isNotEmpty)
         _buildSeccionCarruseles(
           titulo: JerarquiasData.recomendadoFernecito.labelSeccion,
-          icono: JerarquiasData.recomendadoFernecito.icono,
+          icono: CupertinoIcons.hand_thumbsup_fill,
           eventos: recos,
           porFila: CapacidadCartelera.recomendadoPorFila,
           variante: _Variante.mediano,
+          sentidoBase:
+              true, // RECOMENDADOS: hacia la izquierda (contrario a TOP)
         ),
       // LUGARES POPULARES (entre recomendado y normal)
       if (localesPop.isNotEmpty) _buildSeccionLocalesPopulares(localesPop),
       // NORMAL (Destacados en tu ciudad)
-      if (normales.isNotEmpty) _buildSeccionCarruselesNormal(eventos: normales),
+      if (normales.isNotEmpty)
+        _buildSeccionCarruseles(
+          titulo: JerarquiasData.normal.labelSeccion,
+          icono: JerarquiasData.normal.icono,
+          eventos: normales,
+          porFila: CapacidadCartelera.normalPorFila,
+          variante: _Variante.mediano,
+          sentidoBase: false, // base derecha, alterna por fila
+          paginar: true, // muestra 2 filas + "Ver más"
+        ),
       // GRID GRATIS
       if (gratis.isNotEmpty) _buildSeccionGratisGrid(eventos: gratis),
       // Empty state si nada
@@ -1541,18 +1562,28 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     );
   }
 
-  // ---- Sección carruseles por jerarquía (top / recomendado) ----
+  // ---- Sección carruseles por jerarquía (top / recomendado / normal) ----
+  // `paginar: true` muestra solo `normalFilasIniciales` filas + botón "Ver más"
+  // (lo que usa Normal). En false muestra todas las filas (top / recomendado).
   Widget _buildSeccionCarruseles({
     required String titulo,
     required IconData icono,
     required List<Map<String, dynamic>> eventos,
     required int porFila,
     required _Variante variante,
+    bool sentidoBase = false,
+    bool paginar = false,
   }) {
+    final iniciales = CapacidadCartelera.normalFilasIniciales * porFila;
+    final mostrar = (paginar && !_verMasNormal)
+        ? eventos.take(iniciales).toList()
+        : eventos;
+    final hayMas = paginar && eventos.length > iniciales;
+
     // Split en grupos de `porFila`.
     final filas = <List<Map<String, dynamic>>>[];
-    for (var i = 0; i < eventos.length; i += porFila) {
-      filas.add(eventos.sublist(i, math.min(i + porFila, eventos.length)));
+    for (var i = 0; i < mostrar.length; i += porFila) {
+      filas.add(mostrar.sublist(i, math.min(i + porFila, mostrar.length)));
     }
 
     return SliverToBoxAdapter(
@@ -1567,88 +1598,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
                 filas[i],
                 variante,
                 mostrarLineaSeparadora: i < filas.length - 1,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilaCarrusel(
-    List<Map<String, dynamic>> fila,
-    _Variante variante, {
-    bool mostrarLineaSeparadora = false,
-  }) {
-    final esGrande = variante == _Variante.grande;
-    final altura = esGrande ? 380.0 : 285.0;
-    final ancho = esGrande ? 240.0 : 175.0;
-    return Column(
-      children: [
-        SizedBox(
-          height: altura,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
-            physics: const BouncingScrollPhysics(),
-            itemCount: fila.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (ctx, i) {
-              final e = fila[i];
-              final ev = _aEventoCartelera(e);
-              if (esGrande) {
-                return CardEventoGrande(
-                  evento: ev,
-                  ancho: ancho,
-                  onTap: () => _irAEvento(ev.idEvento),
-                );
-              }
-              return CardEventoMediano(
-                evento: ev,
-                ancho: ancho,
-                onTap: () => _irAEvento(ev.idEvento),
-              );
-            },
-          ),
-        ),
-        if (mostrarLineaSeparadora)
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            height: 0.5,
-            color: ColoresApp.textoSecundario.withOpacity(0.12),
-          ),
-      ],
-    );
-  }
-
-  // ---- Sección NORMAL con regla de "ver más" ----
-  Widget _buildSeccionCarruselesNormal({
-    required List<Map<String, dynamic>> eventos,
-  }) {
-    final porFila = CapacidadCartelera.normalPorFila;
-    final iniciales = CapacidadCartelera.normalFilasIniciales * porFila;
-    final mostrar = _verMasNormal ? eventos : eventos.take(iniciales).toList();
-    final hayMas = eventos.length > iniciales;
-
-    final filas = <List<Map<String, dynamic>>>[];
-    for (var i = 0; i < mostrar.length; i += porFila) {
-      filas.add(mostrar.sublist(i, math.min(i + porFila, mostrar.length)));
-    }
-
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 14, bottom: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _TituloSeccion(
-              icono: JerarquiasData.normal.icono,
-              titulo: JerarquiasData.normal.labelSeccion,
-            ),
-            for (var i = 0; i < filas.length; i++)
-              _buildFilaCarrusel(
-                filas[i],
-                _Variante.mediano,
-                mostrarLineaSeparadora: i < filas.length - 1,
+                sentidoBase: sentidoBase,
+                indiceFila: i,
               ),
             if (hayMas)
               Padding(
@@ -1687,6 +1638,71 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     );
   }
 
+  Widget _buildFilaCarrusel(
+    List<Map<String, dynamic>> fila,
+    _Variante variante, {
+    bool mostrarLineaSeparadora = false,
+    bool sentidoBase =
+        false, // false = hacia la derecha, true = hacia la izquierda
+    int indiceFila = 0,
+  }) {
+    // Sentido por fila: la primera usa el sentido base de la sección y cada
+    // fila siguiente gira al revés que la de arriba (intercalado estético).
+    final bool invertir = sentidoBase ^ indiceFila.isOdd;
+    final esGrande = variante == _Variante.grande;
+    final altura = esGrande ? 380.0 : 285.0;
+    final ancho = esGrande ? 240.0 : 175.0;
+
+    Widget cardAt(BuildContext ctx, int i) {
+      final ev = _aEventoCartelera(fila[i]);
+      if (esGrande) {
+        return CardEventoGrande(
+          evento: ev,
+          ancho: ancho,
+          onTap: () => _irAEvento(ev.idEvento),
+        );
+      }
+      return CardEventoMediano(
+        evento: ev,
+        ancho: ancho,
+        onTap: () => _irAEvento(ev.idEvento),
+      );
+    }
+
+    // Todo carrusel con más de 1 evento se auto-scrollea suavemente (top,
+    // recomendados y normal). Solo el grid de gratis queda sin auto-scroll.
+    final Widget carrusel = (fila.length > 1)
+        ? CarruselAutoScroll(
+            itemCount: fila.length,
+            itemBuilder: cardAt,
+            height: altura,
+            invertir: invertir,
+          )
+        : SizedBox(
+            height: altura,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 6),
+              physics: const BouncingScrollPhysics(),
+              itemCount: fila.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: cardAt,
+            ),
+          );
+
+    return Column(
+      children: [
+        carrusel,
+        if (mostrarLineaSeparadora)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            height: 0.5,
+            color: ColoresApp.textoSecundario.withOpacity(0.12),
+          ),
+      ],
+    );
+  }
+
   List<Map<String, dynamic>> _localesPopularesFiltrados() {
     if (_ciudadesActivas.isEmpty) return const [];
     return _locales
@@ -1708,18 +1724,12 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _TituloSeccion(
-              icono: CupertinoIcons.house_fill,
+              icono: FontAwesomeIcons.store,
               titulo: 'Lugares populares',
             ),
-            SizedBox(
-              height: 142,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(20, 6, 20, 8),
-                physics: const BouncingScrollPhysics(),
-                itemCount: filtrados.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (ctx, i) {
+            Builder(
+              builder: (_) {
+                Widget cardLocalAt(BuildContext ctx, int i) {
                   final l = filtrados[i];
                   return CardLocalPopular(
                     idLocal: l['idLocal']?.toString() ?? '',
@@ -1729,8 +1739,30 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
                     verificado: l['verificado'] == true,
                     onTap: () => _irALocal(l),
                   );
-                },
-              ),
+                }
+
+                const padPop = EdgeInsets.fromLTRB(20, 6, 20, 8);
+                if (filtrados.length > 1) {
+                  return CarruselAutoScroll(
+                    itemCount: filtrados.length,
+                    itemBuilder: cardLocalAt,
+                    height: 142,
+                    padding: padPop,
+                    invertir: true, // hacia la izquierda
+                  );
+                }
+                return SizedBox(
+                  height: 142,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: padPop,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: filtrados.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: cardLocalAt,
+                  ),
+                );
+              },
             ),
           ],
         ),

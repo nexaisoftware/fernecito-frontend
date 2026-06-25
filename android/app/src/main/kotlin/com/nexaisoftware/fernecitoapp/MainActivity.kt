@@ -1,4 +1,4 @@
-package com.example.fernecito_frontend
+package com.nexaisoftware.fernecitoapp
 
 import io.flutter.embedding.android.FlutterActivity
 

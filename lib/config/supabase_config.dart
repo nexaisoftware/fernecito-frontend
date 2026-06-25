@@ -5,7 +5,7 @@
 /// - Validar que las credenciales estén correctamente configuradas
 /// - Facilitar testing y cambios de configuración
 ///
-/// Las credenciales se cargan desde el archivo .env en main.dart
+/// La configuracion se carga desde --dart-define y cae a .env solo en local.
 /// Este archivo proporciona métodos helper para validar y acceder a la config.
 ///
 /// Uso:
@@ -23,14 +23,21 @@ class ConfiguracionSupabase {
   static const String _nombreVariableUrl = 'URL_SUPABASE';
   static const String _nombreVariableClave = 'CLAVE_PUBLICA_SUPABASE';
 
-  /// Obtiene la URL de Supabase desde variables de entorno
+  static const String _urlDefine = String.fromEnvironment('URL_SUPABASE');
+  static const String _claveDefine = String.fromEnvironment(
+    'CLAVE_PUBLICA_SUPABASE',
+  );
+
+  /// Obtiene la URL de Supabase desde --dart-define o .env local.
   static String? obtenerUrl() {
-    return dotenv.env[_nombreVariableUrl];
+    return _urlDefine.isNotEmpty ? _urlDefine : dotenv.env[_nombreVariableUrl];
   }
 
-  /// Obtiene la clave pública (anon key) de Supabase desde variables de entorno
+  /// Obtiene la clave publica (anon key) desde --dart-define o .env local.
   static String? obtenerClavePublica() {
-    return dotenv.env[_nombreVariableClave];
+    return _claveDefine.isNotEmpty
+        ? _claveDefine
+        : dotenv.env[_nombreVariableClave];
   }
 
   /// Verifica si Supabase está correctamente configurado

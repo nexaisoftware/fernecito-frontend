@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/compartir_evento.dart';
@@ -60,6 +61,33 @@ class _BotonCompartirEventoState extends State<BotonCompartirEvento> {
         ? ColoresApp.textoSecundario.withValues(alpha: 0.45)
         : ColoresApp.principalMarca;
 
+    // Variante compacta: pill cuadrado (mismo look que los botones de acción de
+    // la card). Evita el linkcito huérfano alineado a la derecha.
+    if (widget.compacto) {
+      return CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: deshabilitado ? null : _onTap,
+        minimumSize: const Size(48, 40),
+        child: Semantics(
+          key: _anclaKey,
+          button: true,
+          label: 'Compartir evento',
+          child: Container(
+            width: 50,
+            decoration: BoxDecoration(
+              color: ColoresApp.fondoSuperficie.withValues(alpha: 0.8),
+              borderRadius: BorderRadius.circular(50),
+              border: Border.all(
+                color: ColoresApp.principalMarca.withValues(alpha: 0.3),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            child: Icon(Icons.share, size: 17, color: color),
+          ),
+        ),
+      );
+    }
+
     return Align(
       alignment: Alignment.centerRight,
       child: CupertinoButton(
@@ -73,7 +101,7 @@ class _BotonCompartirEventoState extends State<BotonCompartirEvento> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(CupertinoIcons.square_arrow_up, size: 17, color: color),
+              Icon(Icons.share, size: 17, color: color),
               const SizedBox(width: 6),
               Text(
                 'Compartir',

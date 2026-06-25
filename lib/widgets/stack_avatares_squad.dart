@@ -15,11 +15,13 @@ class StackAvataresSquad extends StatelessWidget {
     required this.avatares,
     this.totalExtra = 0,
     this.size = 76,
+    this.paddingExterno = _kPadExterno,
   });
 
   final List<String> avatares;
   final int totalExtra;
   final double size;
+  final double paddingExterno;
 
   /// Separación horizontal entre centros visuales (mismo criterio que perfil squad).
   double get _overlap => size * 0.34;
@@ -41,11 +43,11 @@ class StackAvataresSquad extends StatelessWidget {
 
     final step = size - _overlap;
     final badgeSize = size * 0.36;
-    final badgeGap = extra > 0 ? badgeSize * 0.55 : 0.0;
-    final contentW = size + (n - 1) * step + (extra > 0 ? badgeGap + badgeSize : 0);
+    final badgeLeft = (n - 1) * step + size - badgeSize * 0.78;
+    final contentW = extra > 0 ? badgeLeft + badgeSize : size + (n - 1) * step;
 
     return Padding(
-      padding: const EdgeInsets.all(_kPadExterno),
+      padding: EdgeInsets.all(paddingExterno),
       child: SizedBox(
         width: contentW,
         height: size,
@@ -56,14 +58,11 @@ class StackAvataresSquad extends StatelessWidget {
               Positioned(
                 left: i * step,
                 top: 0,
-                child: AvatarBordeBlanco(
-                  avatar: visibles[i],
-                  size: size,
-                ),
+                child: AvatarBordeBlanco(avatar: visibles[i], size: size),
               ),
             if (extra > 0)
               Positioned(
-                left: (n - 1) * step + badgeGap,
+                left: badgeLeft,
                 top: (size - badgeSize) / 2,
                 child: Container(
                   width: badgeSize,

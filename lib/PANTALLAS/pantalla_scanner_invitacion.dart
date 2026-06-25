@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -50,6 +49,7 @@ class _PantallaScannerInvitacionState extends State<PantallaScannerInvitacion> {
   );
 
   bool _procesando = false;
+  bool _flashOn = false;
   String? _mensajeError;
 
   @override
@@ -134,196 +134,171 @@ class _PantallaScannerInvitacionState extends State<PantallaScannerInvitacion> {
 
   @override
   Widget build(BuildContext context) {
+    final scanSize = math.min(MediaQuery.of(context).size.width * 0.72, 300.0);
     return ValueListenableBuilder<Color>(
       valueListenable: TemaFernecito.instancia.colorActual,
       builder: (context, colorTema, _) {
         return Scaffold(
-          backgroundColor: Colors.black,
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
-              const ColoredBox(color: Colors.black),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
+          backgroundColor: ColoresApp.fondoPrincipal,
+          body: SafeArea(
+            child: Column(
+              children: [
+                // ── Encabezado ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 22, 28, 0),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Leer QR',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.baloo2(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          color: ColoresApp.textoPrincipal,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Escaneá QR de locales, RRPP, embajadores, promos y más.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.baloo2(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
+                          color: ColoresApp.textoSecundario,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                // ── Ventana de cámara: ÚNICA parte que muestra la cámara ──
+                SizedBox(
+                  width: scanSize,
+                  height: scanSize,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      MobileScanner(
-                        controller: _controller,
-                        onDetect: _onDetect,
-                        errorBuilder: (context, error) =>
-                            _VistaErrorCamara(
-                          colorTema: colorTema,
-                          onReintentar: () async {
-                            try {
-                              await _controller.start();
-                            } catch (_) {}
-                          },
-                        ),
-                      ),
-                      const RepaintBoundary(
-                        child: Center(child: _MarcoEscaneoQr()),
-                      ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 14,
-                        child: Text(
-                          'Centrá el QR en el recuadro',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.baloo2(
-                            color: Colors.white.withValues(alpha: 0.92),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            shadows: const [
-                              Shadow(
-                                blurRadius: 8,
-                                color: Colors.black54,
-                              ),
-                            ],
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(26),
+                        child: ColoredBox(
+                          color: Colors.black,
+                          child: MobileScanner(
+                            controller: _controller,
+                            onDetect: _onDetect,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error) => _VistaErrorCamara(
+                              colorTema: colorTema,
+                              onReintentar: () async {
+                                try {
+                                  await _controller.start();
+                                } catch (_) {}
+                              },
+                            ),
                           ),
                         ),
                       ),
+                      RepaintBoundary(child: _MarcoEscaneoQr(size: scanSize)),
                     ],
                   ),
                 ),
-              ),
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-                  child: Row(
-                    children: [
-                      _BotonCircularScanner(
-                        icono: CupertinoIcons.xmark,
-                        onTap: () => Navigator.of(context).maybePop(),
-                      ),
-                      const Spacer(),
-                      _BotonCircularScanner(
-                        icono: CupertinoIcons.bolt_fill,
-                        onTap: () => _controller.toggleTorch(),
-                      ),
-                    ],
+                const SizedBox(height: 18),
+                Text(
+                  'Centrá el QR en el recuadro',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: ColoresApp.textoSecundario,
                   ),
                 ),
-              ),
-              SafeArea(
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 64, left: 28, right: 28),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Leer QR',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.baloo2(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            letterSpacing: -0.3,
-                            shadows: const [
-                              Shadow(
-                                blurRadius: 12,
-                                color: Colors.black54,
+                // ── Estado: validando / error ──
+                SizedBox(
+                  height: 56,
+                  child: Center(
+                    child: _procesando
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CupertinoActivityIndicator(
+                                radius: 10,
+                                color: colorTema,
                               ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Escaneá QR de locales, RRPP, embajadores, promociones y más.',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.baloo2(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            height: 1.35,
-                            color: Colors.white.withValues(alpha: 0.88),
-                            shadows: const [
-                              Shadow(
-                                blurRadius: 8,
-                                color: Colors.black45,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_procesando)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.55),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: colorTema.withValues(alpha: 0.45),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CupertinoActivityIndicator(
-                                  radius: 11,
-                                  color: colorTema,
+                              const SizedBox(width: 10),
+                              Text(
+                                'Validando…',
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: ColoresApp.textoPrincipal,
                                 ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Validando…',
-                                  style: GoogleFonts.baloo2(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
+                              ),
+                            ],
+                          )
+                        : _mensajeError != null
+                            ? Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 24),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 9,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: ColoresApp.peligroMarca
+                                        .withValues(alpha: 0.16),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: ColoresApp.peligroMarca
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _mensajeError!,
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.baloo2(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: ColoresApp.peligroMarca,
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        if (_mensajeError != null) ...[
-                          if (_procesando) const SizedBox(height: 10),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: ColoresApp.peligroMarca
-                                  .withValues(alpha: 0.92),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Text(
-                              _mensajeError!,
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.baloo2(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                              )
+                            : const SizedBox.shrink(),
                   ),
                 ),
-              ),
-            ],
+                const Spacer(),
+                // ── Acciones: solo ícono, sin contenedor ──
+                // Margen extra abajo para no quedar tapados por la navbar.
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 96),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _AccionScanner(
+                        icono: CupertinoIcons.xmark,
+                        label: 'Cerrar',
+                        onTap: () => Navigator.of(context).maybePop(),
+                      ),
+                      const SizedBox(width: 64),
+                      _AccionScanner(
+                        icono: _flashOn
+                            ? CupertinoIcons.bolt_fill
+                            : CupertinoIcons.bolt_slash_fill,
+                        label: 'Flash',
+                        activo: _flashOn,
+                        colorActivo: colorTema,
+                        onTap: () async {
+                          await _controller.toggleTorch();
+                          if (mounted) setState(() => _flashOn = !_flashOn);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -333,7 +308,9 @@ class _PantallaScannerInvitacionState extends State<PantallaScannerInvitacion> {
 
 /// Marco animado 4×4 (clonado de locales_qr_validar, adaptado al tema usuario).
 class _MarcoEscaneoQr extends StatefulWidget {
-  const _MarcoEscaneoQr();
+  const _MarcoEscaneoQr({required this.size});
+
+  final double size;
 
   @override
   State<_MarcoEscaneoQr> createState() => _MarcoEscaneoQrState();
@@ -341,10 +318,10 @@ class _MarcoEscaneoQr extends StatefulWidget {
 
 class _MarcoEscaneoQrState extends State<_MarcoEscaneoQr>
     with SingleTickerProviderStateMixin {
-  static const double _size = 230;
-  static const double _inset = 16;
+  static const double _inset = 18;
   static const int _gridN = 4;
   static const double _dotSize = 5.5;
+  double get _size => widget.size;
 
   late final AnimationController _ctrl;
 
@@ -385,7 +362,7 @@ class _MarcoEscaneoQrState extends State<_MarcoEscaneoQr>
                 children: [
                   Container(
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(26),
                       border: Border.all(
                         color: colorTema.withValues(
                           alpha: bordeOp.clamp(0.0, 1.0),
@@ -430,35 +407,45 @@ class _MarcoEscaneoQrState extends State<_MarcoEscaneoQr>
   }
 }
 
-class _BotonCircularScanner extends StatelessWidget {
-  const _BotonCircularScanner({
+class _AccionScanner extends StatelessWidget {
+  const _AccionScanner({
     required this.icono,
+    required this.label,
     required this.onTap,
+    this.activo = false,
+    this.colorActivo,
   });
 
   final IconData icono;
+  final String label;
   final VoidCallback onTap;
+  final bool activo;
+  final Color? colorActivo;
 
   @override
   Widget build(BuildContext context) {
+    final color = activo
+        ? (colorActivo ?? ColoresApp.principalMarca)
+        : ColoresApp.textoSecundario;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.38),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.22),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, color: color, size: 27),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: GoogleFonts.baloo2(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: color,
               ),
             ),
-            child: Icon(icono, color: Colors.white, size: 20),
-          ),
+          ],
         ),
       ),
     );

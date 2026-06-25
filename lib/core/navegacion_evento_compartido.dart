@@ -2,7 +2,6 @@
 library;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 
 import '../PANTALLAS/pantalla_ver_evento.dart';
 import 'supabase_client.dart';

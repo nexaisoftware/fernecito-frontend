@@ -16,7 +16,7 @@ import 'core/supabase_client.dart';
 import 'core/auth_gate.dart';
 import 'core/tema_fernecito.dart';
 import 'core/servicio_estado_cuenta.dart';
-import 'widgets/skeleton_pantallas.dart';
+import 'widgets/splash_carga_fernecito.dart';
 import 'PANTALLAS/pantalla_login.dart';
 import 'PANTALLAS/pantalla_home.dart';
 import 'PANTALLAS/pantalla_crear_perfil.dart';
@@ -29,7 +29,8 @@ class AppFernecito extends StatefulWidget {
   State<AppFernecito> createState() => _AppFernecitoState();
 }
 
-class _AppFernecitoState extends State<AppFernecito> with WidgetsBindingObserver {
+class _AppFernecitoState extends State<AppFernecito>
+    with WidgetsBindingObserver {
   bool _verificandoSesion = true;
   bool _tieneSesionActiva = false;
   bool _perfilCompleto = false;
@@ -141,38 +142,38 @@ class _AppFernecitoState extends State<AppFernecito> with WidgetsBindingObserver
               ),
             ),
           ),
-        // Rutas nombradas para navegación
-        routes: {
-          '/login': (context) => const PantallaLogin(),
-          '/home': (context) => const PantallaHome(),
-        },
-        // Gate de cuenta suspendida: mientras esté pausada, toma el control
-        // total de la app (igual que el guard de rutas del panel de locales).
-        // Escucha ServicioEstadoCuenta y reemplaza toda la UI por la pantalla
-        // bloqueante, que solo permite soporte o cerrar sesión.
-        builder: (context, child) {
-          return ListenableBuilder(
-            listenable: ServicioEstadoCuenta.instancia,
-            builder: (context, _) {
-              if (ServicioEstadoCuenta.instancia.suspendida) {
-                return Navigator(
-                  onGenerateRoute: (_) => CupertinoPageRoute<void>(
-                    builder: (_) => const PantallaCuentaPausada(),
-                  ),
-                );
-              }
-              return child ?? const SizedBox.shrink();
-            },
-          );
-        },
-        // Pantalla inicial según estado de sesión y perfil (skeleton de cartelera mientras verifica)
-        home: _verificandoSesion
-            ? const SkeletonPantallaCartelera()
-            : _tieneSesionActiva
-                ? (_perfilCompleto
+          // Rutas nombradas para navegación
+          routes: {
+            '/login': (context) => const PantallaLogin(),
+            '/home': (context) => const PantallaHome(),
+          },
+          // Gate de cuenta suspendida: mientras esté pausada, toma el control
+          // total de la app (igual que el guard de rutas del panel de locales).
+          // Escucha ServicioEstadoCuenta y reemplaza toda la UI por la pantalla
+          // bloqueante, que solo permite soporte o cerrar sesión.
+          builder: (context, child) {
+            return ListenableBuilder(
+              listenable: ServicioEstadoCuenta.instancia,
+              builder: (context, _) {
+                if (ServicioEstadoCuenta.instancia.suspendida) {
+                  return Navigator(
+                    onGenerateRoute: (_) => CupertinoPageRoute<void>(
+                      builder: (_) => const PantallaCuentaPausada(),
+                    ),
+                  );
+                }
+                return child ?? const SizedBox.shrink();
+              },
+            );
+          },
+          // Pantalla inicial según estado de sesión y perfil.
+          home: _verificandoSesion
+              ? const SplashCargaFernecito()
+              : _tieneSesionActiva
+              ? (_perfilCompleto
                     ? const PantallaHome()
                     : const PantallaCrearPerfil())
-                : const PantallaLogin(),
+              : const PantallaLogin(),
         ),
       ),
     );

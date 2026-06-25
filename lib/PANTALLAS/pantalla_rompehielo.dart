@@ -98,16 +98,14 @@ Widget _slotAnimado({
     layoutBuilder: (current, previous) => Stack(
       alignment: Alignment.topCenter,
       clipBehavior: Clip.none,
-      children: [
-        ...previous,
-        if (current != null) current,
-      ],
+      children: [...previous, if (current != null) current],
     ),
     child: visible
         ? KeyedSubtree(key: ValueKey(slotId), child: builder())
         : SizedBox.shrink(key: ValueKey('$slotId-off')),
   );
 }
+
 const double _nombreFontSize = 17;
 
 /// Contraparte: usuario individual o squad.
@@ -121,6 +119,7 @@ class RompehieloData {
   final RompehieloOrigen origen;
   final String? idEvento;
   final String? nombreEvento;
+
   /// Squad con el que actúo (`null` = yo). Fijado al iniciar o al abrir fila existente.
   final String? idGrupoActorInicial;
   final Map<String, dynamic>? squadActorInicial;
@@ -211,7 +210,8 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
       idGrupoActor: idGrupo,
     );
     if (!mounted) return;
-    final modoNuevo = est.puedeActuar &&
+    final modoNuevo =
+        est.puedeActuar &&
         (est.accionSugerida == RompehieloAccion.replicar ||
             est.accionSugerida == RompehieloAccion.responder ||
             est.accionSugerida == RompehieloAccion.iniciar);
@@ -247,8 +247,7 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
   }
 
   bool get _esIniciador =>
-      _estado == null ||
-      _estado!.accionSugerida == RompehieloAccion.iniciar;
+      _estado == null || _estado!.accionSugerida == RompehieloAccion.iniciar;
 
   bool get _esReplica => _replicaPendiente && _replicaAbierta;
 
@@ -334,9 +333,8 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
         final path = respuesta['foto_perfil_url'] as String;
         final ts = DateTime.now().millisecondsSinceEpoch;
         setState(() {
-          _miAvatarUrl = '${supabase.cliente.storage
-              .from('avatars')
-              .getPublicUrl(path)}?v=$ts';
+          _miAvatarUrl =
+              '${supabase.cliente.storage.from('avatars').getPublicUrl(path)}?v=$ts';
         });
       }
     } catch (_) {}
@@ -461,17 +459,17 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
     final mensajeContra = _mensajeContraparte;
     final turnoLabel = _estado?.ignorado == true
         ? (_estado?.ignoradoPorMi == true
-            ? 'Ignorado por vos'
-            : 'No quiere seguir el rompehielo')
+              ? 'Ignorado por vos'
+              : 'No quiere seguir el rompehielo')
         : _replicaPendiente && !_replicaAbierta
-            ? 'Tu réplica'
-            : _estado?.puedeActuar == true
-                ? (_esReplica
-                    ? 'Tu réplica'
-                    : _esResponder
-                        ? 'Tu respuesta'
-                        : 'Tu turno')
-                : 'Esperando al otro';
+        ? 'Tu réplica'
+        : _estado?.puedeActuar == true
+        ? (_esReplica
+              ? 'Tu réplica'
+              : _esResponder
+              ? 'Tu respuesta'
+              : 'Tu turno')
+        : 'Esperando al otro';
 
     final composer = _puedeEscribir
         ? Column(
@@ -521,20 +519,22 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
               ),
               Expanded(
                 child: _RompehieloHilo(
-                  contraparteAvatar: d.tipoContraparte == TipoContraparte.usuario
+                  contraparteAvatar:
+                      d.tipoContraparte == TipoContraparte.usuario
                       ? AvatarBordeBlanco(
                           avatar: d.contraparte['avatar'] as String? ?? '',
                           size: _avatarRompehielo,
                         )
                       : StackAvataresSquad(
                           avatares: List<String>.from(
-                              d.contraparte['miembrosAvatares'] as List? ?? []),
-                          totalExtra: (d.contraparte['miembrosTotal'] as int?) ??
+                            d.contraparte['miembrosAvatares'] as List? ?? [],
+                          ),
+                          totalExtra:
+                              (d.contraparte['miembrosTotal'] as int?) ??
                               List<String>.from(
-                                      d.contraparte['miembrosAvatares']
-                                          as List? ??
-                                      [])
-                                  .length,
+                                d.contraparte['miembrosAvatares'] as List? ??
+                                    [],
+                              ).length,
                           size: _avatarRompehielo,
                         ),
                   nombreContraparte: _nombreContraparte,
@@ -545,8 +545,7 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
                   puedeEscribir: _puedeEscribir,
                   composerCentro: _esReplica ? null : composer,
                   composerAbajo: _esReplica ? composer : null,
-                  mostrarBotonReplicar:
-                      _replicaPendiente && !_replicaAbierta,
+                  mostrarBotonReplicar: _replicaPendiente && !_replicaAbierta,
                   onReplicar: _abrirReplica,
                   mensajeMio: _mensajeMioVisible,
                   opacityMio: _opacityMio,
@@ -558,14 +557,14 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
                         )
                       : StackAvataresSquad(
                           avatares: List<String>.from(
-                              _responderComo!['miembrosAvatares'] as List? ??
-                                  []),
-                          totalExtra: (_responderComo!['miembrosTotal'] as int?) ??
+                            _responderComo!['miembrosAvatares'] as List? ?? [],
+                          ),
+                          totalExtra:
+                              (_responderComo!['miembrosTotal'] as int?) ??
                               List<String>.from(
-                                      _responderComo!['miembrosAvatares']
-                                          as List? ??
-                                      [])
-                                  .length,
+                                _responderComo!['miembrosAvatares'] as List? ??
+                                    [],
+                              ).length,
                           size: _avatarRompehielo,
                         ),
                   yoEtiqueta: _responderComo == null
@@ -623,17 +622,16 @@ class _RompehieloHilo extends StatelessWidget {
   static const _gapAvatarBurbuja = 10.0;
 
   TextStyle get _estiloNombre => GoogleFonts.baloo2(
-        fontSize: _nombreFontSize,
-        fontWeight: FontWeight.w800,
-        color: ColoresApp.textoPrincipal,
-      );
+    fontSize: _nombreFontSize,
+    fontWeight: FontWeight.w800,
+    color: ColoresApp.textoPrincipal,
+  );
 
   @override
   Widget build(BuildContext context) {
     final tieneBurbujaContra =
         mensajeContraparte != null && mensajeContraparte!.isNotEmpty;
-    final tieneBurbujaMia =
-        mensajeMio != null && mensajeMio!.trim().isNotEmpty;
+    final tieneBurbujaMia = mensajeMio != null && mensajeMio!.trim().isNotEmpty;
     final mostrarEsperaContraparte =
         !tieneBurbujaContra && (esIniciador || tieneBurbujaMia);
 
@@ -668,6 +666,7 @@ class _RompehieloHilo extends StatelessWidget {
                     opacity: opacityContraparte,
                     child: _MensajeNuevoHighlight(
                       activo: contraparteEsNuevo,
+                      ajustarAlContenido: true,
                       child: _burbujaRompehielo(
                         texto: mensajeContraparte!,
                         esMio: false,
@@ -693,68 +692,65 @@ class _RompehieloHilo extends StatelessWidget {
                 if (tieneBurbujaContra || mostrarEsperaContraparte)
                   const SizedBox(height: _gapBurbujas),
                 AnimatedSize(
-                    duration: _durAnimRompehielo,
-                    curve: Curves.easeOutCubic,
-                    alignment: Alignment.topCenter,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _slotAnimado(
-                          visible:
-                              puedeEscribir && composerCentro != null,
-                          slotId: 'composer-centro',
-                          builder: () => composerCentro!,
-                        ),
-                        if (puedeEscribir && composerCentro != null)
-                          const SizedBox(height: _gapBurbujas),
-                        // ── Abajo: burbuja → replicar → composer → yo ──
-                        _slotAnimado(
-                          visible: tieneBurbujaMia,
-                          slotId: 'mia-${mensajeMio ?? ''}',
-                          builder: () => AnimatedOpacity(
-                            duration: _durAnimRompehielo,
-                            curve: Curves.easeOut,
-                            opacity: opacityMio,
-                            child: _MensajeNuevoHighlight(
-                              activo: mioEsNuevo,
-                              child: _burbujaRompehielo(
-                                texto: mensajeMio!,
-                                esMio: true,
-                                colaHaciaArriba: false,
-                              ),
+                  duration: _durAnimRompehielo,
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _slotAnimado(
+                        visible: puedeEscribir && composerCentro != null,
+                        slotId: 'composer-centro',
+                        builder: () => composerCentro!,
+                      ),
+                      if (puedeEscribir && composerCentro != null)
+                        const SizedBox(height: _gapBurbujas),
+                      // ── Abajo: burbuja → replicar → composer → yo ──
+                      _slotAnimado(
+                        visible: tieneBurbujaMia,
+                        slotId: 'mia-${mensajeMio ?? ''}',
+                        builder: () => AnimatedOpacity(
+                          duration: _durAnimRompehielo,
+                          curve: Curves.easeOut,
+                          opacity: opacityMio,
+                          child: _MensajeNuevoHighlight(
+                            activo: mioEsNuevo,
+                            ajustarAlContenido: true,
+                            child: _burbujaRompehielo(
+                              texto: mensajeMio!,
+                              esMio: true,
+                              colaHaciaArriba: false,
                             ),
                           ),
                         ),
-                        if (tieneBurbujaMia)
-                          const SizedBox(height: _gapAvatarBurbuja),
-                        _slotAnimado(
-                          visible:
-                              mostrarBotonReplicar && onReplicar != null,
-                          slotId: 'btn-replicar',
-                          builder: () => Center(
-                            child: _BotonReplicar(onTap: onReplicar!),
-                          ),
-                        ),
-                        if (mostrarBotonReplicar && onReplicar != null)
-                          const SizedBox(height: 10),
-                        _slotAnimado(
-                          visible:
-                              puedeEscribir && composerAbajo != null,
-                          slotId: 'composer-abajo',
-                          builder: () => composerAbajo!,
-                        ),
-                        if (puedeEscribir && composerAbajo != null)
-                          const SizedBox(height: _gapBurbujas),
-                      ],
-                    ),
+                      ),
+                      if (tieneBurbujaMia)
+                        const SizedBox(height: _gapAvatarBurbuja),
+                      _slotAnimado(
+                        visible: mostrarBotonReplicar && onReplicar != null,
+                        slotId: 'btn-replicar',
+                        builder: () =>
+                            Center(child: _BotonReplicar(onTap: onReplicar!)),
+                      ),
+                      if (mostrarBotonReplicar && onReplicar != null)
+                        const SizedBox(height: 10),
+                      _slotAnimado(
+                        visible: puedeEscribir && composerAbajo != null,
+                        slotId: 'composer-abajo',
+                        builder: () => composerAbajo!,
+                      ),
+                      if (puedeEscribir && composerAbajo != null)
+                        const SizedBox(height: _gapBurbujas),
+                    ],
                   ),
+                ),
                 Text(
-                    yoEtiqueta,
-                    textAlign: TextAlign.center,
-                    style: _estiloNombre,
-                  ),
-                  const SizedBox(height: 4),
-                  Center(child: yoAvatar),
+                  yoEtiqueta,
+                  textAlign: TextAlign.center,
+                  style: _estiloNombre,
+                ),
+                const SizedBox(height: 4),
+                Center(child: yoAvatar),
               ],
             ),
           ),
@@ -885,10 +881,12 @@ class _MensajeNuevoHighlight extends StatefulWidget {
   const _MensajeNuevoHighlight({
     required this.child,
     required this.activo,
+    this.ajustarAlContenido = false,
   });
 
   final Widget child;
   final bool activo;
+  final bool ajustarAlContenido;
 
   @override
   State<_MensajeNuevoHighlight> createState() => _MensajeNuevoHighlightState();
@@ -907,12 +905,14 @@ class _MensajeNuevoHighlightState extends State<_MensajeNuevoHighlight>
       vsync: this,
       duration: const Duration(milliseconds: 1100),
     );
-    _scale = Tween<double>(begin: 1.0, end: 1.03).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    _glow = Tween<double>(begin: 0.18, end: 0.55).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _scale = Tween<double>(
+      begin: 1.0,
+      end: 1.03,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _glow = Tween<double>(
+      begin: 0.18,
+      end: 0.55,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
     if (widget.activo) _controller.repeat(reverse: true);
   }
 
@@ -940,15 +940,16 @@ class _MensajeNuevoHighlightState extends State<_MensajeNuevoHighlight>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        return Transform.scale(
+        final resaltado = Transform.scale(
           scale: _scale.value,
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: ColoresApp.principalMarca
-                      .withValues(alpha: _glow.value),
+                  color: ColoresApp.principalMarca.withValues(
+                    alpha: _glow.value,
+                  ),
                   blurRadius: 18 + _glow.value * 12,
                   spreadRadius: 1,
                 ),
@@ -956,6 +957,12 @@ class _MensajeNuevoHighlightState extends State<_MensajeNuevoHighlight>
             ),
             child: child,
           ),
+        );
+        if (!widget.ajustarAlContenido) return resaltado;
+        return Align(
+          alignment: Alignment.center,
+          widthFactor: 1,
+          child: resaltado,
         );
       },
       child: widget.child,
@@ -968,17 +975,21 @@ Widget _burbujaRompehielo({
   required String texto,
   required bool esMio,
   required bool colaHaciaArriba,
-}) =>
-    BurbujaEstado(
-      texto: texto,
-      esMio: esMio,
-      colaHaciaArriba: colaHaciaArriba,
-      fontSize: _bubbleFontSize,
-      maxLines: 6,
-      ajustarAnchoAlTexto: true,
-      minWidth: 136,
-      maxWidth: 318,
-    );
+}) => Align(
+  alignment: Alignment.center,
+  widthFactor: 1,
+  child: BurbujaEstado(
+    texto: texto,
+    esMio: esMio,
+    colaHaciaArriba: colaHaciaArriba,
+    fontSize: _bubbleFontSize,
+    maxLines: 6,
+    ajustarAnchoAlTexto: true,
+    minWidth: 136,
+    maxWidth: 318,
+    centrar: false,
+  ),
+);
 
 class _ComposerRompehielo extends StatelessWidget {
   const _ComposerRompehielo({
@@ -1072,8 +1083,9 @@ class _ComposerRompehielo extends StatelessWidget {
                               : ColoresApp.fondoSuperficie,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: ColoresApp.principalMarca
-                                .withValues(alpha: puedeEnviar ? 1 : 0.25),
+                            color: ColoresApp.principalMarca.withValues(
+                              alpha: puedeEnviar ? 1 : 0.25,
+                            ),
                           ),
                         ),
                         child: Icon(
@@ -1162,8 +1174,9 @@ class _TemplatesChipsState extends State<_TemplatesChips> {
                   : ColoresApp.fondoSuperficie.withValues(alpha: 0.88),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: ColoresApp.principalMarca
-                    .withValues(alpha: esToggle ? 0.55 : 0.28),
+                color: ColoresApp.principalMarca.withValues(
+                  alpha: esToggle ? 0.55 : 0.28,
+                ),
               ),
             ),
             child: Text(

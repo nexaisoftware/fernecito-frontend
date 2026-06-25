@@ -29,11 +29,11 @@ const _kEstadosTokenPromoUsuario = <String>[
 ];
 
 /// Snapshot de token de promo por `id_promocion` (precarga desde Mi Actividad).
-class _SnapshotTokenPromo {
+class SnapshotTokenPromo {
   final String codigo;
   final String estadoToken;
 
-  const _SnapshotTokenPromo({
+  const SnapshotTokenPromo({
     required this.codigo,
     required this.estadoToken,
   });
@@ -90,7 +90,7 @@ class _PantallaActividadState extends State<PantallaActividad> {
   bool _cargando = true;
 
   /// Tokens de promo ya obtenidos por el usuario (clave `id_promocion`), para UX sin flashes.
-  Map<String, _SnapshotTokenPromo> _tokensPromoPorId = {};
+  Map<String, SnapshotTokenPromo> _tokensPromoPorId = {};
 
   @override
   void initState() {
@@ -191,7 +191,7 @@ class _PantallaActividadState extends State<PantallaActividad> {
         };
       }).toList();
 
-      final promoPorId = <String, _SnapshotTokenPromo>{};
+      final promoPorId = <String, SnapshotTokenPromo>{};
       try {
         final promoRows = await sb
             .from('tokens_promociones')
@@ -205,7 +205,7 @@ class _PantallaActividadState extends State<PantallaActividad> {
               t['estado_token']?.toString().toLowerCase() ?? 'activo';
           if (idP.isNotEmpty && codigo.isNotEmpty) {
             promoPorId[idP] =
-                _SnapshotTokenPromo(codigo: codigo, estadoToken: est);
+                SnapshotTokenPromo(codigo: codigo, estadoToken: est);
           }
         }
       } catch (e, st) {
@@ -340,11 +340,11 @@ class _PantallaActividadState extends State<PantallaActividad> {
     );
     showCupertinoModalPopup<void>(
       context: context,
-      builder: (ctx) => _BottomSheetPromos(
+      builder: (ctx) => BottomSheetPromos(
         token: token,
         idEvento: idEvento,
         puedeObtenerPromos: puedeObtenerPromos,
-        promoTokensPrecarga: Map<String, _SnapshotTokenPromo>.from(_tokensPromoPorId),
+        promoTokensPrecarga: Map<String, SnapshotTokenPromo>.from(_tokensPromoPorId),
         onReloadActividadDesdePromos: _cargarActividad,
       ),
     );
@@ -413,30 +413,6 @@ class _PantallaActividadState extends State<PantallaActividad> {
                           ],
                         ),
                       ),
-                      if (!_cargando)
-                        CupertinoButton(
-                          padding: const EdgeInsets.all(8),
-                          onPressed: () {
-                            setState(() => _cargando = true);
-                            _cargarActividad();
-                          },
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: ColoresApp.fondoSuperficie.withOpacity(0.8),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: ColoresApp.principalMarca.withOpacity(0.3),
-                              ),
-                            ),
-                            child: const Icon(
-                              CupertinoIcons.refresh,
-                              size: 18,
-                              color: ColoresApp.textoSecundario,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -961,56 +937,60 @@ class _CardActividad extends StatelessWidget {
             ),
           ),
 
-          // ── Compartir (preview OG + deep link) ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-            child: BotonCompartirEvento(
-              idEvento: token['id_evento']?.toString() ?? '',
-              titulo: token['titulo'] as String? ?? 'Evento',
-              nombreLocal: token['nombreLocal'] as String?,
-              fechaIso: token['fechaInicio'] as String?,
-              ciudad: token['ciudad'] as String?,
-            ),
-          ),
-
-          // ── Ver el pool ──
+          // ── Ver el pool + compartir (misma fila, pesos visuales parejos) ──
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-            child: CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: onVerPool,
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: ColoresApp.fondoSuperficie.withOpacity(0.8),
-                  borderRadius: BorderRadius.circular(50),
-                  border: Border.all(
-                    color: ColoresApp.principalMarca.withOpacity(0.3),
-                  ),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      CupertinoIcons.person_2_fill,
-                      size: 15,
-                      color: ColoresApp.principalMarca,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Ver quiénes van (Pool)',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.baloo2(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: ColoresApp.textoPrincipal,
+            child: Row(
+              children: [
+                Expanded(
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: onVerPool,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: ColoresApp.fondoSuperficie.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(50),
+                        border: Border.all(
+                          color: ColoresApp.principalMarca.withOpacity(0.3),
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            CupertinoIcons.person_2_fill,
+                            size: 15,
+                            color: ColoresApp.principalMarca,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Quiénes van',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.baloo2(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: ColoresApp.textoPrincipal,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                BotonCompartirEvento(
+                  idEvento: token['id_evento']?.toString() ?? '',
+                  titulo: token['titulo'] as String? ?? 'Evento',
+                  nombreLocal: token['nombreLocal'] as String?,
+                  fechaIso: token['fechaInicio'] as String?,
+                  ciudad: token['ciudad'] as String?,
+                  compacto: true,
+                ),
+              ],
             ),
           ),
         ],
@@ -1022,6 +1002,187 @@ class _CardActividad extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Bottom sheet: QR de ingreso real con codigo_puerta
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── Helpers visuales compartidos por los paneles QR (ingreso + promo) ─────────
+
+/// Línea de perforación punteada (estética de ticket recortable).
+class _PerforacionPainter extends CustomPainter {
+  final Color color;
+  const _PerforacionPainter(this.color);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    const dash = 5.0, gap = 5.0;
+    final y = size.height / 2;
+    double x = 0;
+    while (x < size.width) {
+      canvas.drawLine(Offset(x, y), Offset(x + dash, y), paint);
+      x += dash + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PerforacionPainter old) => old.color != color;
+}
+
+/// Código en grande, tocable: copia al portapapeles con haptic y feedback
+/// inline ("¡Copiado!") sin depender de SnackBar/ScaffoldMessenger.
+class _CodigoCopiable extends StatefulWidget {
+  final String codigo;
+  final Color accent;
+  const _CodigoCopiable({required this.codigo, required this.accent});
+
+  @override
+  State<_CodigoCopiable> createState() => _CodigoCopiableState();
+}
+
+class _CodigoCopiableState extends State<_CodigoCopiable> {
+  bool _copiado = false;
+  Timer? _t;
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  void _copiar() {
+    if (widget.codigo.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: widget.codigo));
+    HapticFeedback.mediumImpact();
+    setState(() => _copiado = true);
+    _t?.cancel();
+    _t = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _copiado = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const verde = Color(0xFF34C759);
+    final tieneCodigo = widget.codigo.isNotEmpty;
+    return GestureDetector(
+      onTap: tieneCodigo ? _copiar : null,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'CÓDIGO',
+            style: GoogleFonts.baloo2(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 2,
+              color: Colors.black.withOpacity(0.35),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  tieneCodigo ? widget.codigo : '--------',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 5,
+                    color: Colors.black.withOpacity(0.82),
+                  ),
+                ),
+              ),
+              if (tieneCodigo) ...[
+                const SizedBox(width: 10),
+                Icon(
+                  _copiado
+                      ? CupertinoIcons.checkmark_alt
+                      : CupertinoIcons.doc_on_doc,
+                  size: 18,
+                  color: _copiado ? verde : widget.accent,
+                ),
+              ],
+            ],
+          ),
+          if (tieneCodigo) ...[
+            const SizedBox(height: 4),
+            Text(
+              _copiado ? '¡Copiado!' : 'Tocá para copiar',
+              style: GoogleFonts.baloo2(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: _copiado ? verde : Colors.black.withOpacity(0.4),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Card blanca estilo "ticket": QR arriba, perforación, y un pie libre
+/// (código copiable o estado canjeado). `accent` tiñe sombra y perforación.
+Widget _ticketQrCard({
+  required String qrData,
+  required Color accent,
+  required Widget pie,
+}) {
+  final safe = qrData.isNotEmpty ? qrData : 'SIN_CODIGO';
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      boxShadow: [
+        BoxShadow(
+          color: accent.withOpacity(0.20),
+          blurRadius: 28,
+          spreadRadius: 1,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
+          child: QrImageView(
+            data: safe,
+            version: QrVersions.auto,
+            size: 186,
+            backgroundColor: Colors.white,
+            eyeStyle: const QrEyeStyle(
+              eyeShape: QrEyeShape.square,
+              color: Colors.black,
+            ),
+            dataModuleStyle: const QrDataModuleStyle(
+              dataModuleShape: QrDataModuleShape.square,
+              color: Colors.black,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 14,
+          child: CustomPaint(
+            painter: _PerforacionPainter(accent.withOpacity(0.30)),
+            child: const SizedBox.expand(),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
+          child: pie,
+        ),
+      ],
+    ),
+  );
+}
 
 class _BottomSheetContrasenaFernecito extends StatelessWidget {
   final String codigo;
@@ -1035,8 +1196,8 @@ class _BottomSheetContrasenaFernecito extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-      decoration: SuperficiesApp.bottomSheet(topRadius: 20),
+      padding: const EdgeInsets.fromLTRB(24, 10, 24, 28),
+      decoration: SuperficiesApp.bottomSheet(topRadius: 24),
       child: SafeArea(
         top: false,
         child: Column(
@@ -1044,28 +1205,45 @@ class _BottomSheetContrasenaFernecito extends StatelessWidget {
           children: [
             // Handle
             Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
+              width: 40,
+              height: 5,
+              margin: const EdgeInsets.only(bottom: 18),
               decoration: BoxDecoration(
-                color: ColoresApp.textoSecundario.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(2),
+                color: ColoresApp.textoSecundario.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(3),
               ),
             ),
+            // Badge ícono
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: ColoresApp.principalMarca.withOpacity(0.14),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                CupertinoIcons.qrcode,
+                size: 27,
+                color: ColoresApp.principalMarca,
+              ),
+            ),
+            const SizedBox(height: 14),
             Text(
               'Tu código de ingreso',
               style: GoogleFonts.baloo2(
                 fontSize: 20,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w900,
                 color: ColoresApp.textoPrincipal,
+                letterSpacing: -0.3,
               ),
             ),
             if (tituloEvento.isNotEmpty) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 tituloEvento,
                 style: GoogleFonts.baloo2(
                   fontSize: 13,
+                  fontWeight: FontWeight.w600,
                   color: ColoresApp.textoSecundario,
                 ),
                 maxLines: 1,
@@ -1075,66 +1253,47 @@ class _BottomSheetContrasenaFernecito extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               'Mostrá el QR o dictá el código en la entrada',
+              textAlign: TextAlign.center,
               style: GoogleFonts.baloo2(
                 fontSize: 13,
                 color: ColoresApp.textoSecundario,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 22),
+            _ticketQrCard(
+              qrData: codigo.isNotEmpty ? codigo : 'SIN_CODIGO',
+              accent: ColoresApp.principalMarca,
+              pie: _CodigoCopiable(
+                codigo: codigo,
+                accent: ColoresApp.principalMarca,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Pill de validez
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: ColoresApp.principalMarca.withOpacity(0.3),
-                    blurRadius: 20,
-                    spreadRadius: 2,
+                color: ColoresApp.principalMarca.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(50),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    CupertinoIcons.checkmark_shield_fill,
+                    size: 14,
+                    color: ColoresApp.principalMarca,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Válido una sola vez',
+                    style: GoogleFonts.baloo2(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: ColoresApp.principalMarca,
+                    ),
                   ),
                 ],
-              ),
-              child: QrImageView(
-                data: codigo.isNotEmpty ? codigo : 'SIN_CODIGO',
-                version: QrVersions.auto,
-                size: 180,
-                backgroundColor: Colors.white,
-                eyeStyle: const QrEyeStyle(
-                  eyeShape: QrEyeShape.square,
-                  color: Colors.black,
-                ),
-                dataModuleStyle: const QrDataModuleStyle(
-                  dataModuleShape: QrDataModuleShape.square,
-                  color: Colors.black,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-              decoration: BoxDecoration(
-                color: ColoresApp.fondoPrincipal,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: ColoresApp.principalMarca.withOpacity(0.5),
-                ),
-              ),
-              child: Text(
-                codigo.isNotEmpty ? codigo : '--------',
-                style: GoogleFonts.baloo2(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 8,
-                  color: ColoresApp.principalMarca,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Válido una sola vez',
-              style: GoogleFonts.baloo2(
-                fontSize: 11,
-                color: ColoresApp.textoSecundario,
               ),
             ),
           ],
@@ -1162,28 +1321,45 @@ class _PanelQrCodigoPromo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final safe = codigo.isNotEmpty ? codigo : 'SIN_CODIGO';
-    final letter =
-        codigo.length > 10 ? 2.5 : (codigo.length > 8 ? 4.0 : 6.0);
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        // Badge ícono
+        Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            color: ColoresApp.promoMarca.withOpacity(0.14),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            canjeada
+                ? CupertinoIcons.checkmark_seal_fill
+                : CupertinoIcons.tag_fill,
+            size: 26,
+            color: ColoresApp.promoMarca,
+          ),
+        ),
+        const SizedBox(height: 14),
         Text(
           canjeada ? 'Promo canjeada' : 'Tu código de promo',
           textAlign: TextAlign.center,
           style: GoogleFonts.baloo2(
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
             color: ColoresApp.textoPrincipal,
+            letterSpacing: -0.3,
           ),
         ),
         if (tituloPromo.isNotEmpty) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(
             tituloPromo,
             textAlign: TextAlign.center,
             style: GoogleFonts.baloo2(
               fontSize: 12,
+              fontWeight: FontWeight.w600,
               color: ColoresApp.textoSecundario,
             ),
             maxLines: 2,
@@ -1201,57 +1377,39 @@ class _PanelQrCodigoPromo extends StatelessWidget {
             color: ColoresApp.textoSecundario,
           ),
         ),
-        const SizedBox(height: 16),
-        Center(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: ColoresApp.promoMarca.withOpacity(0.3),
-                  blurRadius: 20,
-                  spreadRadius: 2,
+        const SizedBox(height: 20),
+        _ticketQrCard(
+          qrData: safe,
+          accent: ColoresApp.promoMarca,
+          pie: canjeada
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      codigo.isNotEmpty ? codigo : '------------',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.baloo2(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 4,
+                        color: Colors.black.withOpacity(0.30),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Ya utilizada',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black.withOpacity(0.35),
+                      ),
+                    ),
+                  ],
+                )
+              : _CodigoCopiable(
+                  codigo: codigo,
+                  accent: ColoresApp.promoMarca,
                 ),
-              ],
-            ),
-            child: QrImageView(
-              data: safe,
-              version: QrVersions.auto,
-              size: 180,
-              backgroundColor: Colors.white,
-              eyeStyle: const QrEyeStyle(
-                eyeShape: QrEyeShape.square,
-                color: Colors.black,
-              ),
-              dataModuleStyle: const QrDataModuleStyle(
-                dataModuleShape: QrDataModuleShape.square,
-                color: Colors.black,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          decoration: BoxDecoration(
-            color: ColoresApp.fondoPrincipal,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: ColoresApp.promoMarca.withOpacity(0.5),
-            ),
-          ),
-          child: Text(
-            codigo.isNotEmpty ? codigo : '------------',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.baloo2(
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-              letterSpacing: letter,
-              color: ColoresApp.promoMarca,
-            ),
-          ),
         ),
       ],
     );
@@ -1272,15 +1430,15 @@ String _descripcionPromoRow(Map<String, dynamic> p) {
 
 enum _FaseBotonObtenerPromo { cargando, exitoCheck }
 
-class _BottomSheetPromos extends StatefulWidget {
+class BottomSheetPromos extends StatefulWidget {
   final Map<String, dynamic> token;
   final String idEvento;
   final bool puedeObtenerPromos;
   /// Snapshot desde Mi Actividad al abrir el sheet (evita mostrar “Obtener” si ya está en BD).
-  final Map<String, _SnapshotTokenPromo> promoTokensPrecarga;
+  final Map<String, SnapshotTokenPromo> promoTokensPrecarga;
   final Future<void> Function()? onReloadActividadDesdePromos;
 
-  const _BottomSheetPromos({
+  const BottomSheetPromos({
     required this.token,
     required this.idEvento,
     required this.puedeObtenerPromos,
@@ -1289,10 +1447,10 @@ class _BottomSheetPromos extends StatefulWidget {
   });
 
   @override
-  State<_BottomSheetPromos> createState() => _BottomSheetPromosState();
+  State<BottomSheetPromos> createState() => BottomSheetPromosState();
 }
 
-class _BottomSheetPromosState extends State<_BottomSheetPromos> {
+class BottomSheetPromosState extends State<BottomSheetPromos> {
   bool _cargando = true;
   String? _errorMsg;
   List<Map<String, dynamic>> _promos = [];
@@ -1302,7 +1460,7 @@ class _BottomSheetPromosState extends State<_BottomSheetPromos> {
   final Map<String, _FaseBotonObtenerPromo> _faseObtenerPromo = {};
   final Map<String, Timer> _timersObtenerPromo = {};
 
-  void _aplicarPrecarga(Map<String, _SnapshotTokenPromo> src) {
+  void _aplicarPrecarga(Map<String, SnapshotTokenPromo> src) {
     for (final e in src.entries) {
       _misTokens[e.key] = e.value.codigo;
       _estadoTokenPromo[e.key] = e.value.estadoToken;

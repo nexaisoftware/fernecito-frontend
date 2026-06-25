@@ -10,16 +10,20 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'auth_redirect.dart';
+import '../config/supabase_config.dart';
 
 /// URL pública con Open Graph para preview rica (flyer + título) en WhatsApp.
 String urlPreviewCompartirEvento(String idEvento) {
   final id = Uri.encodeComponent(idEvento);
-  final shareBase = (dotenv.env['URL_SHARE_EVENTO'] ?? '').trim();
+  const shareBaseDefine = String.fromEnvironment('URL_SHARE_EVENTO');
+  final shareBase = shareBaseDefine.isNotEmpty
+      ? shareBaseDefine
+      : (dotenv.env['URL_SHARE_EVENTO'] ?? '').trim();
   if (shareBase.isNotEmpty) {
     return '${shareBase.replaceAll(RegExp(r'/$'), '')}?id=$id&v=916';
   }
 
-  final supabaseBase = (dotenv.env['URL_SUPABASE'] ?? '').replaceAll(
+  final supabaseBase = (ConfiguracionSupabase.obtenerUrl() ?? '').replaceAll(
     RegExp(r'/$'),
     '',
   );
@@ -207,12 +211,17 @@ Future<void> _fallbackPortapapeles(
   try {
     await Clipboard.setData(ClipboardData(text: payload));
     if (feedbackContext == null || !feedbackContext.mounted) return;
+    if (esPluginNativo) {
+      debugPrint(
+        '⚠️ share_plus nativo no disponible. '
+        'Ejecutá: cd ios && pod install && flutter run',
+      );
+    }
     _avisar(
       feedbackContext,
       esPluginNativo
-          ? 'Falta el plugin nativo de compartir. '
-                'Detené la app, corré `cd ios && pod install` y volvé a compilar.'
-          : 'No se abrió el menú de compartir. Copiamos el link al portapapeles.',
+          ? 'No se abrió compartir. Link copiado al portapapeles.'
+          : 'Link copiado al portapapeles.',
     );
   } catch (_) {
     if (feedbackContext != null && feedbackContext.mounted) {
@@ -223,18 +232,49 @@ Future<void> _fallbackPortapapeles(
 
 void _avisar(BuildContext? context, String mensaje) {
   if (context == null || !context.mounted) return;
+
+  // CupertinoAlertDialog usa _PriorityColumn interno y puede crashear si el
+  // contenido llega al tope de altura (~392px). Popup scrollable evita eso.
   showCupertinoDialog<void>(
     context: context,
-    builder: (ctx) => CupertinoAlertDialog(
-      title: const Text('Compartir'),
-      content: Text(mensaje),
-      actions: [
-        CupertinoDialogAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('OK'),
+    barrierDismissible: true,
+    builder: (ctx) => Center(
+      child: CupertinoPopupSurface(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 270, maxHeight: 320),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Compartir',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      mensaje,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 14, height: 1.35),
+                    ),
+                  ),
+                ),
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          ),
         ),
-      ],
+      ),
     ),
   );
 }

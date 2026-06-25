@@ -2,7 +2,7 @@
 ///
 /// Responsabilidades:
 /// - Inicializar Flutter binding (requerido para async en main)
-/// - Cargar variables de entorno desde archivo .env
+/// - Cargar configuracion local/produccion
 /// - Configurar y conectar con Supabase (backend BaaS)
 /// - Lanzar la aplicación principal (AppFernecito)
 ///
@@ -23,27 +23,26 @@ void main() async {
   // Asegura que Flutter esté inicializado antes de operaciones async
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Cargar variables de entorno desde archivo .env
+  // Cargar .env solo como fallback local. En produccion se usa --dart-define.
   try {
     await dotenv.load(fileName: '.env');
-    print('✅ Variables de entorno cargadas correctamente');
+    print('Variables de entorno locales cargadas correctamente');
   } catch (e) {
-    print('❌ Error al cargar archivo .env: $e');
-    print('Asegúrate de que existe un archivo .env en la raíz del proyecto');
+    print('Sin .env local cargado; usando --dart-define si existe.');
   }
 
   // Inicializar Supabase con credenciales del archivo .env y deep link
   bool supabaseInicializado = false;
   String? errorSupabase;
   try {
-    final urlSupabase = dotenv.env['URL_SUPABASE'];
-    final clavePublica = dotenv.env['CLAVE_PUBLICA_SUPABASE'];
+    final urlSupabase = _config('URL_SUPABASE');
+    final clavePublica = _config('CLAVE_PUBLICA_SUPABASE');
 
     // Validar que las credenciales existan
-    if (urlSupabase == null || clavePublica == null) {
+    if (urlSupabase.isEmpty || clavePublica.isEmpty) {
       throw Exception(
-        'Faltan credenciales en .env: URL_SUPABASE o CLAVE_PUBLICA_SUPABASE. '
-        'Copia .env.ejemplo a .env en fernecito_frontend y rellena los valores.',
+        'Faltan URL_SUPABASE o CLAVE_PUBLICA_SUPABASE. '
+        'En produccion usá --dart-define; en local podés usar .env.',
       );
     }
 
@@ -59,12 +58,11 @@ void main() async {
     );
 
     supabaseInicializado = true;
-    print('✅ Supabase inicializado correctamente');
-    print('📡 Conectado a: $urlSupabase');
-    print('🔗 Deep link: fernecito://auth-callback');
+    print('Supabase inicializado correctamente');
+    print('Deep link: fernecito://auth-callback');
   } catch (e) {
     errorSupabase = e.toString();
-    print('❌ Error al inicializar Supabase: $e');
+    print('Error al inicializar Supabase: $e');
     print(
       'La app no puede arrancar sin Supabase. Revisa .env en fernecito_frontend.',
     );
@@ -142,8 +140,7 @@ class _PantallaErrorConfig extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Revisa que exista el archivo .env en la carpeta fernecito_frontend '
-                  'con URL_SUPABASE y CLAVE_PUBLICA_SUPABASE. Usa .env.ejemplo como guía.',
+                  'En produccion se configuran con --dart-define. En local podés usar .env.',
                   style: TextStyle(color: Colors.white54, fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
@@ -154,4 +151,16 @@ class _PantallaErrorConfig extends StatelessWidget {
       ),
     );
   }
+}
+
+String _config(String key) {
+  const urlSupabase = String.fromEnvironment('URL_SUPABASE');
+  const clavePublicaSupabase = String.fromEnvironment('CLAVE_PUBLICA_SUPABASE');
+
+  final fromDefine = switch (key) {
+    'URL_SUPABASE' => urlSupabase,
+    'CLAVE_PUBLICA_SUPABASE' => clavePublicaSupabase,
+    _ => '',
+  };
+  return fromDefine.isNotEmpty ? fromDefine : (dotenv.env[key] ?? '').trim();
 }

@@ -21,6 +21,7 @@ class BurbujaEstado extends StatelessWidget {
   final bool esMio;
   final bool mostrarPuntosSiVacio;
   final bool compacta;
+  final bool centrar;
 
   const BurbujaEstado({
     super.key,
@@ -35,6 +36,7 @@ class BurbujaEstado extends StatelessWidget {
     this.esMio = false,
     this.mostrarPuntosSiVacio = true,
     this.compacta = false,
+    this.centrar = true,
   });
 
   static const _defaultMaxW = 320.0;
@@ -50,24 +52,23 @@ class BurbujaEstado extends StatelessWidget {
       compacta: compacta,
       colaArriba: colaHaciaArriba,
     );
-    final minW = minWidth ??
-        (_esVacio ? medidas.minAnchoVacio : medidas.minAnchoTexto);
+    final minW =
+        minWidth ?? (_esVacio ? medidas.minAnchoVacio : medidas.minAnchoTexto);
 
-    return Center(
-      child: _BurbujaContenido(
-        texto: texto,
-        fontSize: fs,
-        maxWidth: maxW,
-        minWidth: minW,
-        usarMarquee: usarMarquee,
-        maxLines: maxLines,
-        colaHaciaArriba: colaHaciaArriba,
-        esMio: esMio,
-        mostrarPuntosSiVacio: mostrarPuntosSiVacio,
-        ajustarAnchoAlTexto: ajustarAnchoAlTexto,
-        medidas: medidas,
-      ),
+    final contenido = _BurbujaContenido(
+      texto: texto,
+      fontSize: fs,
+      maxWidth: maxW,
+      minWidth: minW,
+      usarMarquee: usarMarquee,
+      maxLines: maxLines,
+      colaHaciaArriba: colaHaciaArriba,
+      esMio: esMio,
+      mostrarPuntosSiVacio: mostrarPuntosSiVacio,
+      ajustarAnchoAlTexto: ajustarAnchoAlTexto,
+      medidas: medidas,
     );
+    return centrar ? Center(child: contenido) : contenido;
   }
 }
 
@@ -137,12 +138,12 @@ class _BurbujaContenido extends StatelessWidget {
   final _MedidasBurbuja medidas;
 
   TextStyle get _style => GoogleFonts.baloo2(
-        fontSize: fontSize,
-        fontWeight: FontWeight.w700,
-        color: ColoresApp.textoPrincipal,
-        height: 1.12,
-        letterSpacing: -0.15,
-      );
+    fontSize: fontSize,
+    fontWeight: FontWeight.w700,
+    color: ColoresApp.textoPrincipal,
+    height: 1.12,
+    letterSpacing: -0.15,
+  );
 
   Size _medirTexto(double maxContentW) {
     final t = texto.trim();
@@ -278,14 +279,20 @@ class PintorBurbujaChat extends CustomPainter {
       path.arcToPoint(Offset(r, bt), radius: Radius.circular(r));
       path.lineTo(cx - tailHalfW, bt);
       path.cubicTo(
-        cx - tailHalfW * 0.5, bt - tailHeight * 0.3,
-        cx - 2.5, bt - tailHeight,
-        cx, bt - tailHeight,
+        cx - tailHalfW * 0.5,
+        bt - tailHeight * 0.3,
+        cx - 2.5,
+        bt - tailHeight,
+        cx,
+        bt - tailHeight,
       );
       path.cubicTo(
-        cx + 2.5, bt - tailHeight,
-        cx + tailHalfW * 0.5, bt - tailHeight * 0.3,
-        cx + tailHalfW, bt,
+        cx + 2.5,
+        bt - tailHeight,
+        cx + tailHalfW * 0.5,
+        bt - tailHeight * 0.3,
+        cx + tailHalfW,
+        bt,
       );
       path.lineTo(w - r, bt);
       path.arcToPoint(Offset(w, bt + r), radius: Radius.circular(r));
@@ -302,14 +309,20 @@ class PintorBurbujaChat extends CustomPainter {
       path.arcToPoint(Offset(w - r, bb), radius: Radius.circular(r));
       path.lineTo(cx + tailHalfW, bb);
       path.cubicTo(
-        cx + tailHalfW * 0.5, bb + tailHeight * 0.3,
-        cx + 2.5, bb + tailHeight,
-        cx, bb + tailHeight,
+        cx + tailHalfW * 0.5,
+        bb + tailHeight * 0.3,
+        cx + 2.5,
+        bb + tailHeight,
+        cx,
+        bb + tailHeight,
       );
       path.cubicTo(
-        cx - 2.5, bb + tailHeight,
-        cx - tailHalfW * 0.5, bb + tailHeight * 0.3,
-        cx - tailHalfW, bb,
+        cx - 2.5,
+        bb + tailHeight,
+        cx - tailHalfW * 0.5,
+        bb + tailHeight * 0.3,
+        cx - tailHalfW,
+        bb,
       );
       path.lineTo(r, bb);
       path.arcToPoint(Offset(0, bb - r), radius: Radius.circular(r));
