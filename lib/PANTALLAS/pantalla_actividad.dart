@@ -4,7 +4,6 @@ library;
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,8 +13,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 import '../core/constants.dart';
+import '../core/servicio_actividad_usuario.dart';
 import '../core/supabase_client.dart';
+import '../widgets/avatar_local.dart';
 import '../widgets/boton_compartir_evento.dart';
+import '../widgets/fernecito_loader.dart';
 import 'pantalla_local_perfil.dart';
 import 'pantalla_pools.dart';
 
@@ -95,6 +97,12 @@ class _PantallaActividadState extends State<PantallaActividad> {
   @override
   void initState() {
     super.initState();
+    final cache = ServicioActividadUsuario.instancia.cache;
+    if (cache != null) {
+      _tokens = cache.tokens;
+      _tokensPromoPorId = _promosDesdeCache(cache);
+      _cargando = false;
+    }
     _cargarActividad();
   }
 
@@ -106,115 +114,37 @@ class _PantallaActividadState extends State<PantallaActividad> {
     }
   }
 
-  Future<void> _cargarActividad() async {
-    try {
-      final sb = ServicioSupabase().cliente;
-      final userId = sb.auth.currentUser?.id;
-      if (userId == null) {
-        debugPrint('[Actividad] _cargarActividad: sin sesión (currentUser null)');
-        if (mounted) setState(() => _cargando = false);
-        return;
-      }
+  Map<String, SnapshotTokenPromo> _promosDesdeCache(ActividadSnapshot cache) {
+    return {
+      for (final e in cache.promosPorId.entries)
+        e.key: SnapshotTokenPromo(
+          codigo: e.value.codigo,
+          estadoToken: e.value.estadoToken,
+        ),
+    };
+  }
 
-      // Paso 1: cargar tokens de asistencia del usuario con evento
-      final rows = await sb
-          .from('tokens_asistencia')
-          .select(
-            'id_token, codigo_puerta, estado_token, fecha_expiracion, '
-            'eventos!tokens_asistencia_id_evento_fkey('
-              'id_evento, titulo_evento, descripcion_evento, url_flyer, '
-              'fecha_inicio, fecha_fin, id_local'
-            ')',
-          )
-          .eq('id_usuario', userId)
-          .inFilter('estado_token', ['pendiente', 'aceptada', 'canjeada'])
-          .order('fecha_creacion', ascending: false);
-
-      if (kDebugMode) {
-        debugPrint(
-          '[Actividad] userId=$userId tokens devueltos por Supabase: ${(rows as List).length}',
-        );
-      }
-
-      // Paso 2: recolectar ids de locales únicos para cargar sus perfiles
-      final idsLocales = <String>{};
-      for (final r in (rows as List)) {
-        final ev = r['eventos'];
-        if (ev is Map) {
-          final idL = ev['id_local']?.toString().trim() ?? '';
-          if (idL.isNotEmpty) idsLocales.add(idL);
-        }
-      }
-
-      // Paso 3: cargar perfiles de locales (después de que RLS tenga la política pública)
-      final perfilesPorId = <String, Map<String, dynamic>>{};
-      if (idsLocales.isNotEmpty) {
-        try {
-          final perfilesRows = await sb
-              .from('perfiles_locales')
-              .select('id, nombre_local, foto_perfil_url, url_maps, direccion, ciudad, provincia')
-              .inFilter('id', idsLocales.toList());
-          for (final p in (perfilesRows as List)) {
-            final id = p['id']?.toString().toLowerCase() ?? '';
-            if (id.isNotEmpty) perfilesPorId[id] = Map<String, dynamic>.from(p as Map);
-          }
-        } catch (_) {
-          // RLS puede bloquear si aún no se aplicó la migración SQL_RLS_LECTURA_PUBLICA.sql
-        }
-      }
-
-      if (!mounted) return;
-
-      final tokens = (rows).map<Map<String, dynamic>>((r) {
-        final ev = r['eventos'] as Map<String, dynamic>? ?? {};
-        final idLocal = ev['id_local']?.toString().trim() ?? '';
-        final perfil = perfilesPorId[idLocal.toLowerCase()];
-        return {
-          'id_token': r['id_token'],
-          'codigo_puerta': r['codigo_puerta'] ?? '',
-          'estado_token': r['estado_token'] ?? 'pendiente',
-          'titulo': ev['titulo_evento'] ?? 'Evento',
-          'descripcion': ev['descripcion_evento'] ?? '',
-          'flyer': ev['url_flyer'] ?? '',
-          'fechaInicio': ev['fecha_inicio'],
-          'fechaFin': ev['fecha_fin'],
-          'nombreLocal': perfil?['nombre_local']?.toString().trim().isNotEmpty == true
-              ? perfil!['nombre_local'].toString()
-              : 'Local',
-          'avatarLocal': _resolverAvatarLocal(perfil?['foto_perfil_url']),
-          'idLocal': idLocal.isNotEmpty ? idLocal : null,
-          'urlMaps': perfil?['url_maps']?.toString().trim() ?? '',
-          'direccion': perfil?['direccion']?.toString().trim() ?? '',
-          'ciudad': perfil?['ciudad']?.toString().trim() ?? '',
-          'provincia': perfil?['provincia']?.toString().trim() ?? '',
-          'id_evento': ev['id_evento'],
-        };
-      }).toList();
-
-      final promoPorId = <String, SnapshotTokenPromo>{};
-      try {
-        final promoRows = await sb
-            .from('tokens_promociones')
-            .select('id_promocion, token_codigo, estado_token')
-            .eq('id_usuario', userId)
-            .inFilter('estado_token', _kEstadosTokenPromoUsuario);
-        for (final t in (promoRows as List)) {
-          final idP = t['id_promocion']?.toString() ?? '';
-          final codigo = t['token_codigo']?.toString() ?? '';
-          final est =
-              t['estado_token']?.toString().toLowerCase() ?? 'activo';
-          if (idP.isNotEmpty && codigo.isNotEmpty) {
-            promoPorId[idP] =
-                SnapshotTokenPromo(codigo: codigo, estadoToken: est);
-          }
-        }
-      } catch (e, st) {
-        debugPrint('[Actividad] tokens_promociones: $e\n$st');
-      }
-
+  /// [forzarCompleto] solo en pull-to-refresh o tras mutaciones (promos).
+  Future<void> _cargarActividad({bool forzarCompleto = false}) async {
+    final srv = ServicioActividadUsuario.instancia;
+    final desdeCache = !forzarCompleto && srv.tieneCache;
+    if (desdeCache && mounted) {
+      final c = srv.cache!;
       setState(() {
-        _tokens = tokens;
-        _tokensPromoPorId = promoPorId;
+        _tokens = c.tokens;
+        _tokensPromoPorId = _promosDesdeCache(c);
+        _cargando = false;
+      });
+    } else if (mounted && !desdeCache) {
+      setState(() => _cargando = true);
+    }
+
+    try {
+      final snap = await srv.sincronizar(forzarCompleto: forzarCompleto);
+      if (!mounted) return;
+      setState(() {
+        _tokens = snap.tokens;
+        _tokensPromoPorId = _promosDesdeCache(snap);
         _cargando = false;
       });
     } catch (e, st) {
@@ -222,14 +152,6 @@ class _PantallaActividadState extends State<PantallaActividad> {
       debugPrint('$st');
       if (mounted) setState(() => _cargando = false);
     }
-  }
-
-  String _resolverAvatarLocal(dynamic avatarRaw) {
-    final avatar = avatarRaw?.toString() ?? '';
-    if (avatar.isEmpty || avatar.startsWith('http')) return avatar;
-    return ServicioSupabase().cliente.storage
-        .from('perfiles-locales')
-        .getPublicUrl(avatar);
   }
 
   String _estadoTextoReal(String estado) {
@@ -345,7 +267,8 @@ class _PantallaActividadState extends State<PantallaActividad> {
         idEvento: idEvento,
         puedeObtenerPromos: puedeObtenerPromos,
         promoTokensPrecarga: Map<String, SnapshotTokenPromo>.from(_tokensPromoPorId),
-        onReloadActividadDesdePromos: _cargarActividad,
+        onReloadActividadDesdePromos: () =>
+            _cargarActividad(forzarCompleto: true),
       ),
     );
   }
@@ -356,72 +279,49 @@ class _PantallaActividadState extends State<PantallaActividad> {
 
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
-      child: Stack(
-        children: [
-          // Fondo degradado sutil
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      ColoresApp.principalMarca.withOpacity(0.18),
-                      ColoresApp.principalMarca.withOpacity(0.06),
-                      Colors.transparent,
-                    ],
-                    stops: const [0, 0.35, 1],
+      child: FernecitoRefreshScrollView(
+        onRefresh: () => _cargarActividad(forzarCompleto: true),
+        slivers: [
+          // Header
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, padding.top + 12, 20, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Mi Actividad',
+                          style: GoogleFonts.baloo2(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
+                            color: ColoresApp.textoPrincipal,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        Text(
+                          _tokens.isEmpty
+                              ? 'Todavía no reservaste nada'
+                              : '${_tokens.length} ${_tokens.length == 1 ? "reserva" : "reservas"} activas',
+                          style: GoogleFonts.baloo2(
+                            fontSize: 13,
+                            color: ColoresApp.textoSecundario,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
-          CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              CupertinoSliverRefreshControl(onRefresh: _cargarActividad),
-              SliverToBoxAdapter(child: SizedBox(height: padding.top)),
-              // Header
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Mi Actividad',
-                              style: GoogleFonts.baloo2(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                                color: ColoresApp.textoPrincipal,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            Text(
-                              _tokens.isEmpty
-                                  ? 'Todavía no reservaste nada'
-                                  : '${_tokens.length} ${_tokens.length == 1 ? "reserva" : "reservas"} activas',
-                              style: GoogleFonts.baloo2(
-                                fontSize: 13,
-                                color: ColoresApp.textoSecundario,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 20)),
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-              if (_cargando)
+          if (_cargando)
                 const SliverFillRemaining(
-                  child: Center(child: CupertinoActivityIndicator(radius: 14)),
+                  child: FernecitoLoaderCentro(size: 34),
                 )
               else if (_tokens.isEmpty)
                 SliverFillRemaining(
@@ -482,6 +382,7 @@ class _PantallaActividadState extends State<PantallaActividad> {
                             token: t,
                             flyerUrl: t['flyer'] as String? ?? '',
                             avatarLocal: t['avatarLocal'] as String? ?? '',
+                            localEsPionero: t['localEsPionero'] == true,
                             estadoTexto: _estadoTextoReal(estado),
                             estadoColor: _estadoColorReal(estado),
                             fechaHora: _formatearFecha(t['fechaInicio'] as String?),
@@ -505,6 +406,7 @@ class _PantallaActividadState extends State<PantallaActividad> {
                                         t['nombreLocal'] as String? ?? 'Local',
                                     avatarLocal:
                                         t['avatarLocal'] as String? ?? '',
+                                    localEsPionero: t['localEsPionero'] == true,
                                   ),
                                 ),
                               );
@@ -528,8 +430,6 @@ class _PantallaActividadState extends State<PantallaActividad> {
                   ),
                 ),
               SliverToBoxAdapter(child: SizedBox(height: padding.bottom + 80)),
-            ],
-          ),
         ],
       ),
     );
@@ -544,6 +444,7 @@ class _CardActividad extends StatelessWidget {
   final Map<String, dynamic> token;
   final String flyerUrl;
   final String avatarLocal;
+  final bool localEsPionero;
   final String estadoTexto;
   final Color estadoColor;
   final String fechaHora;
@@ -558,6 +459,7 @@ class _CardActividad extends StatelessWidget {
     required this.token,
     required this.flyerUrl,
     required this.avatarLocal,
+    this.localEsPionero = false,
     required this.estadoTexto,
     required this.estadoColor,
     required this.fechaHora,
@@ -587,7 +489,7 @@ class _CardActividad extends StatelessWidget {
             height: flyerH,
             placeholder: (_, __) => Container(
               color: ColoresApp.fondoSuperficie,
-              child: const Center(child: CupertinoActivityIndicator()),
+              child: const FernecitoLoaderCentro(),
             ),
             errorWidget: (_, __, ___) => Container(
               color: ColoresApp.fondoSuperficie,
@@ -609,24 +511,14 @@ class _CardActividad extends StatelessWidget {
             ),
           );
 
-    Widget avatarWidget = avatarLocal.isNotEmpty
-        ? CachedNetworkImage(
-            imageUrl: avatarLocal,
-            fit: BoxFit.cover,
-            memCacheWidth: avatarCacheW,
-            width: 24,
-            height: 24,
-            errorWidget: (_, __, ___) => const Icon(
-              CupertinoIcons.building_2_fill,
-              size: 14,
-              color: ColoresApp.textoSecundario,
-            ),
-          )
-        : const Icon(
-            CupertinoIcons.building_2_fill,
-            size: 14,
-            color: ColoresApp.textoSecundario,
-          );
+    Widget avatarWidget = AvatarLocal(
+      imageUrl: avatarLocal,
+      size: 24,
+      esPionero: localEsPionero,
+      placeholderIcon: CupertinoIcons.building_2_fill,
+      memCacheWidth: avatarCacheW,
+      borderWidth: 1.2,
+    );
 
     return Container(
       decoration: SuperficiesApp.card(
@@ -636,10 +528,7 @@ class _CardActividad extends StatelessWidget {
         sombraBlur: 14,
         sombraOffsetY: 5,
       ).copyWith(
-        border: Border.all(
-          color: ColoresApp.principalMarca.withValues(alpha: 0.18),
-        ),
-      ),
+              ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -703,11 +592,7 @@ class _CardActividad extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: estadoColor.withOpacity(0.18),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: estadoColor.withOpacity(0.4),
-                            width: 1,
-                          ),
-                        ),
+                                                  ),
                         child: Text(
                           estadoTexto,
                           style: GoogleFonts.baloo2(
@@ -737,13 +622,7 @@ class _CardActividad extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            ClipOval(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: avatarWidget,
-                              ),
-                            ),
+                            avatarWidget,
                             const SizedBox(width: 6),
                             Flexible(
                               child: Text(
@@ -814,10 +693,7 @@ class _CardActividad extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: ColoresApp.fondoSuperficie.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(50),
-                        border: Border.all(
-                          color: ColoresApp.principalMarca.withOpacity(0.3),
-                        ),
-                      ),
+                                              ),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -855,10 +731,7 @@ class _CardActividad extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: ColoresApp.promoMarca.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(50),
-                        border: Border.all(
-                          color: ColoresApp.promoMarca.withOpacity(0.5),
-                        ),
-                      ),
+                                              ),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -950,10 +823,7 @@ class _CardActividad extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: ColoresApp.fondoSuperficie.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(50),
-                        border: Border.all(
-                          color: ColoresApp.principalMarca.withOpacity(0.3),
-                        ),
-                      ),
+                                              ),
                       padding: const EdgeInsets.symmetric(vertical: 11),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1438,7 +1308,7 @@ class BottomSheetPromos extends StatefulWidget {
   final Map<String, SnapshotTokenPromo> promoTokensPrecarga;
   final Future<void> Function()? onReloadActividadDesdePromos;
 
-  const BottomSheetPromos({
+  const BottomSheetPromos({super.key, 
     required this.token,
     required this.idEvento,
     required this.puedeObtenerPromos,
@@ -1888,12 +1758,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                           ? const Color(0xFF34C759).withOpacity(0.12)
                           : ColoresApp.promoMarca.withOpacity(0.14),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: widget.puedeObtenerPromos
-                            ? const Color(0xFF34C759).withOpacity(0.42)
-                            : ColoresApp.promoMarca.withOpacity(0.38),
-                      ),
-                    ),
+                                          ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1927,7 +1792,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
               // Contenido
               Expanded(
                 child: _cargando
-                    ? const Center(child: CupertinoActivityIndicator(radius: 14))
+                    ? const FernecitoLoaderCentro(size: 28)
                     : _errorMsg != null
                         ? Center(
                             child: Padding(
@@ -2257,12 +2122,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                                                       .withOpacity(0.95),
                                                   borderRadius:
                                                       BorderRadius.circular(14),
-                                                  border: Border.all(
-                                                    color: ColoresApp
-                                                        .textoSecundario
-                                                        .withOpacity(0.28),
-                                                  ),
-                                                ),
+                                                                                                  ),
                                                 child: Row(
                                                   children: [
                                                     Icon(
@@ -2298,11 +2158,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                                                       .withOpacity(0.95),
                                                   borderRadius:
                                                       BorderRadius.circular(14),
-                                                  border: Border.all(
-                                                    color: ColoresApp.peligroMarca
-                                                        .withOpacity(0.35),
-                                                  ),
-                                                ),
+                                                                                                  ),
                                                 child: Row(
                                                   children: [
                                                     Icon(
@@ -2351,12 +2207,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                                                         .withOpacity(0.14),
                                                     borderRadius:
                                                         BorderRadius.circular(50),
-                                                    border: Border.all(
-                                                      color: ColoresApp
-                                                          .promoMarca
-                                                          .withOpacity(0.55),
-                                                    ),
-                                                  ),
+                                                                                                      ),
                                                   child: Row(
                                                     mainAxisAlignment:
                                                         MainAxisAlignment.center,
@@ -2405,10 +2256,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                                                   mainAxisAlignment:
                                                       MainAxisAlignment.center,
                                                   children: [
-                                                    const CupertinoActivityIndicator(
-                                                      color: Colors.white,
-                                                      radius: 11,
-                                                    ),
+                                                    const FernecitoLoader.inline(size: 22, color: Colors.white),
                                                     const SizedBox(width: 10),
                                                     Text(
                                                       'Obteniendo…',
@@ -2540,11 +2388,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                                                   .withOpacity(0.65),
                                               borderRadius:
                                                   BorderRadius.circular(18),
-                                              border: Border.all(
-                                                color: ColoresApp.promoMarca
-                                                    .withOpacity(0.22),
-                                              ),
-                                            ),
+                                                                                          ),
                                             child: _PanelQrCodigoPromo(
                                               codigo: codigo,
                                               tituloPromo: tituloPromo,

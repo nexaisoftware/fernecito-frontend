@@ -134,10 +134,7 @@ class _BusquedaSocialExpandibleState extends State<BusquedaSocialExpandible>
         decoration: BoxDecoration(
           color: ColoresApp.fondoSuperficie.withValues(alpha: 0.65),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: ColoresApp.principalMarca.withValues(alpha: 0.12),
-          ),
-        ),
+                  ),
         child: Row(
           children: [
             Icon(
@@ -148,7 +145,7 @@ class _BusquedaSocialExpandibleState extends State<BusquedaSocialExpandible>
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Buscar',
+                widget.hint,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.baloo2(
@@ -175,10 +172,7 @@ class _BusquedaSocialExpandibleState extends State<BusquedaSocialExpandible>
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: ColoresApp.principalMarca.withValues(alpha: 0.28 * t),
-          ),
-        ),
+                  ),
         child: Row(
           children: [
             Icon(
@@ -200,13 +194,7 @@ class _BusquedaSocialExpandibleState extends State<BusquedaSocialExpandible>
                 ),
                 decoration: InputDecoration(
                   isCollapsed: true,
-                  border: InputBorder.none,
-                  hintText: 'Buscar',
-                  hintStyle: GoogleFonts.baloo2(
-                    color: ColoresApp.textoSecundario.withValues(alpha: 0.85),
-                    fontSize: 13,
-                  ),
-                ),
+                                  ),
               ),
             ),
             GestureDetector(

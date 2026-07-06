@@ -16,11 +16,12 @@ import '../PANTALLAS/pantalla_home.dart';
 import '../PANTALLAS/pantalla_crear_perfil.dart';
 import '../PANTALLAS/pantalla_cuenta_pausada.dart';
 import '../PANTALLAS/pantalla_nueva_contrasena.dart';
+import 'app_navigator.dart';
 import 'recovery_flow_flag.dart';
 import 'servicio_estado_cuenta.dart';
+import 'servicio_push.dart';
 
-// GlobalKey para acceder al Navigator desde cualquier lugar
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+export 'app_navigator.dart' show navigatorKey;
 
 class AuthGate extends StatefulWidget {
   final Widget child;
@@ -56,7 +57,9 @@ class _AuthGateState extends State<AuthGate> {
         final session = data.session;
 
         print('🔐 AuthGate: Evento detectado: $event');
-        print('🔐 AuthGate: Session: ${session != null ? "activa (${session.user.email})" : "null"}');
+        print(
+          '🔐 AuthGate: Session: ${session != null ? "activa (${session.user.email})" : "null"}',
+        );
 
         if (!mounted) {
           print('⚠️ AuthGate: Widget no mounted, ignorando evento');
@@ -71,6 +74,12 @@ class _AuthGateState extends State<AuthGate> {
 
         // Manejar eventos según el tipo
         switch (event) {
+          case AuthChangeEvent.initialSession:
+            if (session != null) {
+              unawaited(ServicioPush.instancia.registrarParaUsuario());
+            }
+            break;
+
           case AuthChangeEvent.signedIn:
             _handleSignedIn(session);
             break;
@@ -109,12 +118,18 @@ class _AuthGateState extends State<AuthGate> {
 
     // Verificar si ya procesamos este usuario (evitar duplicados)
     if (_lastUserId == session.user.id && _currentRoute != null) {
-      print('⚠️ AuthGate: Usuario ${session.user.email} ya procesado, ignorando');
+      print(
+        '⚠️ AuthGate: Usuario ${session.user.email} ya procesado, ignorando',
+      );
       return;
     }
 
     print('✅ AuthGate: Procesando usuario logueado: ${session.user.email}');
     _lastUserId = session.user.id;
+
+    // Registrar el dispositivo para push (pide permiso Android 13+/iOS).
+    // Fire-and-forget: no bloquea la navegación ni rompe si falla.
+    unawaited(ServicioPush.instancia.registrarParaUsuario());
 
     try {
       final suspendida = await ServicioEstadoCuenta.instancia.refrescar();
@@ -127,8 +142,10 @@ class _AuthGateState extends State<AuthGate> {
       }
 
       // Verificar si el perfil está completo
-      print('🔍 AuthGate: Consultando perfil_completo para user ${session.user.id}');
-      
+      print(
+        '🔍 AuthGate: Consultando perfil_completo para user ${session.user.id}',
+      );
+
       final respuesta = await Supabase.instance.client
           .from('perfiles_usuarios')
           .select('perfil_completo, estado_cuenta')
@@ -139,7 +156,9 @@ class _AuthGateState extends State<AuthGate> {
 
       final estado = respuesta?['estado_cuenta']?.toString();
       if (estado == 'pausada') {
-        print('🛑 AuthGate: Cuenta pausada (fallback), redirigiendo a CuentaPausada');
+        print(
+          '🛑 AuthGate: Cuenta pausada (fallback), redirigiendo a CuentaPausada',
+        );
         _navigateTo(const PantallaCuentaPausada(), 'cuenta_pausada');
         return;
       }
@@ -160,7 +179,9 @@ class _AuthGateState extends State<AuthGate> {
       print('❌ AuthGate: Error verificando perfil: $error');
       // Si hay error, asumir perfil incompleto
       if (mounted) {
-        print('➡️ AuthGate: Error en consulta, navegando a CrearPerfil por seguridad');
+        print(
+          '➡️ AuthGate: Error en consulta, navegando a CrearPerfil por seguridad',
+        );
         _navigateTo(const PantallaCrearPerfil(), 'crear_perfil');
       }
     }
@@ -169,6 +190,7 @@ class _AuthGateState extends State<AuthGate> {
   void _handleSignedOut() {
     print('🔐 AuthGate: Usuario cerró sesión');
     ServicioEstadoCuenta.instancia.limpiar();
+    ServicioPush.instancia.olvidarLocal();
     _lastUserId = null; // Resetear el último usuario
     _currentRoute = null; // Resetear la ruta
 
@@ -194,7 +216,7 @@ class _AuthGateState extends State<AuthGate> {
 
     // Obtener el NavigatorState desde el GlobalKey
     final navigator = navigatorKey.currentState;
-    
+
     if (navigator == null) {
       print('❌ AuthGate: Navigator no disponible');
       return;
@@ -203,10 +225,7 @@ class _AuthGateState extends State<AuthGate> {
     try {
       // Navegar limpiando todo el stack
       navigator.pushAndRemoveUntil(
-        CupertinoPageRoute(
-          builder: (context) => screen,
-          maintainState: false,
-        ),
+        CupertinoPageRoute(builder: (context) => screen, maintainState: false),
         (route) => false, // Remover todas las rutas anteriores
       );
 

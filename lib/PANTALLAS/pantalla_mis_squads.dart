@@ -19,6 +19,7 @@ import '../widgets/perfil_squad_ui.dart';
 import '../widgets/sheet_invitar_miembros_squad.dart';
 import '../widgets/social_ui.dart';
 import 'pantalla_perfil_usuarios.dart';
+import '../widgets/fernecito_loader.dart';
 
 class PantallaMisSquads extends StatefulWidget {
   final Map<String, dynamic> squad;
@@ -723,10 +724,7 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
             decoration: BoxDecoration(
               color: ColoresApp.fondoPrincipal.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: ColoresApp.principalMarca.withValues(alpha: 0.2),
-              ),
-            ),
+                          ),
           ),
           const SizedBox(height: 8),
           CupertinoButton(
@@ -775,10 +773,7 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(50),
-          border: Border.all(
-            color: ColoresApp.peligroMarca.withValues(alpha: 0.45),
-          ),
-        ),
+                  ),
         child: Text(
           'Quitar',
           style: GoogleFonts.baloo2(
@@ -799,12 +794,7 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
     if (_cargando) {
       return CupertinoPageScaffold(
         backgroundColor: ColoresApp.fondoPrincipal,
-        child: Center(
-          child: CupertinoActivityIndicator(
-            color: ColoresApp.principalMarca,
-            radius: 18,
-          ),
-        ),
+        child: const FernecitoLoaderCentro(size: 36),
       );
     }
 

@@ -397,8 +397,7 @@ class _CardContinuarRompehielo extends StatelessWidget {
 
           borderRadius: BorderRadius.circular(18),
 
-          border: Border.all(color: accent.withValues(alpha: 0.28)),
-
+          
           boxShadow: [
             BoxShadow(
               color: accent.withValues(alpha: 0.12),
@@ -524,14 +523,7 @@ class _CardIdentidadRompehielo extends StatelessWidget {
 
           borderRadius: BorderRadius.circular(16),
 
-          border: Border.all(
-            color: seleccionado
-                ? accent.withValues(alpha: 0.50)
-                : accent.withValues(alpha: 0.12),
-
-            width: seleccionado ? 1.5 : 1,
-          ),
-        ),
+                  ),
 
         child: Row(
           children: [
@@ -620,8 +612,7 @@ class _BadgeEstadoRompehielo extends StatelessWidget {
 
         borderRadius: BorderRadius.circular(20),
 
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
+              ),
 
       child: Text(
         texto,
@@ -671,12 +662,7 @@ class _AvatarSquadModal extends StatelessWidget {
 
                   shape: BoxShape.circle,
 
-                  border: Border.all(
-                    color: ColoresApp.principalMarca.withValues(alpha: 0.40),
-
-                    width: 1.4,
-                  ),
-                ),
+                                  ),
 
                 child: Icon(
                   CupertinoIcons.person_3_fill,

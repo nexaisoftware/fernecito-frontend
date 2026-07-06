@@ -19,6 +19,7 @@ import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/perfil_squad_ui.dart';
 import 'pantalla_perfil_usuarios.dart';
 import 'pantalla_rompehielo.dart' show TipoContraparte;
+import '../widgets/fernecito_loader.dart';
 
 enum EstadoRelacionSquad {
   ninguno,
@@ -227,12 +228,7 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
     if (_cargando) {
       return CupertinoPageScaffold(
         backgroundColor: ColoresApp.fondoPrincipal,
-        child: Center(
-          child: CupertinoActivityIndicator(
-            color: ColoresApp.principalMarca,
-            radius: 18,
-          ),
-        ),
+        child: const FernecitoLoaderCentro(size: 36),
       );
     }
 
@@ -383,7 +379,7 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
       borderRadius: BorderRadius.circular(18),
       onPressed: _procesando ? null : _onAccionPrincipal,
       child: _procesando
-          ? CupertinoActivityIndicator(color: textColor)
+          ? FernecitoLoader.inline(size: 16, color: textColor)
           : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

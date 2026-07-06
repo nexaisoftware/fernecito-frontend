@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
 import '../core/supabase_client.dart';
+import '../widgets/fernecito_loader.dart';
 
 class PantallaEliminarTodo extends StatefulWidget {
   const PantallaEliminarTodo({super.key});
@@ -124,9 +125,7 @@ class _PantallaEliminarTodoState extends State<PantallaEliminarTodo> {
                 decoration: BoxDecoration(
                   color: ColoresApp.fondoSuperficie.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: ColoresApp.peligroMarca.withValues(alpha: 0.4)),
-                ),
+                                  ),
                 child: Text(
                   '• Tu cuenta de usuario (amigos, squads, reservas, rompehielos)\n'
                   '• Tus locales y todos sus eventos y promos\n'
@@ -167,13 +166,7 @@ class _PantallaEliminarTodoState extends State<PantallaEliminarTodo> {
                 decoration: BoxDecoration(
                   color: ColoresApp.fondoSuperficie,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: _habilitado
-                        ? ColoresApp.peligroMarca
-                        : Colors.white.withValues(alpha: 0.15),
-                    width: _habilitado ? 1.5 : 1,
-                  ),
-                ),
+                                  ),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 14),
@@ -195,7 +188,7 @@ class _PantallaEliminarTodoState extends State<PantallaEliminarTodo> {
                 borderRadius: BorderRadius.circular(50),
                 onPressed: (_habilitado && !_eliminando) ? _eliminar : null,
                 child: _eliminando
-                    ? const CupertinoActivityIndicator(color: Colors.white)
+                    ? const FernecitoLoader.inline(size: 16, color: Colors.white)
                     : Text(
                         'Eliminar definitivamente',
                         style: GoogleFonts.baloo2(

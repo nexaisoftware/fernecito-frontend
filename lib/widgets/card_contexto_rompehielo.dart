@@ -39,10 +39,7 @@ class CardContextoRompehielo extends StatelessWidget {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: ColoresApp.principalMarca.withValues(alpha: 0.18),
-        ),
-      ),
+              ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

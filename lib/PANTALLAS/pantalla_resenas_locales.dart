@@ -22,6 +22,7 @@ import '../core/constants.dart';
 import '../core/supabase_client.dart';
 import '../widgets/avatar_usuario.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
+import '../widgets/fernecito_loader.dart';
 
 class PantallaResenasLocales extends StatefulWidget {
   final String nombreLocal;
@@ -218,10 +219,7 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
                     ],
                   ),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: ColoresApp.principalMarca.withOpacity(0.35),
-                  ),
-                  boxShadow: [
+                                    boxShadow: [
                     BoxShadow(
                       color: ColoresApp.principalMarca.withOpacity(0.35),
                       blurRadius: 36,
@@ -381,7 +379,7 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
               _AppBarLocal(nombre: widget.nombreLocal),
               Expanded(
                 child: _cargando
-                    ? const Center(child: CupertinoActivityIndicator(radius: 14))
+                    ? const FernecitoLoaderCentro(size: 28)
                     : CustomScrollView(
                         physics: const BouncingScrollPhysics(),
                         slivers: [
@@ -441,10 +439,7 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
           decoration: BoxDecoration(
             color: ColoresApp.principalMarca.withOpacity(0.14),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: ColoresApp.principalMarca.withOpacity(0.45),
-            ),
-          ),
+                      ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -484,10 +479,7 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: ColoresApp.principalMarca.withOpacity(0.32),
-        ),
-        boxShadow: [
+                boxShadow: [
           BoxShadow(
             color: ColoresApp.principalMarca.withOpacity(0.12),
             blurRadius: 18,
@@ -553,10 +545,7 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
             decoration: BoxDecoration(
               color: ColoresApp.fondoPrincipal.withOpacity(0.6),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: ColoresApp.textoSecundario.withOpacity(0.18),
-              ),
-            ),
+                          ),
             child: CupertinoTextField(
               controller: _textoController,
               focusNode: _focusComentario,
@@ -592,7 +581,7 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CupertinoActivityIndicator(color: Colors.black),
+                      child: FernecitoLoader.inline(size: 16, color: Colors.black),
                     )
                   : Text(
                       _misEstrellas > 0 ? 'Publicar reseña' : 'Elegí estrellas',
@@ -648,11 +637,7 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
                     ],
                   ),
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: ColoresApp.principalMarca.withOpacity(0.5),
-                    width: 1.2,
-                  ),
-                ),
+                                  ),
                 child: _CardResenaInner(resena: r, sinBorde: true),
               ),
             );
@@ -855,10 +840,7 @@ class _CardResena extends StatelessWidget {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withOpacity(0.78),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.06),
-        ),
-      ),
+              ),
       child: _CardResenaInner(resena: resena),
     );
   }

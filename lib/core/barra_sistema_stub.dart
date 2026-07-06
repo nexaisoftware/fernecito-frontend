@@ -1,0 +1,1 @@
+void actualizarThemeColorPwa(bool modoOscuro) {}

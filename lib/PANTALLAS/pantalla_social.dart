@@ -17,7 +17,7 @@ import 'pantalla_perfil_squads.dart';
 import 'pantalla_perfil_usuarios.dart';
 import '../widgets/busqueda_social_expandible.dart';
 import '../widgets/encabezado_amigos_social.dart';
-import '../widgets/fondo_gradiente_fernecito.dart';
+import '../widgets/fernecito_loader.dart';
 import '../widgets/social_explorar_sheets.dart';
 import '../widgets/social_ui.dart';
 
@@ -96,20 +96,29 @@ Map<String, dynamic> _mapInvitacionSquad(SquadResumen s) {
   return map;
 }
 
-class PantallaSocial extends StatefulWidget {
-  final int initialTabIndex;
+enum SocialVista { explorar, amigos, squads }
 
+class PantallaSocial extends StatefulWidget {
+  final SocialVista vista;
+  final bool mostrarVolver;
+
+  /// Compatibilidad: 0 → amigos, 1 → squads (desde notificaciones antiguas).
   const PantallaSocial({
     super.key,
-    this.initialTabIndex = 0,
+    this.vista = SocialVista.explorar,
+    this.mostrarVolver = false,
+    @Deprecated('Usar vista') this.initialTabIndex = 0,
   });
+
+  final int initialTabIndex;
 
   @override
   State<PantallaSocial> createState() => _PantallaSocialState();
 }
 
 class _PantallaSocialState extends State<PantallaSocial> {
-  late int _tabIndex;
+  late SocialVista _vista;
+  int _explorarIndice = 0;
 
   final ServicioAmigos _srvAmigos = ServicioAmigos();
   final ServicioSquads _srvSquads = ServicioSquads();
@@ -129,14 +138,24 @@ class _PantallaSocialState extends State<PantallaSocial> {
   @override
   void initState() {
     super.initState();
-    _tabIndex = widget.initialTabIndex.clamp(0, 1);
+    _vista = widget.vista;
     _cargarAmigos();
     _cargarSquads();
   }
 
-  Future<void> _cargarAmigos({bool silencioso = false}) async {
-    if (!silencioso && mounted) setState(() => _cargandoAmigos = true);
-    final data = await _srvAmigos.listar();
+  Future<void> _cargarAmigos({
+    bool silencioso = false,
+    bool forzarCompleto = false,
+  }) async {
+    if (!silencioso && !forzarCompleto && _srvAmigos.tieneCache && mounted) {
+      setState(() {
+        _amistades = _srvAmigos.cache!;
+        _cargandoAmigos = false;
+      });
+    } else if (!silencioso && mounted) {
+      setState(() => _cargandoAmigos = true);
+    }
+    final data = await _srvAmigos.listar(forzarCompleto: forzarCompleto);
     if (mounted) {
       setState(() {
         _amistades = data;
@@ -159,10 +178,18 @@ class _PantallaSocialState extends State<PantallaSocial> {
     });
   }
 
-  Future<void> _cargarSquads() async {
-    if (mounted) setState(() => _cargandoSquads = true);
-    final mios = await _srvSquads.misSquads();
-    final invs = await _srvSquads.invitaciones();
+  Future<void> _cargarSquads({bool forzarCompleto = false}) async {
+    if (!forzarCompleto && _srvSquads.tieneCacheListas && mounted) {
+      setState(() {
+        _misSquads = _srvSquads.misSquadsCache ?? _misSquads;
+        _invitaciones = _srvSquads.invitacionesCache ?? _invitaciones;
+        _cargandoSquads = false;
+      });
+    } else if (mounted) {
+      setState(() => _cargandoSquads = true);
+    }
+    final mios = await _srvSquads.misSquads(forzarCompleto: forzarCompleto);
+    final invs = await _srvSquads.invitaciones(forzarCompleto: forzarCompleto);
     if (mounted) {
       setState(() {
         _misSquads = mios;
@@ -364,9 +391,103 @@ class _PantallaSocialState extends State<PantallaSocial> {
         .then((_) => _cargarSquads());
   }
 
+  void _abrirMisAmigos() {
+    setState(() => _vista = SocialVista.amigos);
+  }
+
+  void _abrirMisSquads() {
+    setState(() => _vista = SocialVista.squads);
+  }
+
+  void _volverAExplorar() {
+    setState(() => _vista = SocialVista.explorar);
+  }
+
+  Widget _barraVolverEmbebida({required String titulo}) {
+    final top = MediaQuery.paddingOf(context).top;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(4, top + 4, 16, 4),
+      child: Row(
+        children: [
+          CupertinoButton(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: const Size(36, 36),
+            onPressed: _volverAExplorar,
+            child: Icon(
+              CupertinoIcons.chevron_back,
+              color: ColoresApp.principalMarca,
+              size: 26,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              titulo,
+              style: GoogleFonts.baloo2(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: ColoresApp.textoPrincipal,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _botonAccesoSocial({
+    required String titulo,
+    required IconData icono,
+    required VoidCallback onTap,
+    int novedades = 0,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: ColoresApp.fondoSuperficie,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icono, size: 16, color: ColoresApp.principalMarca),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    titulo,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.baloo2(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: ColoresApp.textoPrincipal,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            top: 7,
+            right: 10,
+            child: IgnorePointer(
+              child: IndicadorNovedadesSocial(cantidad: novedades),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final padding = MediaQuery.of(context).padding;
+    const fondoSocial = ColoresApp.fondoPrincipal;
 
     final idsAmigos =
         _amistades.amigos.map((a) => a.idUsuario).toSet();
@@ -381,89 +502,211 @@ class _PantallaSocialState extends State<PantallaSocial> {
     final solicitudesSquads =
         _invitaciones.map(_mapInvitacionSquad).toList();
     final misGrupos = _misSquads.map((s) => _mapSquadResumen(s)).toList();
+    final novedadesAmigos = _amistades.recibidas
+        .where((a) => !idsAmigos.contains(a.idUsuario))
+        .length;
+    final novedadesSquads = _invitaciones.length;
 
-    return CupertinoPageScaffold(
-      backgroundColor: ColoresApp.fondoPrincipal,
-      child: FondoGradienteFernecito(
-        corto: true,
-        child: Column(
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(20, padding.top + 14, 20, 0),
-              child: ToggleSegmentadoSocial(
-                opciones: const ['Amigos', 'Squads'],
-                indice: _tabIndex,
-                onChanged: (i) => setState(() => _tabIndex = i),
+    if (_vista == SocialVista.amigos) {
+      return CupertinoPageScaffold(
+        backgroundColor: fondoSocial,
+        navigationBar: widget.mostrarVolver
+            ? CupertinoNavigationBar(
+                backgroundColor: Colors.transparent,
+                border: null,
+                leading: CupertinoNavigationBarBackButton(
+                  color: ColoresApp.principalMarca,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                middle: Text(
+                  'Mis amigos',
+                  style: GoogleFonts.baloo2(
+                    fontWeight: FontWeight.w800,
+                    color: ColoresApp.textoPrincipal,
+                  ),
+                ),
+              )
+            : null,
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!widget.mostrarVolver)
+                _barraVolverEmbebida(titulo: 'Mis amigos'),
+              Expanded(
+                child: _TabAmigos(
+                  pantallaDedicada: widget.mostrarVolver,
+                  solicitudes: solicitudesAmigos,
+                  amigos: amigos,
+                  cargando: _cargandoAmigos,
+                  solicitudProcesandoKey: _solicitudProcesandoKey,
+                  srvAmigos: _srvAmigos,
+                  onRefresh: () => _cargarAmigos(
+                    silencioso: true,
+                    forzarCompleto: true,
+                  ),
+                  onAceptar: _aceptarAmigo,
+                  onCancelarRechazar: (s) {
+                    final esEnviada = s['esEnviada'] as bool? ?? false;
+                    if (esEnviada) {
+                      _cancelarSolicitudAmigo(s['id_usuario'] as String);
+                    } else {
+                      _rechazarAmigo(
+                        s['id_relacion']?.toString(),
+                        idUsuario: s['id_usuario']?.toString(),
+                      );
+                    }
+                  },
+                  onAbrirPerfil: (s, estado) =>
+                      _abrirPerfilUsuario(context, s, estadoRelacion: estado),
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: IndexedStack(
-                index: _tabIndex,
-                children: [
-                  _TabAmigos(
-                    solicitudes: solicitudesAmigos,
-                    amigos: amigos,
-                    cargando: _cargandoAmigos,
-                    solicitudProcesandoKey: _solicitudProcesandoKey,
-                    srvAmigos: _srvAmigos,
-                    onRefresh: () => _cargarAmigos(silencioso: true),
-                    onAceptar: _aceptarAmigo,
-                    onCancelarRechazar: (s) {
-                      final esEnviada = s['esEnviada'] as bool? ?? false;
-                      if (esEnviada) {
-                        _cancelarSolicitudAmigo(s['id_usuario'] as String);
-                      } else {
-                        _rechazarAmigo(
-                          s['id_relacion']?.toString(),
-                          idUsuario: s['id_usuario']?.toString(),
-                        );
-                      }
-                    },
-                    onAbrirPerfil: (s, estado) =>
-                        _abrirPerfilUsuario(context, s, estadoRelacion: estado),
-                    onExplorar: () => mostrarExplorarPersonasSheet(
-                      context,
-                      onPerfil: (u) => _abrirPerfilUsuario(
-                        context,
-                        _mapUsuarioBusqueda(u),
-                        estadoRelacion:
-                            _estadoUsuarioDesde(u.estadoAmistad),
-                      ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_vista == SocialVista.squads) {
+      return CupertinoPageScaffold(
+        backgroundColor: fondoSocial,
+        navigationBar: widget.mostrarVolver
+            ? CupertinoNavigationBar(
+                backgroundColor: Colors.transparent,
+                border: null,
+                leading: CupertinoNavigationBarBackButton(
+                  color: ColoresApp.principalMarca,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                middle: Text(
+                  'Mis squads',
+                  style: GoogleFonts.baloo2(
+                    fontWeight: FontWeight.w800,
+                    color: ColoresApp.textoPrincipal,
+                  ),
+                ),
+              )
+            : null,
+        child: SafeArea(
+          top: false,
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!widget.mostrarVolver)
+                _barraVolverEmbebida(titulo: 'Mis squads'),
+              Expanded(
+                child: _TabSquads(
+                  pantallaDedicada: widget.mostrarVolver,
+                  solicitudes: solicitudesSquads,
+                  misGrupos: misGrupos,
+                  cargando: _cargandoSquads,
+                  srvSquads: _srvSquads,
+                  onRefresh: () => _cargarSquads(forzarCompleto: true),
+                  onCrearSquad: () => _abrirCrearSquad(context),
+                  squadProcesandoId: _squadProcesandoId,
+                  onAbrirPerfilSquad: (s) => _abrirPerfilSquad(
+                    context,
+                    s,
+                    estado: _estadoSquadDesde(
+                      s['mi_estado'] as String?,
+                      esInvitacionRecibida: s['es_invitacion_recibida'] == true,
                     ),
                   ),
-                  _TabSquads(
-                    solicitudes: solicitudesSquads,
-                    misGrupos: misGrupos,
-                    cargando: _cargandoSquads,
-                    srvSquads: _srvSquads,
-                    onRefresh: _cargarSquads,
-                    onCrearSquad: () => _abrirCrearSquad(context),
-                    onExplorar: () => mostrarExplorarSquadsSheet(
-                      context,
-                      onSquad: (s) => _abrirPerfilSquad(
-                        context,
-                        _mapSquadExplorar(s),
-                        estado: _estadoSquadDesde(s.miEstado),
+                  onAceptarInvitacion: (s) => _responderInvitacion(
+                    s['id_grupo'] as String,
+                    aceptar: true,
+                  ),
+                  onRechazarInvitacion: (s) => _responderInvitacion(
+                    s['id_grupo'] as String,
+                    aceptar: false,
+                  ),
+                  onAbrirMisSquad: (s) => _abrirMisSquad(context, s),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final topSafe = MediaQuery.paddingOf(context).top;
+
+    return CupertinoPageScaffold(
+      backgroundColor: fondoSocial,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, topSafe + 10, 16, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _botonAccesoSocial(
+                      titulo: 'Mis amigos',
+                      icono: CupertinoIcons.person_2_fill,
+                      onTap: _abrirMisAmigos,
+                      novedades: novedadesAmigos,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _botonAccesoSocial(
+                      titulo: 'Mis squads',
+                      icono: CupertinoIcons.person_3_fill,
+                      onTap: _abrirMisSquads,
+                      novedades: novedadesSquads,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IndexedStack(
+                    index: _explorarIndice,
+                    children: [
+                      ExplorarPersonasContenido(
+                        paddingInferiorScroll:
+                            reservaInferiorSocialEmbebido(context),
+                        onPerfil: (u) => _abrirPerfilUsuario(
+                          context,
+                          _mapUsuarioBusqueda(u),
+                          estadoRelacion:
+                              _estadoUsuarioDesde(u.estadoAmistad),
+                        ),
+                      ),
+                      ExplorarSquadsContenido(
+                        paddingInferiorScroll:
+                            reservaInferiorSocialEmbebido(context),
+                        onSquad: (s) => _abrirPerfilSquad(
+                          context,
+                          _mapSquadExplorar(s),
+                          estado: _estadoSquadDesde(s.miEstado),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: MediaQuery.paddingOf(context).bottom +
+                        kSocialNavHomeAltura +
+                        kSocialSwitchFlotanteGap,
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: SwitchExplorarFlotanteSocial(
+                        indice: _explorarIndice,
+                        onChanged: (i) => setState(() => _explorarIndice = i),
                       ),
                     ),
-                    squadProcesandoId: _squadProcesandoId,
-                    onAbrirPerfilSquad: (s) => _abrirPerfilSquad(
-                      context,
-                      s,
-                      estado: _estadoSquadDesde(
-                        s['mi_estado'] as String?,
-                        esInvitacionRecibida:
-                            s['es_invitacion_recibida'] == true,
-                      ),
-                    ),
-                    onAceptarInvitacion: (s) => _responderInvitacion(
-                        s['id_grupo'] as String,
-                        aceptar: true),
-                    onRechazarInvitacion: (s) => _responderInvitacion(
-                        s['id_grupo'] as String,
-                        aceptar: false),
-                    onAbrirMisSquad: (s) => _abrirMisSquad(context, s),
                   ),
                 ],
               ),
@@ -476,24 +719,24 @@ class _PantallaSocialState extends State<PantallaSocial> {
 }
 
 class _TabAmigos extends StatefulWidget {
+  final bool pantallaDedicada;
   final List<Map<String, dynamic>> solicitudes;
   final List<Map<String, dynamic>> amigos;
   final bool cargando;
   final String? solicitudProcesandoKey;
   final ServicioAmigos srvAmigos;
-  final VoidCallback onExplorar;
   final Future<void> Function() onRefresh;
   final void Function(Map<String, dynamic>) onAceptar;
   final void Function(Map<String, dynamic>) onCancelarRechazar;
   final void Function(Map<String, dynamic>, EstadoRelacionUsuario) onAbrirPerfil;
 
   const _TabAmigos({
+    this.pantallaDedicada = false,
     required this.solicitudes,
     required this.amigos,
     required this.cargando,
     this.solicitudProcesandoKey,
     required this.srvAmigos,
-    required this.onExplorar,
     required this.onRefresh,
     required this.onAceptar,
     required this.onCancelarRechazar,
@@ -536,29 +779,54 @@ class _TabAmigosState extends State<_TabAmigos> {
   @override
   Widget build(BuildContext context) {
     final mostrandoBusqueda = _ultimaQuery.length >= 2;
+    final bottomPad = MediaQuery.paddingOf(context).bottom + 100;
+    final contenido = _contenidoLista(mostrandoBusqueda);
 
-    return RefreshIndicator.adaptive(
+    final lista = FernecitoRefreshableList(
       onRefresh: widget.onRefresh,
-      color: ColoresApp.principalMarca,
-      backgroundColor: ColoresApp.fondoSuperficie,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(20, 6, 20, 100),
+      padding: EdgeInsets.fromLTRB(20, widget.pantallaDedicada ? 12 : 6, 20, bottomPad),
+      children: contenido,
+    );
+
+    if (widget.pantallaDedicada) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-        BusquedaSocialExpandible(
-          hint: 'Buscar',
-          onQueryChanged: _onBuscar,
-          flexBarraColapsada: 5,
-          flexPorAccionColapsada: 3,
-          accionesColapsado: [
-            BotonExplorarSocial(onTap: widget.onExplorar),
-          ],
-        ),
-        if (!mostrandoBusqueda) const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            child: _barraBusqueda(),
+          ),
+          Expanded(child: lista),
+        ],
+      );
+    }
+
+    return FernecitoRefreshableList(
+      onRefresh: widget.onRefresh,
+      padding: EdgeInsets.fromLTRB(20, 6, 20, bottomPad),
+      children: [
+        _barraBusqueda(),
+        ...contenido,
+      ],
+    );
+  }
+
+  Widget _barraBusqueda() {
+    return BusquedaSocialExpandible(
+      hint: widget.pantallaDedicada ? 'Buscar amigos' : 'Buscar',
+      onQueryChanged: _onBuscar,
+      flexBarraColapsada: 10,
+      flexPorAccionColapsada: 3,
+    );
+  }
+
+  List<Widget> _contenidoLista(bool mostrandoBusqueda) {
+    return [
+        if (!mostrandoBusqueda && !widget.pantallaDedicada) const SizedBox(height: 12),
         if (_buscando)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(child: CupertinoActivityIndicator()),
+            child: FernecitoLoaderCentro(size: 26),
           )
         else if (mostrandoBusqueda) ...[
           const SizedBox(height: 12),
@@ -642,7 +910,7 @@ class _TabAmigosState extends State<_TabAmigos> {
         if (!mostrandoBusqueda && widget.cargando)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 30),
-            child: Center(child: CupertinoActivityIndicator()),
+            child: FernecitoLoaderCentro(size: 26),
           )
         else if (!mostrandoBusqueda) ...[
           if (widget.solicitudes.isNotEmpty) ...[
@@ -676,19 +944,19 @@ class _TabAmigosState extends State<_TabAmigos> {
               },
             ),
             const SizedBox(height: 20),
+          ] else if (widget.pantallaDedicada) ...[
+            const EncabezadoSeccionSocial(
+              titulo: 'Solicitudes',
+              subtitulo: 'Sin pendientes por ahora',
+            ),
+            const SizedBox(height: 8),
           ],
-          if (widget.amigos.isNotEmpty)
-            EncabezadoAmigosCentrado(cantidad: widget.amigos.length),
+          if (widget.amigos.isNotEmpty || widget.pantallaDedicada)
+            EncabezadoAmigosCentrado(
+              cantidad: widget.amigos.length,
+            ),
           if (widget.amigos.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                'Todavía no tenés amigos. Explorá por ciudad o buscá por nombre.',
-                style: GoogleFonts.baloo2(
-                    fontSize: 14, color: ColoresApp.textoSecundario),
-                textAlign: TextAlign.center,
-              ),
-            )
+            const _PanelVacioAmigosSocial()
           else
             ...widget.amigos.map((a) => _CardAmigo(
                   amigo: a,
@@ -696,7 +964,53 @@ class _TabAmigosState extends State<_TabAmigos> {
                       widget.onAbrirPerfil(a, EstadoRelacionUsuario.amigo),
                 )),
         ],
-      ],
+    ];
+  }
+}
+
+class _PanelVacioAmigosSocial extends StatelessWidget {
+  const _PanelVacioAmigosSocial();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Text(
+        'Todavía no tenés amigos. Buscá por nombre arriba o explorá desde la pestaña Social.',
+        textAlign: TextAlign.center,
+        style: GoogleFonts.baloo2(
+          fontSize: 14,
+          color: ColoresApp.textoSecundario,
+        ),
+      ),
+    );
+  }
+}
+
+class _PanelVacioSquadsSocial extends StatelessWidget {
+  final VoidCallback onCrear;
+
+  const _PanelVacioSquadsSocial({
+    required this.onCrear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        children: [
+          Text(
+            'Todavía no tenés squads. Creá uno propio o explorá desde la pestaña Social.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.baloo2(
+              fontSize: 14,
+              color: ColoresApp.textoSecundario,
+            ),
+          ),
+          const SizedBox(height: 16),
+          BotonSquadMasSocial(onTap: onCrear),
+        ],
       ),
     );
   }
@@ -779,7 +1093,7 @@ class _CardSolicitudAmigo extends StatelessWidget {
                   borderRadius: BorderRadius.circular(50),
                   onPressed: procesando ? null : onCancelar,
                   child: procesando
-                      ? const CupertinoActivityIndicator(radius: 8)
+                      ? const FernecitoLoader.inline(size: 16)
                       : Text('Cancelar',
                           style: GoogleFonts.baloo2(
                               fontSize: 12,
@@ -818,8 +1132,7 @@ class _CardSolicitudAmigo extends StatelessWidget {
                       borderRadius: BorderRadius.circular(50),
                       onPressed: procesando ? null : onAceptar,
                       child: procesando
-                          ? const CupertinoActivityIndicator(
-                              radius: 7, color: Colors.white)
+                          ? const FernecitoLoader.inline(size: 16, color: Colors.white)
                           : Text(
                               'Aceptar',
                               style: GoogleFonts.baloo2(
@@ -872,12 +1185,7 @@ class _CardAmigo extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: ColoresApp.textoSecundario.withValues(alpha: 0.12),
-            ),
-          ),
-        ),
+                  ),
         child: Row(
           children: [
             AvatarSocial(url: amigo['avatar'] as String? ?? '', size: 40),
@@ -926,12 +1234,12 @@ class _CardAmigo extends StatelessWidget {
 // —— Tab Squads ——
 
 class _TabSquads extends StatefulWidget {
+  final bool pantallaDedicada;
   final List<Map<String, dynamic>> solicitudes;
   final List<Map<String, dynamic>> misGrupos;
   final bool cargando;
   final ServicioSquads srvSquads;
   final VoidCallback onCrearSquad;
-  final VoidCallback onExplorar;
   final Future<void> Function() onRefresh;
   final void Function(Map<String, dynamic>) onAbrirPerfilSquad;
   final void Function(Map<String, dynamic>) onAceptarInvitacion;
@@ -940,12 +1248,12 @@ class _TabSquads extends StatefulWidget {
   final String? squadProcesandoId;
 
   const _TabSquads({
+    this.pantallaDedicada = false,
     required this.solicitudes,
     required this.misGrupos,
     this.cargando = false,
     required this.srvSquads,
     required this.onCrearSquad,
-    required this.onExplorar,
     required this.onRefresh,
     required this.onAbrirPerfilSquad,
     required this.onAceptarInvitacion,
@@ -990,30 +1298,57 @@ class _TabSquadsState extends State<_TabSquads> {
   @override
   Widget build(BuildContext context) {
     final mostrandoBusqueda = _ultimaQuery.length >= 2;
+    final bottomPad = MediaQuery.paddingOf(context).bottom + 100;
+    final contenido = _contenidoLista(mostrandoBusqueda);
 
-    return RefreshIndicator.adaptive(
+    final lista = FernecitoRefreshableList(
       onRefresh: widget.onRefresh,
-      color: ColoresApp.principalMarca,
-      backgroundColor: ColoresApp.fondoSuperficie,
-      child: ListView(
-      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-      padding: EdgeInsets.fromLTRB(20, 6, 20, MediaQuery.paddingOf(context).bottom + 100),
+      padding: EdgeInsets.fromLTRB(20, widget.pantallaDedicada ? 12 : 6, 20, bottomPad),
+      children: contenido,
+    );
+
+    if (widget.pantallaDedicada) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            child: _barraBusqueda(),
+          ),
+          Expanded(child: lista),
+        ],
+      );
+    }
+
+    return FernecitoRefreshableList(
+      onRefresh: widget.onRefresh,
+      padding: EdgeInsets.fromLTRB(20, 6, 20, bottomPad),
       children: [
-        BusquedaSocialExpandible(
-          hint: 'Nombre del squad',
-          onQueryChanged: _onBuscar,
-          flexBarraColapsada: 4,
-          flexPorAccionColapsada: 3,
-          accionesColapsado: [
-            BotonSquadMasSocial(onTap: widget.onCrearSquad),
-            BotonExplorarSocial(onTap: widget.onExplorar),
-          ],
-        ),
-        if (!mostrandoBusqueda) const SizedBox(height: 12),
+        _barraBusqueda(),
+        ...contenido,
+      ],
+    );
+  }
+
+  Widget _barraBusqueda() {
+    return BusquedaSocialExpandible(
+      hint: 'Nombre del squad',
+      onQueryChanged: _onBuscar,
+      flexBarraColapsada: 4,
+      flexPorAccionColapsada: 3,
+      accionesColapsado: [
+        BotonSquadMasSocial(onTap: widget.onCrearSquad),
+      ],
+    );
+  }
+
+  List<Widget> _contenidoLista(bool mostrandoBusqueda) {
+    return [
+        if (!mostrandoBusqueda && !widget.pantallaDedicada) const SizedBox(height: 12),
         if (_buscando)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(child: CupertinoActivityIndicator()),
+            child: FernecitoLoaderCentro(size: 26),
           )
         else if (mostrandoBusqueda) ...[
           const SizedBox(height: 12),
@@ -1078,7 +1413,7 @@ class _TabSquadsState extends State<_TabSquads> {
         if (!mostrandoBusqueda && widget.cargando)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 30),
-            child: Center(child: CupertinoActivityIndicator()),
+            child: FernecitoLoaderCentro(size: 26),
           )
         else if (!mostrandoBusqueda) ...[
           if (widget.solicitudes.isNotEmpty) ...[
@@ -1098,18 +1433,18 @@ class _TabSquadsState extends State<_TabSquads> {
               );
             }),
             const SizedBox(height: 20),
+          ] else if (widget.pantallaDedicada) ...[
+            const EncabezadoSeccionSocial(
+              titulo: 'Invitaciones',
+              subtitulo: 'Sin invitaciones pendientes',
+            ),
+            const SizedBox(height: 8),
           ],
-          if (widget.misGrupos.isNotEmpty)
+          if (widget.misGrupos.isNotEmpty || widget.pantallaDedicada)
             EncabezadoSquadsCentrado(cantidad: widget.misGrupos.length),
           if (widget.misGrupos.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                'Todavía no tenés squads. Creá uno o explorá por ciudad.',
-                style: GoogleFonts.baloo2(
-                    fontSize: 14, color: ColoresApp.textoSecundario),
-                textAlign: TextAlign.center,
-              ),
+            _PanelVacioSquadsSocial(
+              onCrear: widget.onCrearSquad,
             )
           else
             ...widget.misGrupos.map((g) => _CardMiGrupo(
@@ -1117,9 +1452,7 @@ class _TabSquadsState extends State<_TabSquads> {
                   onTap: () => widget.onAbrirMisSquad(g),
                 )),
         ],
-      ],
-      ),
-    );
+    ];
   }
 }
 
@@ -1146,11 +1479,7 @@ class _CardSolicitudSquad extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: SuperficiesApp.card(radius: 20, temaTint: 0.18).copyWith(
-          border: Border.all(
-            color: ColoresApp.principalMarca.withValues(alpha: 0.35),
-            width: 1.5,
-          ),
-        ),
+                  ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1210,7 +1539,7 @@ class _CardSolicitudSquad extends StatelessWidget {
                     borderRadius: BorderRadius.circular(50),
                     onPressed: procesando ? null : onUnirse,
                     child: procesando
-                        ? const CupertinoActivityIndicator(color: Colors.white)
+                        ? const FernecitoLoader.inline(size: 16, color: Colors.white)
                         : Text(
                             'Unirse',
                             style: GoogleFonts.baloo2(
@@ -1260,9 +1589,7 @@ class _StackAvataresMiembros extends StatelessWidget {
                 height: 28,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border:
-                      Border.all(color: ColoresApp.fondoSuperficie, width: 2),
-                ),
+                                  ),
                 child: ClipOval(
                   child: CachedNetworkImage(
                     imageUrl: avatares[i],
@@ -1286,8 +1613,7 @@ class _StackAvataresMiembros extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: ColoresApp.principalMarca,
-                border: Border.all(color: ColoresApp.fondoSuperficie, width: 2),
-              ),
+                              ),
               child: Text(
                 '+$overflow',
                 style: GoogleFonts.baloo2(
@@ -1321,10 +1647,7 @@ class _CardMiGrupo extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: SuperficiesApp.card(radius: 20, temaTint: 0.18).copyWith(
-          border: Border.all(
-            color: ColoresApp.principalMarca.withValues(alpha: 0.18),
-          ),
-        ),
+                  ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

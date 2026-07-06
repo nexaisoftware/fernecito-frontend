@@ -19,6 +19,7 @@ class Notificacion {
   final bool leida;
   final DateTime fechaCreacion;
   final DateTime? fechaLectura;
+  final DateTime? fechaExpiracion;
 
   const Notificacion({
     required this.id,
@@ -35,6 +36,7 @@ class Notificacion {
     required this.leida,
     required this.fechaCreacion,
     this.fechaLectura,
+    this.fechaExpiracion,
   });
 
   factory Notificacion.fromMap(Map<String, dynamic> m) {
@@ -57,6 +59,9 @@ class Notificacion {
           DateTime.now().toUtc(),
       fechaLectura: m['fecha_lectura'] != null
           ? DateTime.tryParse(m['fecha_lectura'].toString())?.toUtc()
+          : null,
+      fechaExpiracion: m['fecha_expiracion'] != null
+          ? DateTime.tryParse(m['fecha_expiracion'].toString())?.toUtc()
           : null,
     );
   }
@@ -130,6 +135,7 @@ class Notificacion {
       leida: leida ?? this.leida,
       fechaCreacion: fechaCreacion,
       fechaLectura: fechaLectura ?? this.fechaLectura,
+      fechaExpiracion: fechaExpiracion,
     );
   }
 }

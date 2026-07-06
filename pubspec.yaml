@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.10.7
@@ -77,11 +77,23 @@ dependencies:
   # Escaneo de QR de invitación de RRPP (scanner flotante en cartelera)
   mobile_scanner: ^7.2.0
   shared_preferences: ^2.5.4
+  http: ^1.2.2
 
   # Input OTP de 8 dígitos (recuperación de contraseña)
   pinput: ^6.0.2
   app_links: ^6.4.1
   share_plus: ^13.1.0
+  visibility_detector: ^0.4.0+2
+
+  # Mapa explorar (iOS, Android y PWA)
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  geolocator: ^13.0.2
+  profile_image_cropper: ^2.0.0
+
+  # Notificaciones push (FCM) — solo app usuarios
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.5
 
 dev_dependencies:
   flutter_test:
@@ -164,23 +176,19 @@ flutter_launcher_icons:
 
 # Configuración del splash screen nativo
 flutter_native_splash:
-  # Color de fondo (verde brillante de botones)
+  # Splash nativa (capa B): logo con fondo de marca, tamaño controlado.
+  # El logo transparente solo se usa en SplashCargaFernecito (capa C).
   color: "#1DB954"
-  # Imagen del splash (misma que el icono)
   image: "assets/imagenes/logoiconapp.png"
-  # Configuración para iOS
   ios: true
   ios_content_mode: scaleAspectFit
-  # Configuración para Android
   android: true
   android_gravity: center
-  # Escala de la imagen para que sea más pequeña
   image_dark: "assets/imagenes/logoiconapp.png"
-  # Android 12+
   android_12:
     image: "assets/imagenes/logoiconapp.png"
     color: "#1DB954"
     icon_background_color: "#1DB954"
-  # Hacer la imagen más pequeña (0.4 = 40% del tamaño)
+  # HTML de web/ se mantiene a mano (logo redondeado + verde).
   web: false
   fullscreen: true

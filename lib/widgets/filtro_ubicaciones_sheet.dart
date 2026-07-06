@@ -284,13 +284,7 @@ class _FiltroUbicacionesSheetState extends State<_FiltroUbicacionesSheet> {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
               decoration: BoxDecoration(
                 color: ColoresApp.fondoPrincipal.withValues(alpha: 0.92),
-                border: Border(
-                  top: BorderSide(
-                    color: ColoresApp.textoSecundario.withValues(alpha: 0.15),
-                    width: 1,
-                  ),
-                ),
-              ),
+                              ),
               child: FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: ColoresApp.principalMarca,
@@ -520,10 +514,7 @@ class _DropdownProvincia extends StatelessWidget {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: ColoresApp.textoSecundario.withValues(alpha: 0.18),
-        ),
-      ),
+              ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           isExpanded: true,

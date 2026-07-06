@@ -10,7 +10,6 @@ library;
 
 import 'dart:async';
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -126,6 +125,7 @@ class _CarruselAutoScrollState extends State<CarruselAutoScroll>
           reverse: widget.invertir,
           padding: widget.padding,
           physics: const BouncingScrollPhysics(),
+          cacheExtent: 700,
           itemCount: count,
           separatorBuilder: (_, __) => SizedBox(width: widget.spacing),
           itemBuilder: (ctx, i) =>

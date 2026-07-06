@@ -7,7 +7,6 @@
 /// Es autosuficiente (no depende del Navigator principal de la app).
 library;
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,6 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/constants.dart';
 import '../core/servicio_estado_cuenta.dart';
+import '../widgets/fernecito_loader.dart';
 
 const String _emailSoporte = 'soporte@fernecito.app';
 
@@ -90,21 +90,11 @@ class _PantallaCuentaPausadaState extends State<PantallaCuentaPausada> {
         backgroundColor: ColoresApp.fondoPrincipal,
         body: SafeArea(
           child: _verificando
-              ? Center(
-                  child: CupertinoActivityIndicator(
-                    radius: 16,
-                    color: ColoresApp.principalMarca,
-                  ),
-                )
-              : CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
+              ? const FernecitoLoaderCentro(size: 32)
+              : FernecitoRefreshScrollView(
+                  onRefresh: () =>
+                      _verificarEstado(desdeRefresh: true),
                   slivers: [
-                    CupertinoSliverRefreshControl(
-                      onRefresh: () =>
-                          _verificarEstado(desdeRefresh: true),
-                    ),
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: Center(
@@ -180,11 +170,7 @@ class _PantallaCuentaPausadaState extends State<PantallaCuentaPausada> {
                                     decoration: BoxDecoration(
                                       color: ColoresApp.fondoSuperficie,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: ColoresApp.textoSecundario
-                                            .withValues(alpha: 0.28),
-                                      ),
-                                    ),
+                                                                          ),
                                     child: Text(
                                       _mensajeRefresh!,
                                       textAlign: TextAlign.center,
@@ -203,11 +189,7 @@ class _PantallaCuentaPausadaState extends State<PantallaCuentaPausada> {
                                   decoration: BoxDecoration(
                                     color: ColoresApp.fondoSuperficie,
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: ColoresApp.peligroMarca
-                                          .withValues(alpha: 0.40),
-                                    ),
-                                  ),
+                                                                      ),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,

@@ -10,12 +10,18 @@
 library;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show DefaultMaterialLocalizations;
+import 'package:flutter/material.dart' show DefaultMaterialLocalizations, Material, ScaffoldMessenger;
+import 'package:flutter/services.dart' show AnnotatedRegion, SystemUiOverlayStyle;
 import 'core/constants.dart';
 import 'core/supabase_client.dart';
 import 'core/auth_gate.dart';
 import 'core/tema_fernecito.dart';
 import 'core/servicio_estado_cuenta.dart';
+import 'core/barra_sistema_fernecito.dart';
+import 'core/bootstrap_cartelera.dart';
+import 'core/splash_web.dart';
+import 'widgets/control_actualizacion_web.dart';
+import 'widgets/control_instalar_pwa.dart';
 import 'widgets/splash_carga_fernecito.dart';
 import 'PANTALLAS/pantalla_login.dart';
 import 'PANTALLAS/pantalla_home.dart';
@@ -39,13 +45,24 @@ class _AppFernecitoState extends State<AppFernecito>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    BootstrapCartelera.lista.addListener(_onBootstrapCartelera);
+    // PWA: barra oscura desde el primer frame (no verde tipo "en llamada").
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      quitarSplashHtml();
+      BarraSistemaFernecito.aplicar();
+    });
     _verificarSesionExistente();
   }
 
   @override
   void dispose() {
+    BootstrapCartelera.lista.removeListener(_onBootstrapCartelera);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onBootstrapCartelera() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -105,9 +122,16 @@ class _AppFernecitoState extends State<AppFernecito>
     } catch (e) {
       print('❌ Error verificando sesión: $e');
     } finally {
-      setState(() {
-        _verificandoSesion = false;
-      });
+      if (mounted) {
+        setState(() {
+          _verificandoSesion = false;
+        });
+        // Login / crear perfil: salir del splash verde a la UI oscura.
+        // Home aplica la barra al terminar de cargar la cartelera.
+        if (!_tieneSesionActiva || !_perfilCompleto) {
+          BarraSistemaFernecito.aplicar();
+        }
+      }
     }
   }
 
@@ -152,30 +176,61 @@ class _AppFernecitoState extends State<AppFernecito>
           // Escucha ServicioEstadoCuenta y reemplaza toda la UI por la pantalla
           // bloqueante, que solo permite soporte o cerrar sesión.
           builder: (context, child) {
-            return ListenableBuilder(
-              listenable: ServicioEstadoCuenta.instancia,
-              builder: (context, _) {
-                if (ServicioEstadoCuenta.instancia.suspendida) {
-                  return Navigator(
-                    onGenerateRoute: (_) => CupertinoPageRoute<void>(
-                      builder: (_) => const PantallaCuentaPausada(),
+            return Material(
+              color: ColoresApp.fondoPrincipal,
+              child: ScaffoldMessenger(
+                child: AnnotatedRegion<SystemUiOverlayStyle>(
+                  value: BarraSistemaFernecito.estilo,
+                  child: ControlInstalarPwa(
+                    child: ControlActualizacionWeb(
+                      child: ListenableBuilder(
+                        listenable: ServicioEstadoCuenta.instancia,
+                        builder: (context, _) {
+                          if (ServicioEstadoCuenta.instancia.suspendida) {
+                            return Navigator(
+                              onGenerateRoute: (_) => CupertinoPageRoute<void>(
+                                builder: (_) => const PantallaCuentaPausada(),
+                              ),
+                            );
+                          }
+                          return child ?? const SizedBox.shrink();
+                        },
+                      ),
                     ),
-                  );
-                }
-                return child ?? const SizedBox.shrink();
-              },
+                  ),
+                ),
+              ),
             );
           },
-          // Pantalla inicial según estado de sesión y perfil.
-          home: _verificandoSesion
-              ? const SplashCargaFernecito()
-              : _tieneSesionActiva
-              ? (_perfilCompleto
-                    ? const PantallaHome()
-                    : const PantallaCrearPerfil())
-              : const PantallaLogin(),
+          // Un solo splash (misma instancia) hasta sesión + cartelera lista.
+          home: _buildHome(),
         ),
       ),
+    );
+  }
+
+  Widget _buildHome() {
+    final irAHome = !_verificandoSesion &&
+        _tieneSesionActiva &&
+        _perfilCompleto;
+    final mostrarSplash = _verificandoSesion ||
+        (irAHome && !BootstrapCartelera.lista.value);
+
+    if (!_verificandoSesion && !_tieneSesionActiva) {
+      return const PantallaLogin();
+    }
+    if (!_verificandoSesion && _tieneSesionActiva && !_perfilCompleto) {
+      return const PantallaCrearPerfil();
+    }
+
+    // Home montado debajo (carga cartelera) + splash encima sin reiniciar animación.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (irAHome) const PantallaHome(),
+        if (mostrarSplash)
+          const SplashCargaFernecito(key: ValueKey('splash_fernecito')),
+      ],
     );
   }
 }

@@ -2,7 +2,7 @@
 // Si la función no los reconoce, el usuario ve un mensaje genérico en vez del motivo real.
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/core/motivos_pausa_cuenta.dart';
+import 'package:fernecito_frontend/core/motivos_pausa_cuenta.dart';
 
 void main() {
   group('motivosPausaPublicos — lista completa', () {

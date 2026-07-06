@@ -18,6 +18,7 @@ import '../core/recovery_flow_flag.dart';
 import '../core/supabase_client.dart';
 import '../core/auth_redirect.dart';
 import 'pantalla_login.dart';
+import '../widgets/fernecito_loader.dart';
 
 enum _PasoRecuperacion { email, codigo, password }
 
@@ -618,11 +619,7 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
           decoration: BoxDecoration(
             color: ColoresApp.fondoSuperficie,
             borderRadius: BorderRadius.circular(50),
-            border: Border.all(
-              color: ColoresApp.textoSecundario.withOpacity(0.3),
-              width: 1,
-            ),
-          ),
+                      ),
           padding: const EdgeInsets.all(16),
           prefix: Padding(
             padding: const EdgeInsets.only(left: 16),
@@ -689,13 +686,7 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
                       decoration: BoxDecoration(
                         color: ColoresApp.fondoSuperficie,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isFocusedSlot
-                              ? ColoresApp.principalMarca
-                              : ColoresApp.textoSecundario.withOpacity(0.28),
-                          width: isFocusedSlot ? 2 : 1,
-                        ),
-                      ),
+                                              ),
                       child: Text(
                         digit,
                         style: digit == '−'
@@ -743,11 +734,7 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
           decoration: BoxDecoration(
             color: ColoresApp.fondoSuperficie,
             borderRadius: BorderRadius.circular(50),
-            border: Border.all(
-              color: ColoresApp.textoSecundario.withOpacity(0.3),
-              width: 1,
-            ),
-          ),
+                      ),
           padding: const EdgeInsets.all(16),
           prefix: Padding(
             padding: const EdgeInsets.only(left: 16),
@@ -798,11 +785,7 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
           decoration: BoxDecoration(
             color: ColoresApp.fondoSuperficie,
             borderRadius: BorderRadius.circular(50),
-            border: Border.all(
-              color: ColoresApp.textoSecundario.withOpacity(0.3),
-              width: 1,
-            ),
-          ),
+                      ),
           padding: const EdgeInsets.all(16),
           prefix: Padding(
             padding: const EdgeInsets.only(left: 16),
@@ -842,9 +825,7 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
         ),
         child: Center(
           child: procesando
-              ? const CupertinoActivityIndicator(
-                  color: ColoresApp.textoPrincipal,
-                )
+              ? const FernecitoLoader.inline(size: 16, color: ColoresApp.textoPrincipal)
               : Text(
                   texto,
                   style: GoogleFonts.baloo2(

@@ -12,12 +12,30 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:app_links/app_links.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'app.dart';
+import 'core/config_push_web.dart';
 import 'core/servicio_enlace_evento.dart';
+import 'core/servicio_push.dart';
 import 'core/tema_fernecito.dart';
+
+/// Handler de mensajes push con la app en background/cerrada. Debe ser una
+/// función top-level anotada con vm:entry-point. Los mensajes con `notification`
+/// los muestra el sistema automáticamente; no requiere lógica extra.
+@pragma('vm:entry-point')
+Future<void> _fcmBackgroundHandler(RemoteMessage message) async {}
+
+bool get _pushSoportado =>
+    (kIsWeb && ConfigPushWeb.habilitada) ||
+    (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS));
 
 void main() async {
   // Asegura que Flutter esté inicializado antes de operaciones async
@@ -68,8 +86,31 @@ void main() async {
     );
   }
 
-  // Cargar tema guardado
+  // Firebase + push: nativo (Android/iOS) y PWA web (FCM + service worker).
+  if (_pushSoportado) {
+    try {
+      await Firebase.initializeApp(
+        options: kIsWeb ? ConfigPushWeb.options : null,
+      );
+      FirebaseMessaging.onBackgroundMessage(_fcmBackgroundHandler);
+      await ServicioPush.instancia.inicializar();
+      print('Firebase/push inicializado');
+    } catch (e) {
+      print('⚠️ Firebase/push no inicializado: $e');
+    }
+  }
+
+  // Cargar tema guardado.
+  // La barra/theme-color oscura se aplica al salir del splash (ver BootstrapCartelera
+  // y AppFernecito), para no pintar el body de gris encima del splash verde en PWA.
   await TemaFernecito.instancia.cargar();
+
+  // Precarga Baloo 2 para que el splash no “corte” al llegar la fuente.
+  try {
+    await GoogleFonts.pendingFonts([
+      GoogleFonts.baloo2(fontWeight: FontWeight.w800),
+    ]);
+  } catch (_) {}
 
   // Deep link web ?evento= /e/{id} → PantallaVerEvento tras login
   ServicioEnlaceEvento.instancia.capturarDesdeUriActual();

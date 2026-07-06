@@ -17,6 +17,7 @@ import '../models/social.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/social_ui.dart';
 import 'pantalla_perfil_usuarios.dart';
+import '../widgets/fernecito_loader.dart';
 
 class _FilaInvitacion {
   final String id;
@@ -476,7 +477,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
                         borderRadius: BorderRadius.circular(18),
                         onPressed: _validandoUsername ? null : _validarUsername,
                         child: _validandoUsername
-                            ? const CupertinoActivityIndicator(color: Colors.white)
+                            ? const FernecitoLoader.inline(size: 16, color: Colors.white)
                             : Text(
                                 _usernameValidado ? 'Disponible' : 'Comprobar @',
                                 style: GoogleFonts.baloo2(
@@ -574,10 +575,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
                     decoration: BoxDecoration(
                       color: ColoresApp.fondoPrincipal.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: ColoresApp.principalMarca.withValues(alpha: 0.28),
-                      ),
-                    ),
+                                          ),
                     clipBehavior: Clip.antiAlias,
                     child: _bannerPreviewBytes != null
                         ? Image.memory(
@@ -648,10 +646,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
                             decoration: BoxDecoration(
                               color: ColoresApp.principalMarca.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: ColoresApp.principalMarca.withValues(alpha: 0.4),
-                              ),
-                            ),
+                                                          ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -695,7 +690,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
                 borderRadius: BorderRadius.circular(18),
                 onPressed: _creando ? null : _crearSquad,
                 child: _creando
-                    ? const CupertinoActivityIndicator(color: Colors.white)
+                    ? const FernecitoLoader.inline(size: 16, color: Colors.white)
                     : Text(
                         'Crear squad',
                         style: GoogleFonts.baloo2(
@@ -719,10 +714,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
       decoration: BoxDecoration(
         color: ColoresApp.fondoPrincipal.withValues(alpha: 0.65),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: ColoresApp.principalMarca.withValues(alpha: 0.12),
-        ),
-      ),
+              ),
       child: Row(
         children: [
           Icon(
@@ -788,7 +780,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
       if (_buscandoUsuarios && _resultadosBusqueda.isEmpty) {
         return const Padding(
           padding: EdgeInsets.symmetric(vertical: 20),
-          child: Center(child: CupertinoActivityIndicator()),
+          child: FernecitoLoaderCentro(),
         );
       }
       final amigos = _filasAmigosEnBusqueda(query);
@@ -824,7 +816,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
             const Padding(
               padding: EdgeInsets.only(top: 12),
               child: Center(
-                child: CupertinoActivityIndicator(radius: 10),
+                child: FernecitoLoader.inline(size: 20),
               ),
             ),
         ],
@@ -834,7 +826,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
     if (_cargandoAmigos) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 20),
-        child: Center(child: CupertinoActivityIndicator()),
+        child: FernecitoLoaderCentro(),
       );
     }
 
@@ -1035,10 +1027,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
       decoration: BoxDecoration(
         color: ColoresApp.fondoPrincipal.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: ColoresApp.principalMarca.withValues(alpha: 0.1),
-        ),
-      ),
+              ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: Row(
         children: [

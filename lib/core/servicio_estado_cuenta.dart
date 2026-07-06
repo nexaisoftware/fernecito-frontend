@@ -15,6 +15,8 @@ class ServicioEstadoCuenta extends ChangeNotifier {
   String? _motivoLabel;
   bool _cargando = false;
   bool _notifyPendiente = false;
+  DateTime? _ultimoRefreshAt;
+  static const _ttl = Duration(minutes: 2);
 
   bool get suspendida => _suspendida;
   String? get motivoLabel => _motivoLabel;
@@ -31,13 +33,21 @@ class ServicioEstadoCuenta extends ChangeNotifier {
   }
 
   /// Refresca desde backend. Devuelve true si la cuenta sigue pausada.
-  Future<bool> refrescar() async {
+  /// [forzar] ignora TTL (p. ej. pull o acción crítica).
+  Future<bool> refrescar({bool forzar = false}) async {
     final uid = Supabase.instance.client.auth.currentUser?.id;
     if (uid == null) {
       _suspendida = false;
       _motivoLabel = null;
+      _ultimoRefreshAt = null;
       _notifyListenersSeguro();
       return false;
+    }
+
+    if (!forzar &&
+        _ultimoRefreshAt != null &&
+        DateTime.now().difference(_ultimoRefreshAt!) < _ttl) {
+      return _suspendida;
     }
 
     _cargando = true;
@@ -64,6 +74,7 @@ class ServicioEstadoCuenta extends ChangeNotifier {
       _motivoLabel = null;
     } finally {
       _cargando = false;
+      _ultimoRefreshAt = DateTime.now();
       _notifyListenersSeguro();
     }
     return _suspendida;
@@ -72,6 +83,7 @@ class ServicioEstadoCuenta extends ChangeNotifier {
   void limpiar() {
     _suspendida = false;
     _motivoLabel = null;
+    _ultimoRefreshAt = null;
     _notifyListenersSeguro();
   }
 }

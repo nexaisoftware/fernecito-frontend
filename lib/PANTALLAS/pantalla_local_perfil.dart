@@ -12,11 +12,16 @@ import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
 import '../core/flujo_reporte.dart';
+import '../core/servicio_impresiones.dart';
+import '../core/servicio_locales_megusta.dart';
 import '../core/supabase_client.dart';
+import '../widgets/avatar_local.dart';
+import '../widgets/boton_megusta_local.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import 'pantalla_resenas_locales.dart';
 import 'pantalla_ver_evento.dart';
 import '../widgets/social_ui.dart';
+import '../widgets/fernecito_loader.dart';
 
 bool _avatarUrlEsAsset(String url) => url.startsWith('assets/');
 
@@ -54,6 +59,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   String? _urlMaps;
   List<String> _rubros = [];
   bool _verificado = false;
+  bool _esPionero = false;
   bool _mostrarCalificaciones = true;
   double? _calificacionPromedio;
   int _calificacionCantidad = 0;
@@ -62,12 +68,24 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   List<String> _fotosLocal = []; // URLs resueltas
   String _avatarEffective = '';
   List<Map<String, dynamic>> _lugaresPopulares = [];
+  int _cantidadMegusta = 0;
+  bool _yoMegusta = false;
+  bool _toggleMegusta = false;
 
   @override
   void initState() {
     super.initState();
     _avatarEffective = widget.avatarUrl;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _registrarVistaPerfil(),
+    );
     _cargarDatos();
+  }
+
+  void _registrarVistaPerfil() {
+    final id = widget.idLocal?.trim();
+    if (id == null || id.isEmpty) return;
+    ServicioImpresiones.instancia.registrarVisitaPerfil(idLocal: id);
   }
 
   /// Resuelve una path de storage a URL pública. Si ya es http, la devuelve tal cual.
@@ -92,7 +110,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
             'id, nombre_local, descripcion_local, '
             'url_instagram, url_tiktok, url_website, '
             'ciudad, provincia, direccion, url_maps, rubro, '
-            'local_verificado, calificacion_promedio, calificacion_cantidad, '
+            'local_verificado, es_pionero, calificacion_promedio, calificacion_cantidad, '
             'mostrar_calificaciones, '
             'foto_perfil_url, url_foto_banner, estado_cuenta, '
             'foto_local_1, foto_local_2, foto_local_3, foto_local_4, foto_local_5',
@@ -179,7 +197,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
           var q = sb
               .from('perfiles_locales')
               .select(
-                'id, nombre_local, foto_perfil_url, ciudad, provincia, local_verificado, rubro, fecha_creacion',
+                'id, nombre_local, foto_perfil_url, ciudad, provincia, local_verificado, es_pionero, rubro, fecha_creacion',
               )
               .neq('id', widget.idLocal!);
           if (ciudadLocal.isNotEmpty) {
@@ -193,16 +211,49 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
               .limit(8);
           rawPop = res as List;
         }
+        final pionerosPorId = <String, bool>{};
+        final verificadosPorId = <String, bool>{};
+        final idsPopulares = rawPop
+            .whereType<Map>()
+            .map((p) => p['id']?.toString() ?? '')
+            .where((id) => id.isNotEmpty)
+            .toSet()
+            .toList();
+        if (idsPopulares.isNotEmpty) {
+          try {
+            final extras = await sb
+                .from('perfiles_locales')
+                .select('id, local_verificado, es_pionero')
+                .inFilter('id', idsPopulares);
+            for (final row in extras as List) {
+              final map = Map<String, dynamic>.from(row as Map);
+              final id = map['id']?.toString() ?? '';
+              if (id.isEmpty) continue;
+              pionerosPorId[id] = map['es_pionero'] == true;
+              verificadosPorId[id] = map['local_verificado'] == true;
+            }
+          } catch (e) {
+            debugPrint('[LocalPerfil] extras pioneros populares: $e');
+          }
+        }
         populares = rawPop.map((p) {
           final m = Map<String, dynamic>.from(p as Map);
+          final id = m['id']?.toString() ?? '';
+          final esPionero =
+              m['es_pionero'] == true || pionerosPorId[id] == true;
+          final verificado =
+              m['local_verificado'] == true ||
+              verificadosPorId[id] == true ||
+              esPionero;
           final avatarPath = m['foto_perfil_url']?.toString();
           return {
-            'id': m['id']?.toString() ?? '',
+            'id': id,
             'nombre': m['nombre_local']?.toString() ?? 'Local',
             'avatar': _resolverPathStorage(sb, avatarPath, 'avatars_locales'),
             'ciudad': m['ciudad']?.toString() ?? '',
             'provincia': m['provincia']?.toString() ?? '',
-            'verificado': m['local_verificado'] == true,
+            'verificado': verificado,
+            'esPionero': esPionero,
             'rubro': (m['rubro'] is List && (m['rubro'] as List).isNotEmpty)
                 ? (m['rubro'] as List).first.toString()
                 : '',
@@ -243,6 +294,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
         _urlMaps = local['url_maps']?.toString();
         _rubros = rubrosList;
         _verificado = local['local_verificado'] == true;
+        _esPionero = local['es_pionero'] == true;
         // Switch del local: si lo apagó, no mostramos su calificación.
         _mostrarCalificaciones = local['mostrar_calificaciones'] != false;
         _calificacionPromedio = (calNum != null && calNum > 0) ? calNum : null;
@@ -256,9 +308,40 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
             (local['estado_cuenta']?.toString() ?? 'activa') != 'activa';
         _cargando = false;
       });
+      _cargarMegusta();
     } catch (e, st) {
       debugPrint('[LocalPerfil] _cargarDatos error: $e\n$st');
       if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  Future<void> _cargarMegusta() async {
+    final id = widget.idLocal?.trim();
+    if (id == null || id.isEmpty || _bloqueado) return;
+    final est = await ServicioLocalesMegusta.instancia.estado(id);
+    if (!mounted) return;
+    setState(() {
+      _cantidadMegusta = est.cantidad;
+      _yoMegusta = est.yoMegusta;
+    });
+  }
+
+  Future<void> _onToggleMegusta() async {
+    final id = widget.idLocal?.trim();
+    if (id == null || id.isEmpty || _toggleMegusta || _bloqueado) return;
+    if (ServicioSupabase().usuarioActual == null) return;
+    setState(() => _toggleMegusta = true);
+    try {
+      final est = await ServicioLocalesMegusta.instancia.toggle(id);
+      if (!mounted || est == null) return;
+      setState(() {
+        _cantidadMegusta = est.cantidad;
+        _yoMegusta = est.yoMegusta;
+      });
+    } catch (e) {
+      debugPrint('[LocalPerfil] toggle megusta: $e');
+    } finally {
+      if (mounted) setState(() => _toggleMegusta = false);
     }
   }
 
@@ -409,36 +492,16 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 112,
-                          height: 112,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: ColoresApp.fondoSuperficie,
-                            border: Border.all(
-                              color: ColoresApp.textoSecundario.withValues(
-                                alpha: 0.3,
-                              ),
-                              width: 2,
-                            ),
-                          ),
-                          child: Icon(
-                            CupertinoIcons.building_2_fill,
-                            size: 50,
-                            color: ColoresApp.textoSecundario.withValues(
-                              alpha: 0.7,
-                            ),
-                          ),
+                        AvatarLocal(
+                          imageUrl: widget.avatarUrl,
+                          size: 112,
+                          placeholderIcon: CupertinoIcons.building_2_fill,
                         ),
                         const SizedBox(height: 14),
-                        Text(
-                          nombre,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.baloo2(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: ColoresApp.textoPrincipal,
-                          ),
+                        _NombreLocalPerfilHero(
+                          nombre: nombre,
+                          maxWidth: MediaQuery.sizeOf(context).width - 56,
+                          fontSize: 20,
                         ),
                         const SizedBox(height: 18),
                         Container(
@@ -451,12 +514,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                               alpha: 0.6,
                             ),
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: ColoresApp.textoSecundario.withValues(
-                                alpha: 0.18,
-                              ),
-                            ),
-                          ),
+                                                      ),
                           child: Column(
                             children: [
                               Icon(
@@ -491,6 +549,34 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
     );
   }
 
+  /// Fondo del banner mientras carga o si falla: negro + blur del avatar en caché.
+  Widget _fondoBannerReserva() {
+    final urlBlur = _avatarEffective.trim();
+    if (urlBlur.isNotEmpty && !_avatarUrlEsAsset(urlBlur)) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          const ColoredBox(color: ColoresApp.fondoPrincipal),
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36),
+            child: Opacity(
+              opacity: 0.5,
+              child: CachedNetworkImage(
+                imageUrl: urlBlur,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                placeholder: (_, __) => const SizedBox.expand(),
+                errorWidget: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return const ColoredBox(color: ColoresApp.fondoPrincipal);
+  }
+
   @override
   Widget build(BuildContext context) {
     // Show loading indicator while fetching data
@@ -499,7 +585,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
         backgroundColor: ColoresApp.fondoPrincipal,
         child: FondoGradienteFernecito(
           corto: true,
-          child: const Center(child: CupertinoActivityIndicator(radius: 18)),
+          child: const FernecitoLoaderCentro(size: 36),
         ),
       );
     }
@@ -519,7 +605,8 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
     final size = MediaQuery.of(context).size;
     final screenHeight = size.height;
     final screenWidth = size.width;
-    final bannerHeight = (screenHeight * 0.43).clamp(320.0, 460.0).toDouble();
+    // ~15% más alto que el hero base (0.43) para evitar overflow en iPhone.
+    final bannerHeight = (screenHeight * 0.4945).clamp(368.0, 529.0).toDouble();
 
     final padding = MediaQuery.of(context).padding;
     // Responsive: pantallas estrechas reducen tamaños para evitar overflow
@@ -568,284 +655,220 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                 ? Image.asset(
                                     bannerSource,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: ColoresApp.fondoSuperficie,
-                                      child: const Icon(
-                                        CupertinoIcons.photo,
-                                        size: 64,
-                                        color: ColoresApp.textoSecundario,
-                                      ),
-                                    ),
+                                    errorBuilder: (_, __, ___) =>
+                                        _fondoBannerReserva(),
                                   )
                                 : CachedNetworkImage(
                                     imageUrl: bannerSource,
                                     fit: BoxFit.cover,
-                                    placeholder: (_, __) => Container(
-                                      color: ColoresApp.fondoSuperficie,
-                                      child: const Icon(
-                                        CupertinoIcons.photo,
-                                        size: 64,
-                                        color: ColoresApp.textoSecundario,
-                                      ),
+                                    fadeInDuration: const Duration(
+                                      milliseconds: 280,
                                     ),
-                                    errorWidget: (_, __, ___) => Container(
-                                      color: ColoresApp.fondoSuperficie,
-                                      child: const Icon(
-                                        CupertinoIcons.photo,
-                                        size: 64,
-                                        color: ColoresApp.textoSecundario,
-                                      ),
-                                    ),
+                                    placeholder: (_, __) =>
+                                        _fondoBannerReserva(),
+                                    errorWidget: (_, __, ___) =>
+                                        _fondoBannerReserva(),
                                   ),
-                            // Overlay oscuro (también enmascarado: se desvanece con la imagen)
-                            Container(color: Colors.black.withOpacity(0.45)),
+                            // Overlay oscuro polarizado (también enmascarado)
+                            Container(
+                              color: Colors.black.withValues(alpha: 0.58),
+                            ),
                           ],
                         ),
                       ),
                     ),
-                    // Contenido: avatar, nombre, puntuación, botones (responsive, scroll si overflow)
+                    // Contenido: avatar, nombre, puntuación, iconos (sin scroll interno)
                     Positioned.fill(
                       child: Padding(
                         padding: EdgeInsets.fromLTRB(
                           horizontalPadding,
-                          padding.top + 16,
+                          padding.top + 14,
                           horizontalPadding,
-                          24,
+                          8,
                         ),
                         child: Center(
-                          child: SingleChildScrollView(
-                            physics: const BouncingScrollPhysics(),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: avatarSize,
-                                  height: avatarSize,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: ColoresApp.principalMarca
-                                          .withOpacity(0.8),
-                                      width: 3,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.4),
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AvatarLocal(
+                                imageUrl: _avatarEffective,
+                                size: avatarSize,
+                                esPionero: _esPionero,
+                                placeholderIcon: CupertinoIcons.building_2_fill,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.4),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
                                   ),
-                                  child: ClipOval(
-                                    child: _avatarUrlEsAsset(_avatarEffective)
-                                        ? Image.asset(
-                                            _avatarEffective,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) =>
-                                                const Icon(
-                                                  CupertinoIcons
-                                                      .building_2_fill,
-                                                  size: 48,
+                                ],
+                              ),
+                              const SizedBox(height: 11),
+                              _NombreLocalPerfilHero(
+                                nombre: nombreLocal.trim().isNotEmpty
+                                    ? nombreLocal.trim()
+                                    : 'Local',
+                                maxWidth: screenWidth - horizontalPadding * 2,
+                                fontSize: isNarrow ? 21 : 26,
+                                isNarrow: isNarrow,
+                                insignia: (_verificado || _esPionero)
+                                    ? Icon(
+                                        CupertinoIcons.checkmark_seal_fill,
+                                        size: isNarrow ? 20 : 24,
+                                        color: _esPionero
+                                            ? const Color(0xFFE0B800)
+                                            : ColoresApp.principalMarca,
+                                      )
+                                    : null,
+                              ),
+                              if (_mostrarCalificaciones)
+                                const SizedBox(height: 7),
+                              if (_mostrarCalificaciones)
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      CupertinoPageRoute(
+                                        builder: (_) => PantallaResenasLocales(
+                                          nombreLocal: nombreLocal,
+                                          idLocal: widget.idLocal,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 3,
+                                    ),
+                                    child: _calificacionPromedio == null
+                                        ? Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const _EstrellasRating(
+                                                valor: null,
+                                                size: 16,
+                                              ),
+                                              const SizedBox(height: 5),
+                                              Text(
+                                                'Sin calificaciones aún',
+                                                style: GoogleFonts.baloo2(
+                                                  fontSize: 12.5,
+                                                  fontWeight: FontWeight.w600,
                                                   color: ColoresApp
                                                       .textoSecundario,
                                                 ),
+                                              ),
+                                            ],
                                           )
-                                        : CachedNetworkImage(
-                                            imageUrl: _avatarEffective,
-                                            fit: BoxFit.cover,
-                                            placeholder: (_, __) => const Icon(
-                                              CupertinoIcons.building_2_fill,
-                                              size: 48,
-                                              color: ColoresApp.textoSecundario,
-                                            ),
-                                            errorWidget: (_, __, ___) =>
-                                                const Icon(
-                                                  CupertinoIcons
-                                                      .building_2_fill,
-                                                  size: 48,
+                                        : Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                _calificacionPromedio!
+                                                    .toStringAsFixed(1),
+                                                style: GoogleFonts.baloo2(
+                                                  fontSize: 36,
+                                                  fontWeight: FontWeight.w900,
+                                                  height: 0.95,
+                                                  letterSpacing: -0.5,
+                                                  color:
+                                                      ColoresApp.textoPrincipal,
+                                                ),
+                                              ),
+                                              _EstrellasRating(
+                                                valor: _calificacionPromedio,
+                                                size: 15,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '$_calificacionCantidad ${_calificacionCantidad == 1 ? 'calificación' : 'calificaciones'}',
+                                                style: GoogleFonts.baloo2(
+                                                  fontSize: 12.5,
+                                                  fontWeight: FontWeight.w600,
                                                   color: ColoresApp
                                                       .textoSecundario,
                                                 ),
+                                              ),
+                                            ],
                                           ),
                                   ),
                                 ),
-                                const SizedBox(height: 12),
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        nombreLocal,
-                                        style: GoogleFonts.baloo2(
-                                          fontSize: isNarrow ? 21 : 26,
-                                          fontWeight: FontWeight.w800,
-                                          color: ColoresApp.textoPrincipal,
+                              SizedBox(height: isNarrow ? 13 : 16),
+                              // Fila de iconos modernos sin contenedor (solo glow)
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isNarrow ? 4 : 8,
+                                ),
+                                child: Builder(
+                                  builder: (_) {
+                                    final sz = isNarrow ? 24.0 : 28.0;
+                                    final sep = SizedBox(
+                                      width: isNarrow ? 20 : 25,
+                                    );
+                                    final igOk =
+                                        _instagramUrl != null &&
+                                        _instagramUrl!.isNotEmpty;
+                                    final ttOk =
+                                        _tiktokUrl != null &&
+                                        _tiktokUrl!.isNotEmpty;
+                                    final webOk =
+                                        _sitioWebUrl != null &&
+                                        _sitioWebUrl!.isNotEmpty;
+                                    final ubiOk =
+                                        _ubicacionTextoComputed.isNotEmpty ||
+                                        (_direccion ?? '').isNotEmpty ||
+                                        (_urlMaps ?? '').isNotEmpty;
+                                    return Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _IconoEnlace(
+                                          icon: CupertinoIcons.location_solid,
+                                          activo: ubiOk,
+                                          onTap: ubiOk
+                                              ? () => _abrirUbicacion(context)
+                                              : null,
+                                          size: sz,
                                         ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                      if (_verificado) ...[
-                                        SizedBox(width: isNarrow ? 5 : 7),
-                                        Icon(
-                                          CupertinoIcons.checkmark_seal_fill,
-                                          size: isNarrow ? 20 : 24,
-                                          color: ColoresApp.principalMarca,
+                                        sep,
+                                        _IconoEnlace(
+                                          icon: FontAwesomeIcons.instagram,
+                                          useFontAwesome: true,
+                                          activo: igOk,
+                                          onTap: igOk
+                                              ? () => _abrirUrl(_instagramUrl!)
+                                              : null,
+                                          size: sz,
+                                        ),
+                                        sep,
+                                        _IconoEnlace(
+                                          icon: FontAwesomeIcons.tiktok,
+                                          useFontAwesome: true,
+                                          activo: ttOk,
+                                          onTap: ttOk
+                                              ? () => _abrirUrl(_tiktokUrl!)
+                                              : null,
+                                          size: sz,
+                                        ),
+                                        sep,
+                                        _IconoEnlace(
+                                          icon: CupertinoIcons.globe,
+                                          activo: webOk,
+                                          onTap: webOk
+                                              ? () => _abrirUrl(_sitioWebUrl!)
+                                              : null,
+                                          size: sz,
                                         ),
                                       ],
-                                    ],
-                                  ),
+                                    );
+                                  },
                                 ),
-                                if (_mostrarCalificaciones)
-                                  const SizedBox(height: 8),
-                                if (_mostrarCalificaciones)
-                                  GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        CupertinoPageRoute(
-                                          builder: (_) =>
-                                              PantallaResenasLocales(
-                                                nombreLocal: nombreLocal,
-                                                idLocal: widget.idLocal,
-                                              ),
-                                        ),
-                                      );
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 4,
-                                      ),
-                                      child: _calificacionPromedio == null
-                                          ? Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const _EstrellasRating(
-                                                  valor: null,
-                                                  size: 16,
-                                                ),
-                                                const SizedBox(height: 6),
-                                                Text(
-                                                  'Sin calificaciones aún',
-                                                  style: GoogleFonts.baloo2(
-                                                    fontSize: 12.5,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: ColoresApp
-                                                        .textoSecundario,
-                                                  ),
-                                                ),
-                                              ],
-                                            )
-                                          : Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  _calificacionPromedio!
-                                                      .toStringAsFixed(1),
-                                                  style: GoogleFonts.baloo2(
-                                                    fontSize: 36,
-                                                    fontWeight: FontWeight.w900,
-                                                    height: 0.95,
-                                                    letterSpacing: -0.5,
-                                                    color: ColoresApp
-                                                        .textoPrincipal,
-                                                  ),
-                                                ),
-                                                _EstrellasRating(
-                                                  valor: _calificacionPromedio,
-                                                  size: 15,
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  '$_calificacionCantidad ${_calificacionCantidad == 1 ? 'calificación' : 'calificaciones'}',
-                                                  style: GoogleFonts.baloo2(
-                                                    fontSize: 12.5,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: ColoresApp
-                                                        .textoSecundario,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                    ),
-                                  ),
-                                SizedBox(height: isNarrow ? 14 : 18),
-                                // Fila de iconos modernos sin contenedor (solo glow)
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  physics: const BouncingScrollPhysics(),
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: isNarrow ? 4 : 8,
-                                  ),
-                                  child: Builder(
-                                    builder: (_) {
-                                      final sz = isNarrow ? 24.0 : 28.0;
-                                      final sep = SizedBox(
-                                        width: isNarrow ? 22 : 28,
-                                      );
-                                      final igOk =
-                                          _instagramUrl != null &&
-                                          _instagramUrl!.isNotEmpty;
-                                      final ttOk =
-                                          _tiktokUrl != null &&
-                                          _tiktokUrl!.isNotEmpty;
-                                      final webOk =
-                                          _sitioWebUrl != null &&
-                                          _sitioWebUrl!.isNotEmpty;
-                                      final ubiOk =
-                                          _ubicacionTextoComputed.isNotEmpty ||
-                                          (_direccion ?? '').isNotEmpty ||
-                                          (_urlMaps ?? '').isNotEmpty;
-                                      return Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          _IconoEnlace(
-                                            icon: CupertinoIcons.location_solid,
-                                            activo: ubiOk,
-                                            onTap: ubiOk
-                                                ? () => _abrirUbicacion(context)
-                                                : null,
-                                            size: sz,
-                                          ),
-                                          sep,
-                                          _IconoEnlace(
-                                            icon: FontAwesomeIcons.instagram,
-                                            useFontAwesome: true,
-                                            activo: igOk,
-                                            onTap: igOk
-                                                ? () =>
-                                                      _abrirUrl(_instagramUrl!)
-                                                : null,
-                                            size: sz,
-                                          ),
-                                          sep,
-                                          _IconoEnlace(
-                                            icon: FontAwesomeIcons.tiktok,
-                                            useFontAwesome: true,
-                                            activo: ttOk,
-                                            onTap: ttOk
-                                                ? () => _abrirUrl(_tiktokUrl!)
-                                                : null,
-                                            size: sz,
-                                          ),
-                                          sep,
-                                          _IconoEnlace(
-                                            icon: CupertinoIcons.globe,
-                                            activo: webOk,
-                                            onTap: webOk
-                                                ? () => _abrirUrl(_sitioWebUrl!)
-                                                : null,
-                                            size: sz,
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -869,12 +892,36 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
               ),
             ),
 
+            if (widget.idLocal != null &&
+                widget.idLocal!.isNotEmpty &&
+                !_bloqueado)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    2,
+                    horizontalPadding,
+                    0,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: BotonMegustaLocalHero(
+                      cantidad: _cantidadMegusta,
+                      activo: _yoMegusta,
+                      habilitado: ServicioSupabase().usuarioActual != null,
+                      cargando: _toggleMegusta,
+                      onTap: _onToggleMegusta,
+                    ),
+                  ),
+                ),
+              ),
+
             // Info del lugar (solo texto + flecha a la derecha, sin contenedor; al tocar despliega)
             SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
                   horizontalPadding,
-                  16,
+                  6,
                   horizontalPadding,
                   0,
                 ),
@@ -916,6 +963,10 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (_esPionero) ...[
+                              _BadgeBestChoicePerfil(),
+                              const SizedBox(height: 12),
+                            ],
                             if (_descripcion != null &&
                                 _descripcion!.trim().isNotEmpty)
                               Text(
@@ -982,11 +1033,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                         color: ColoresApp.principalMarca
                                             .withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: ColoresApp.principalMarca
-                                              .withOpacity(0.35),
-                                        ),
-                                      ),
+                                                                              ),
                                       child: Text(
                                         r,
                                         style: GoogleFonts.baloo2(
@@ -1081,7 +1128,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                       height: 280,
                                       color: ColoresApp.fondoSuperficie,
                                       child: const Center(
-                                        child: CupertinoActivityIndicator(),
+                                        child: FernecitoLoader.inline(size: 16),
                                       ),
                                     ),
                                     errorWidget: (_, __, ___) => Container(
@@ -1157,7 +1204,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                               color: ColoresApp.fondoSuperficie,
                                               child: const Center(
                                                 child:
-                                                    CupertinoActivityIndicator(),
+                                                    FernecitoLoader.inline(size: 16),
                                               ),
                                             ),
                                             errorWidget: (_, __, ___) =>
@@ -1227,6 +1274,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                             nombre: loc['nombre'] as String? ?? 'Local',
                             avatar: loc['avatar'] as String? ?? '',
                             verificado: loc['verificado'] == true,
+                            esPionero: loc['esPionero'] == true,
                             rubro: loc['rubro'] as String? ?? '',
                             ciudad: loc['ciudad'] as String? ?? '',
                           ),
@@ -1390,6 +1438,7 @@ class _CardLugarPopular extends StatelessWidget {
   final String nombre;
   final String avatar;
   final bool verificado;
+  final bool esPionero;
   final String rubro;
   final String ciudad;
 
@@ -1398,9 +1447,12 @@ class _CardLugarPopular extends StatelessWidget {
     required this.nombre,
     required this.avatar,
     required this.verificado,
+    required this.esPionero,
     required this.rubro,
     required this.ciudad,
   });
+
+  static const _doradoPionero = Color(0xFFE0B800);
 
   String _capitalizar(String s) =>
       s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}';
@@ -1426,7 +1478,11 @@ class _CardLugarPopular extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          AvatarSocial(url: avatar, size: 48),
+          AvatarLocal(
+            imageUrl: avatar,
+            size: 48,
+            esPionero: esPionero,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1452,7 +1508,9 @@ class _CardLugarPopular extends StatelessWidget {
                         child: Icon(
                           CupertinoIcons.checkmark_seal_fill,
                           size: 16,
-                          color: ColoresApp.principalMarca,
+                          color: esPionero
+                              ? _doradoPionero
+                              : ColoresApp.principalMarca,
                         ),
                       ),
                   ],
@@ -1536,7 +1594,7 @@ class VisualizadorFotosLocal extends StatelessWidget {
                             imageUrl: fotoUrl,
                             fit: BoxFit.contain,
                             placeholder: (_, __) => const Center(
-                              child: CupertinoActivityIndicator(),
+                              child: FernecitoLoader.inline(size: 16),
                             ),
                             errorWidget: (_, __, ___) => Container(
                               color: ColoresApp.fondoSuperficie,
@@ -1594,6 +1652,106 @@ class VisualizadorFotosLocal extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Badge compacto Best Choice — primer ítem dentro de Info del lugar.
+class _BadgeBestChoicePerfil extends StatelessWidget {
+  static const _dorado = Color(0xFFE0B800);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: _dorado.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+              ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(CupertinoIcons.star_fill, size: 12, color: _dorado),
+          const SizedBox(width: 5),
+          Text(
+            'Best Choice',
+            style: GoogleFonts.baloo2(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: _dorado,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Nombre del local en hero: salto temprano + insignia inline al final.
+class _NombreLocalPerfilHero extends StatelessWidget {
+  const _NombreLocalPerfilHero({
+    required this.nombre,
+    required this.maxWidth,
+    required this.fontSize,
+    this.isNarrow = false,
+    this.insignia,
+  });
+
+  final String nombre;
+  final double maxWidth;
+  final double fontSize;
+  final bool isNarrow;
+  final Widget? insignia;
+
+  static const double _espacioInsignia = 8;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = GoogleFonts.baloo2(
+      fontSize: fontSize,
+      fontWeight: FontWeight.w800,
+      color: ColoresApp.textoPrincipal,
+      height: 1.2,
+    );
+    final textDirection = Directionality.of(context);
+    final reservaTrailing = FormatoNombreLocalHero.reservaTrailingInsignia(
+      tieneInsignia: insignia != null,
+      fontSize: fontSize,
+      isNarrow: isNarrow,
+    );
+    final nombreMostrado = FormatoNombreLocalHero.paraDisplay(
+      nombre: nombre,
+      maxWidth: maxWidth,
+      textStyle: textStyle,
+      textDirection: textDirection,
+      reservaTrailing: reservaTrailing,
+    );
+
+    final trailing = <InlineSpan>[
+      if (insignia != null)
+        WidgetSpan(
+          alignment: PlaceholderAlignment.middle,
+          child: Padding(
+            padding: const EdgeInsets.only(left: _espacioInsignia),
+            child: insignia!,
+          ),
+        ),
+    ];
+
+    return SizedBox(
+      width: maxWidth,
+      child: Text.rich(
+        TextSpan(
+          style: textStyle,
+          children: [
+            TextSpan(text: nombreMostrado),
+            ...trailing,
+          ],
+        ),
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

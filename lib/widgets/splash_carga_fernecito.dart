@@ -1,10 +1,18 @@
+/// Splash de carga Flutter (capa C): logo + «Fernecito App» + loader de íconos.
 library;
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-const Color kVerdeSplashFernecito = Color(0xFF16B957);
+import 'fernecito_loader.dart';
 
+/// Verde unificado con splash nativa (`flutter_native_splash` / Android / iOS / PWA).
+const Color kVerdeSplashFernecito = Color(0xFF1DB954);
+
+/// Splash de app mientras carga sesión o cartelera.
+///
+/// Logo (fondo transparente) centrado → sube un poco y debajo, pegado,
+/// aparece «Fernecito App». Más abajo, íconos blancos con sombra.
 class SplashCargaFernecito extends StatefulWidget {
   const SplashCargaFernecito({super.key});
 
@@ -13,104 +21,40 @@ class SplashCargaFernecito extends StatefulWidget {
 }
 
 class _SplashCargaFernecitoState extends State<SplashCargaFernecito>
-    with TickerProviderStateMixin {
-  late final AnimationController _entradaController;
-  late final AnimationController _barraController;
-  late final Animation<double> _entrada;
-  late final Animation<double> _barra;
-
-  @override
-  void initState() {
-    super.initState();
-    _entradaController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    )..forward();
-    _barraController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1150),
-    )..repeat(reverse: true);
-    _entrada = CurvedAnimation(
-      parent: _entradaController,
-      curve: Curves.easeOutCubic,
-    );
-    _barra = CurvedAnimation(
-      parent: _barraController,
-      curve: Curves.easeInOutCubic,
-    );
-  }
-
-  @override
-  void dispose() {
-    _entradaController.dispose();
-    _barraController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: kVerdeSplashFernecito,
-      child: Center(
-        child: AnimatedBuilder(
-          animation: Listenable.merge([_entradaController, _barraController]),
-          builder: (context, child) {
-            final entrada = _entrada.value;
-            return Opacity(
-              opacity: entrada.clamp(0.0, 1.0),
-              child: Transform.translate(
-                offset: Offset(0, 6 * (1 - entrada)),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    child!,
-                    const SizedBox(height: 34),
-                    BarraEspejoFernecito(value: _barra.value),
-                  ],
-                ),
-              ),
-            );
-          },
-          child: Container(
-            width: 160,
-            height: 160,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(24)),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Image.asset(
-                'assets/imagenes/logoiconapp.png',
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class SplashCargaFernecitoBarra extends StatefulWidget {
-  const SplashCargaFernecitoBarra({super.key});
-
-  @override
-  State<SplashCargaFernecitoBarra> createState() =>
-      _SplashCargaFernecitoBarraState();
-}
-
-class _SplashCargaFernecitoBarraState extends State<SplashCargaFernecitoBarra>
     with SingleTickerProviderStateMixin {
+  static const _logoSize = 88.0;
+  static const _subidaLogo = 12.0;
+
   late final AnimationController _controller;
-  late final Animation<double> _value;
+  late final Animation<double> _entrada;
+  late final Animation<double> _subirLogo;
+  late final Animation<double> _revelarTexto;
+  late final Animation<double> _loaderOpacidad;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1150),
-    )..repeat(reverse: true);
-    _value = CurvedAnimation(parent: _controller, curve: Curves.easeInOutCubic);
+      duration: const Duration(milliseconds: 1200),
+    )..forward();
+
+    _entrada = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.0, 0.32, curve: Curves.easeOutCubic),
+    );
+    _subirLogo = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.18, 0.72, curve: Curves.easeInOutCubic),
+    );
+    _revelarTexto = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.28, 0.80, curve: Curves.easeOutCubic),
+    );
+    _loaderOpacidad = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.50, 0.95, curve: Curves.easeOut),
+    );
   }
 
   @override
@@ -121,13 +65,137 @@ class _SplashCargaFernecitoBarraState extends State<SplashCargaFernecitoBarra>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _value,
-      builder: (context, _) => BarraEspejoFernecito(value: _value.value),
+    return ColoredBox(
+      color: kVerdeSplashFernecito,
+      child: Center(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            final entrada = _entrada.value.clamp(0.0, 1.0);
+            final subir = _subirLogo.value.clamp(0.0, 1.0);
+            final revelar = _revelarTexto.value.clamp(0.0, 1.0);
+            return Opacity(
+              opacity: entrada,
+              child: Transform.translate(
+                offset: Offset(0, 8 * (1 - entrada)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Logo + texto en el mismo bloque (gap 0), suben juntos.
+                    Transform.translate(
+                      offset: Offset(0, -_subidaLogo * subir),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const _LogoSplash(size: _logoSize),
+                          ClipRect(
+                            child: Align(
+                              alignment: Alignment.topCenter,
+                              heightFactor: revelar,
+                              child: Opacity(
+                                opacity: Curves.easeOut.transform(revelar),
+                                child: Text(
+                                  'Fernecito App',
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: GoogleFonts.baloo2(
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    height: 1.0,
+                                    letterSpacing: -0.4,
+                                    shadows: const [
+                                      Shadow(
+                                        color: Color(0x33000000),
+                                        blurRadius: 10,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Compensa la subida para que el loader no salte.
+                    SizedBox(height: _subidaLogo * subir),
+                    const SizedBox(height: 24),
+                    Opacity(
+                      opacity: _loaderOpacidad.value.clamp(0.0, 1.0),
+                      child: const FernecitoLoader.inline(
+                        size: 32,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                            color: Color(0x40000000),
+                            blurRadius: 12,
+                            offset: Offset(0, 3),
+                          ),
+                          Shadow(
+                            color: Color(0x22000000),
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
 
+class _LogoSplash extends StatelessWidget {
+  const _LogoSplash({required this.size});
+
+  static const assetPath = 'assets/imagenes/logo_sin_fondo_splash.png';
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Image(
+        image: const AssetImage(assetPath),
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        gaplessPlayback: false,
+      ),
+    );
+  }
+}
+
+/// Compat: barra antigua (pantalla_splash legacy).
+class SplashCargaFernecitoBarra extends StatelessWidget {
+  const SplashCargaFernecitoBarra({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const FernecitoLoader.inline(
+      size: 28,
+      color: Colors.white,
+      shadows: [
+        Shadow(
+          color: Color(0x40000000),
+          blurRadius: 10,
+          offset: Offset(0, 2),
+        ),
+      ],
+    );
+  }
+}
+
+/// Compat: barra espejo (ya no se usa en el splash principal).
 class BarraEspejoFernecito extends StatelessWidget {
   const BarraEspejoFernecito({super.key, required this.value});
 
@@ -136,7 +204,6 @@ class BarraEspejoFernecito extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final halfWidth = 86.0 * value.clamp(0.0, 1.0);
-
     return SizedBox(
       width: 172,
       height: 4,
@@ -151,12 +218,6 @@ class BarraEspejoFernecito extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(50),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.white.withValues(alpha: 0.28),
-                  blurRadius: 10,
-                ),
-              ],
             ),
           ),
         ],

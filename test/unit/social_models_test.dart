@@ -4,11 +4,11 @@
 // Esos getters se cubren en integration tests.
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/models/social.dart';
+import 'package:fernecito_frontend/models/social.dart';
 
 void main() {
   group('MiembroSquad.fromMap', () {
-    Map<String, dynamic> _map({String rol = 'miembro', bool perfilPublico = true}) => {
+    Map<String, dynamic> map0({String rol = 'miembro', bool perfilPublico = true}) => {
           'id_usuario': 'user-001',
           'username': 'testuser',
           'nombre': 'Test User',
@@ -21,7 +21,7 @@ void main() {
         };
 
     test('parsea campos básicos', () {
-      final m = MiembroSquad.fromMap(_map());
+      final m = MiembroSquad.fromMap(map0());
       expect(m.idUsuario, 'user-001');
       expect(m.username, 'testuser');
       expect(m.nombre, 'Test User');
@@ -29,25 +29,25 @@ void main() {
     });
 
     test('rol default "miembro" si campo ausente', () {
-      final map = _map()..remove('rol_miembro');
+      final map = map0()..remove('rol_miembro');
       expect(MiembroSquad.fromMap(map).rol, 'miembro');
     });
 
     test('esLider solo cuando rol == lider', () {
-      expect(MiembroSquad.fromMap(_map(rol: 'lider')).esLider, isTrue);
-      expect(MiembroSquad.fromMap(_map(rol: 'admin')).esLider, isFalse);
-      expect(MiembroSquad.fromMap(_map(rol: 'miembro')).esLider, isFalse);
+      expect(MiembroSquad.fromMap(map0(rol: 'lider')).esLider, isTrue);
+      expect(MiembroSquad.fromMap(map0(rol: 'admin')).esLider, isFalse);
+      expect(MiembroSquad.fromMap(map0(rol: 'miembro')).esLider, isFalse);
     });
 
     test('esAdmin para lider y admin, no para miembro', () {
-      expect(MiembroSquad.fromMap(_map(rol: 'lider')).esAdmin, isTrue);
-      expect(MiembroSquad.fromMap(_map(rol: 'admin')).esAdmin, isTrue);
-      expect(MiembroSquad.fromMap(_map(rol: 'miembro')).esAdmin, isFalse);
+      expect(MiembroSquad.fromMap(map0(rol: 'lider')).esAdmin, isTrue);
+      expect(MiembroSquad.fromMap(map0(rol: 'admin')).esAdmin, isTrue);
+      expect(MiembroSquad.fromMap(map0(rol: 'miembro')).esAdmin, isFalse);
     });
   });
 
   group('SquadExplorarItem.fromMap', () {
-    Map<String, dynamic> _map({int cantidad = 0, List? avatares}) => {
+    Map<String, dynamic> map0({int cantidad = 0, List? avatares}) => {
           'id_grupo': 'squad-001',
           'nombre_grupo': 'Los Exploradores',
           'url_portada': null,
@@ -57,7 +57,7 @@ void main() {
         };
 
     test('parsea campos básicos', () {
-      final s = SquadExplorarItem.fromMap(_map(cantidad: 5));
+      final s = SquadExplorarItem.fromMap(map0(cantidad: 5));
       expect(s.idGrupo, 'squad-001');
       expect(s.nombre, 'Los Exploradores');
       expect(s.cantidadMiembros, 5);
@@ -65,24 +65,24 @@ void main() {
     });
 
     test('nombre fallback "Squad" si nombre_grupo es null', () {
-      final map = _map()..['nombre_grupo'] = null;
+      final map = map0()..['nombre_grupo'] = null;
       expect(SquadExplorarItem.fromMap(map).nombre, 'Squad');
     });
 
     test('miembrosExtra == 0 cuando cantidadMiembros <= 3', () {
-      expect(SquadExplorarItem.fromMap(_map(cantidad: 0)).miembrosExtra, 0);
-      expect(SquadExplorarItem.fromMap(_map(cantidad: 1)).miembrosExtra, 0);
-      expect(SquadExplorarItem.fromMap(_map(cantidad: 3)).miembrosExtra, 0);
+      expect(SquadExplorarItem.fromMap(map0(cantidad: 0)).miembrosExtra, 0);
+      expect(SquadExplorarItem.fromMap(map0(cantidad: 1)).miembrosExtra, 0);
+      expect(SquadExplorarItem.fromMap(map0(cantidad: 3)).miembrosExtra, 0);
     });
 
     test('miembrosExtra == cantidad - 3 cuando > 3', () {
-      expect(SquadExplorarItem.fromMap(_map(cantidad: 4)).miembrosExtra, 1);
-      expect(SquadExplorarItem.fromMap(_map(cantidad: 10)).miembrosExtra, 7);
-      expect(SquadExplorarItem.fromMap(_map(cantidad: 100)).miembrosExtra, 97);
+      expect(SquadExplorarItem.fromMap(map0(cantidad: 4)).miembrosExtra, 1);
+      expect(SquadExplorarItem.fromMap(map0(cantidad: 10)).miembrosExtra, 7);
+      expect(SquadExplorarItem.fromMap(map0(cantidad: 100)).miembrosExtra, 97);
     });
 
     test('fotosMiembros vacío si avatares_miembros no es List', () {
-      final map = _map()..['avatares_miembros'] = null;
+      final map = map0()..['avatares_miembros'] = null;
       expect(SquadExplorarItem.fromMap(map).fotosMiembros, isEmpty);
     });
   });

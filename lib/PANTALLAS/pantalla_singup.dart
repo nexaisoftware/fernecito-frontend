@@ -26,6 +26,7 @@ import '../widgets/fondo_gradiente_fernecito.dart';
 import '../core/supabase_client.dart';
 import '../core/auth_redirect.dart';
 import '../core/auth_errors.dart';
+import '../widgets/fernecito_loader.dart';
 
 class PantallaSignup extends StatefulWidget {
   const PantallaSignup({super.key});
@@ -423,10 +424,7 @@ class _PantallaSignupState extends State<PantallaSignup>
                       decoration: BoxDecoration(
                         color: ColoresApp.principalMarca.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: ColoresApp.principalMarca.withOpacity(0.3),
-                        ),
-                      ),
+                                              ),
                       child: Row(
                         children: [
                           Icon(
@@ -585,9 +583,7 @@ class _PantallaSignupState extends State<PantallaSignup>
         ),
         child: Center(
           child: _cargandoRegistro
-              ? const CupertinoActivityIndicator(
-                  color: ColoresApp.textoPrincipal,
-                )
+              ? const FernecitoLoader.inline(size: 16, color: ColoresApp.textoPrincipal)
               : Text(
                   'Crea tu cuenta!',
                   style: GoogleFonts.baloo2(

@@ -13,6 +13,7 @@ import '../core/constants.dart';
 import '../core/privacidad_perfil.dart';
 import '../core/servicio_amigos.dart';
 import '../core/rompehielo_navegacion.dart';
+import '../core/servicio_locales_megusta.dart';
 import '../core/servicio_perfil_usuario.dart';
 import '../core/flujo_reporte.dart';
 import '../core/servicio_squads.dart';
@@ -20,9 +21,13 @@ import '../core/supabase_client.dart';
 import '../models/rompehielo.dart';
 import '../models/social.dart';
 import '../widgets/avatar_usuario.dart';
+import '../widgets/banner_perfil_usuario.dart';
 import '../widgets/boton_rompehielo.dart';
 import '../widgets/burbuja_estado.dart';
+import '../widgets/carrusel_lugares_megusta.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
+import '../widgets/fernecito_loader.dart';
+import '../widgets/perfil_actividad_sheet.dart';
 import '../widgets/social_ui.dart';
 import 'pantalla_rompehielo.dart' show TipoContraparte;
 
@@ -67,6 +72,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
   String _tiktokPersistido = '';
   List<SquadResumen> _squadsDondeEsMiembro = const [];
   RompehieloEstado? _rompehieloEstado;
+  List<LocalMegustaItem> _lugaresMegusta = const [];
 
   static String _textoMiembroSquads(List<SquadResumen> squads) {
     if (squads.isEmpty) return '';
@@ -146,6 +152,12 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     }
     if (_estado == EstadoRelacionUsuario.amigo) {
       await _cargarSquadsMiembroAmigo();
+    }
+    if (det?['puede_ver'] == true) {
+      final lugares = await ServicioLocalesMegusta.instancia.listar(
+        idUsuario: id,
+      );
+      if (mounted) setState(() => _lugaresMegusta = lugares);
     }
   }
 
@@ -311,6 +323,14 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     return widget.usuario['avatar'] as String? ?? '';
   }
 
+  String get _imagenFondoBanner {
+    final banner = ServicioSupabase().urlBannerUsuario(
+      _detalle?['url_foto_banner']?.toString(),
+    );
+    if (banner != null && banner.isNotEmpty) return banner;
+    return _avatarUrl;
+  }
+
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.of(context).padding;
@@ -346,279 +366,339 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       _detalle,
       'cantidad_amigos',
     );
+    final cantidadSquads = ServicioPerfilUsuario.enteroDeDetalle(
+      _detalle,
+      'cantidad_squads',
+    );
     final sinActividad =
         !_cargandoDetalle &&
         puedeVer &&
         locales == 0 &&
         eventos == 0 &&
-        cantidadAmigos == 0;
+        cantidadAmigos == 0 &&
+        cantidadSquads == 0;
+    final mostrarBanner = puedeVer && !bloqueada && !_cargandoDetalle;
 
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
       child: FondoGradienteFernecito(
         corto: true,
-        child: SingleChildScrollView(
+        child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
-            20,
-            padding.top + 8,
-            20,
-            padding.bottom + 100,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: () => Navigator.of(context).pop(),
-                    minimumSize: Size.zero,
-                    child: Icon(
-                      CupertinoIcons.back,
-                      color: ColoresApp.principalMarca,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      puedeVer ? 'Ver perfil de $username' : username,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.baloo2(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: ColoresApp.textoPrincipal,
-                        height: 1.2,
-                      ),
-                    ),
-                  ),
-                  if (_idUsuario != null && _idUsuario!.isNotEmpty)
-                    CupertinoButton(
-                      padding: const EdgeInsets.all(6),
-                      minimumSize: const Size(0, 34),
-                      onPressed: _procesando ? null : _abrirMenuUsuario,
-                      child: Icon(
-                        CupertinoIcons.ellipsis,
-                        size: 21,
-                        color: ColoresApp.textoSecundario,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              if (_cargandoDetalle)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 48),
-                  child: Center(child: CupertinoActivityIndicator()),
-                )
-              else if (bloqueada) ...[
-                _buildPerfilBloqueado(
-                  username: username,
-                  esAmigo: esAmigoDetalle,
-                ),
-              ] else if (!puedeVer) ...[
-                _buildCabeceraPerfilPrivado(
-                  context: context,
-                  username: username,
+          slivers: [
+            if (mostrarBanner)
+              SliverToBoxAdapter(
+                child: _buildBannerPerfilPublico(
                   avatar: avatar,
-                ),
-                const SizedBox(height: 28),
-                _buildActionButtonTitulo(),
-                const SizedBox(height: 10),
-                _buildActionButton(),
-                // Rompehielo disponible también en perfiles privados.
-                if (_idUsuario != null) ...[
-                  const SizedBox(height: 12),
-                  _botonRompehielo(usuario: usuario, nombre: username),
-                ],
-              ] else ...[
-                Center(
-                  child: Column(
-                    children: [
-                      // Avatar como héroe (arriba)
-                      AvatarUsuario(
-                        avatar: avatar,
-                        size: 116,
-                        onTap: () => _abrirVisualizadorAvatar(context, avatar),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        nombreVisible,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.baloo2(
-                          fontSize: 23,
-                          fontWeight: FontWeight.w900,
-                          color: ColoresApp.textoPrincipal,
-                          height: 1.1,
-                        ),
-                      ),
-                      if (_estado == EstadoRelacionUsuario.amigo) ...[
-                        const SizedBox(height: 5),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 11,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: ColoresApp.principalMarca.withValues(
-                              alpha: 0.14,
-                            ),
-                            borderRadius: BorderRadius.circular(50),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                CupertinoIcons.checkmark_seal_fill,
-                                size: 13,
-                                color: ColoresApp.principalMarca,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                'Amigos',
-                                style: GoogleFonts.baloo2(
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: ColoresApp.principalMarca,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ] else if (sinActividad) ...[
-                        const SizedBox(height: 5),
-                        Text(
-                          'Nuevo en Fernecito',
-                          style: GoogleFonts.baloo2(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: ColoresApp.textoSecundario,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 7),
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.sizeOf(context).width * 0.88,
-                        ),
-                        child: BurbujaEstado(
-                          texto: estado,
-                          fontSize: 14,
-                          ajustarAnchoAlTexto: true,
-                          maxLines: 3,
-                        ),
-                      ),
-                      if (_idUsuario != null) ...[
-                        const SizedBox(height: 14),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: _botonRompehielo(
-                            usuario: usuario,
-                            nombre: nombreVisible,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-                _buildRedesSociales(
+                  username: username,
+                  nombreVisible: nombreVisible,
+                  estado: estado,
                   instagramUrl: instagramUrl,
                   tiktokUrl: tiktokUrl,
-                ),
-                const SizedBox(height: 22),
-                _buildSeccionActividad(
-                  nombre: nombreVisible,
-                  puedeVer: puedeVer,
                   sinActividad: sinActividad,
+                  esAmigo: _estado == EstadoRelacionUsuario.amigo,
                 ),
-                const SizedBox(height: 24),
-                _buildActionButtonTitulo(),
-                const SizedBox(height: 10),
-                _buildActionButton(),
-              ],
-              if (puedeVer && _estado == EstadoRelacionUsuario.amigo) ...[
-                const SizedBox(height: 18),
-                if (_squadsDondeEsMiembro.isNotEmpty)
-                  Text(
-                    _textoMiembroSquads(_squadsDondeEsMiembro),
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.baloo2(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: ColoresApp.principalMarca,
-                      height: 1.35,
+              )
+            else
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20, padding.top + 8, 20, 0),
+                  child: _buildBarraNavegacionPerfil(username: username),
+                ),
+              ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                mostrarBanner ? 16 : 18,
+                20,
+                padding.bottom + 100,
+              ),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  if (_cargandoDetalle)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: FernecitoLoaderCentro(size: 34),
+                    )
+                  else if (bloqueada) ...[
+                    _buildPerfilBloqueado(
+                      username: username,
+                      esAmigo: esAmigoDetalle,
                     ),
-                  ),
-                const SizedBox(height: 12),
-                GestureDetector(
-                  onTap: () =>
-                      _abrirAgregarASquad(context, nombreVisible, username),
-                  child: Container(
-                    width: double.infinity,
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: ColoresApp.fondoSuperficie.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(50),
-                      border: Border.all(
-                        color: ColoresApp.principalMarca.withValues(
-                          alpha: 0.32,
+                  ] else if (!puedeVer) ...[
+                    _buildCabeceraPerfilPrivado(
+                      context: context,
+                      username: username,
+                      avatar: avatar,
+                    ),
+                    const SizedBox(height: 28),
+                    _buildActionButtonTitulo(),
+                    const SizedBox(height: 10),
+                    _buildActionButton(),
+                    if (_idUsuario != null) ...[
+                      const SizedBox(height: 12),
+                      _botonRompehielo(usuario: usuario, nombre: username),
+                    ],
+                  ] else ...[
+                    if (_idUsuario != null) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: _botonRompehielo(
+                          usuario: usuario,
+                          nombre: nombreVisible,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                    ],
+                    _buildSeccionActividad(
+                      nombre: nombreVisible,
+                      puedeVer: puedeVer,
+                      sinActividad: sinActividad,
+                    ),
+                    const SizedBox(height: 12),
+                    CarruselLugaresMegusta(items: _lugaresMegusta),
+                    const SizedBox(height: 24),
+                    _buildActionButtonTitulo(),
+                    const SizedBox(height: 10),
+                    _buildActionButton(),
+                  ],
+                  if (puedeVer && _estado == EstadoRelacionUsuario.amigo) ...[
+                    const SizedBox(height: 18),
+                    if (_squadsDondeEsMiembro.isNotEmpty)
+                      Text(
+                        _textoMiembroSquads(_squadsDondeEsMiembro),
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.baloo2(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: ColoresApp.principalMarca,
+                          height: 1.35,
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () => _abrirAgregarASquad(
+                        context,
+                        nombreVisible,
+                        username,
+                      ),
+                      child: Container(
+                        width: double.infinity,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: ColoresApp.fondoSuperficie.withValues(
+                            alpha: 0.55,
+                          ),
+                          borderRadius: BorderRadius.circular(50),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              CupertinoIcons.person_3_fill,
+                              size: 17,
+                              color: ColoresApp.principalMarca,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _squadsDondeEsMiembro.isEmpty
+                                  ? 'Agregar a un squad'
+                                  : 'Añadir a otro squad',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.baloo2(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: ColoresApp.textoPrincipal,
+                                height: 1,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          CupertinoIcons.person_3_fill,
-                          size: 17,
-                          color: ColoresApp.principalMarca,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _squadsDondeEsMiembro.isEmpty
-                              ? 'Agregar a un squad'
-                              : 'Añadir a otro squad',
-                          textAlign: TextAlign.center,
+                    const SizedBox(height: 14),
+                    Center(
+                      child: CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        onPressed: _procesando ? null : _onAccionAmistad,
+                        child: Text(
+                          'Eliminar amigo',
                           style: GoogleFonts.baloo2(
                             fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: ColoresApp.textoPrincipal,
-                            height: 1,
+                            fontWeight: FontWeight.w600,
+                            color: ColoresApp.peligroMarca.withValues(
+                              alpha: 0.85,
+                            ),
+                            decoration: TextDecoration.underline,
+                            decorationColor: ColoresApp.peligroMarca.withValues(
+                              alpha: 0.5,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Center(
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: _procesando ? null : _onAccionAmistad,
-                    child: Text(
-                      'Eliminar amigo',
-                      style: GoogleFonts.baloo2(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: ColoresApp.peligroMarca.withValues(alpha: 0.85),
-                        decoration: TextDecoration.underline,
-                        decorationColor: ColoresApp.peligroMarca.withValues(
-                          alpha: 0.5,
                         ),
                       ),
                     ),
-                  ),
-                ),
-              ],
-            ],
+                  ],
+                ]),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBarraNavegacionPerfil({required String username}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => Navigator.of(context).pop(),
+          minimumSize: Size.zero,
+          child: Icon(
+            CupertinoIcons.back,
+            color: ColoresApp.principalMarca,
           ),
         ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            username,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.baloo2(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: ColoresApp.textoPrincipal,
+              height: 1.2,
+            ),
+          ),
+        ),
+        if (_idUsuario != null && _idUsuario!.isNotEmpty)
+          CupertinoButton(
+            padding: const EdgeInsets.all(6),
+            minimumSize: const Size(0, 34),
+            onPressed: _procesando ? null : _abrirMenuUsuario,
+            child: Icon(
+              CupertinoIcons.ellipsis,
+              size: 21,
+              color: ColoresApp.textoSecundario,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBannerPerfilPublico({
+    required String avatar,
+    required String username,
+    required String nombreVisible,
+    required String estado,
+    required String instagramUrl,
+    required String tiktokUrl,
+    required bool sinActividad,
+    required bool esAmigo,
+  }) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final isNarrow = screenWidth < 400;
+    final avatarSize = isNarrow
+        ? 68.0
+        : (screenHeight < 700 ? 76.0 : 84.0);
+
+    return BannerPerfilUsuario(
+      imagenFondo: _imagenFondoBanner,
+      conRedesSociales: true,
+      leading: SizedBox(
+        width: screenWidth * 0.62,
+        child: Row(
+          children: [
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              onPressed: () => Navigator.of(context).pop(),
+              child: Icon(
+                CupertinoIcons.back,
+                color: ColoresApp.principalMarca,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                username,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.baloo2(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: ColoresApp.textoPrincipal,
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      trailing: _idUsuario != null && _idUsuario!.isNotEmpty
+          ? CupertinoButton(
+              padding: const EdgeInsets.all(6),
+              minimumSize: const Size(0, 34),
+              onPressed: _procesando ? null : _abrirMenuUsuario,
+              child: Icon(
+                CupertinoIcons.ellipsis,
+                size: 21,
+                color: ColoresApp.textoSecundario,
+              ),
+            )
+          : null,
+      avatar: AvatarBordeBlanco(
+        avatar: avatar,
+        size: avatarSize,
+        onTap: () => _abrirVisualizadorAvatar(context, avatar),
+      ),
+      nombre: Text(
+        nombreVisible,
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.baloo2(
+          fontSize: isNarrow ? 21 : 24,
+          fontWeight: FontWeight.w900,
+          color: ColoresApp.textoPrincipal,
+          height: 1.1,
+        ),
+      ),
+      debajoNombre: esAmigo
+          ? const BadgeAmigosPerfil()
+          : sinActividad
+              ? Text(
+                  'Nuevo en Fernecito',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: ColoresApp.textoSecundario,
+                  ),
+                )
+              : null,
+      estado: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: screenWidth * 0.88),
+        child: BurbujaEstado(
+          texto: estado,
+          fontSize: 13,
+          compacta: true,
+          ajustarAnchoAlTexto: true,
+          maxLines: 2,
+        ),
+      ),
+      redesSociales: RedesSocialesBannerPerfil(
+        instagramUrl: instagramUrl,
+        tiktokUrl: tiktokUrl,
+        onInstagram:
+            instagramUrl.isNotEmpty ? () => _abrirUrl(instagramUrl) : null,
+        onTikTok: tiktokUrl.isNotEmpty ? () => _abrirUrl(tiktokUrl) : null,
       ),
     );
   }
@@ -691,11 +771,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: ColoresApp.fondoSuperficie,
-              border: Border.all(
-                color: ColoresApp.textoSecundario.withValues(alpha: 0.3),
-                width: 2,
-              ),
-            ),
+                          ),
             child: Icon(
               CupertinoIcons.person_fill,
               size: 54,
@@ -718,10 +794,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
             decoration: BoxDecoration(
               color: ColoresApp.fondoSuperficie.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: ColoresApp.textoSecundario.withValues(alpha: 0.18),
-              ),
-            ),
+                          ),
             child: Column(
               children: [
                 Icon(
@@ -754,7 +827,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                 borderRadius: BorderRadius.circular(50),
                 onPressed: _procesando ? null : _eliminarAmigoDirecto,
                 child: _procesando
-                    ? const CupertinoActivityIndicator()
+                    ? const FernecitoLoader.inline(size: 16)
                     : Text(
                         'Eliminar amigo',
                         style: GoogleFonts.baloo2(
@@ -813,33 +886,6 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     );
   }
 
-  Widget _buildRedesSociales({
-    required String instagramUrl,
-    required String tiktokUrl,
-  }) {
-    final igActivo = instagramUrl.isNotEmpty;
-    final ttActivo = tiktokUrl.isNotEmpty;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _EnlaceRedMinimal(
-          icono: FontAwesomeIcons.instagram,
-          etiqueta: 'Instagram',
-          habilitado: igActivo,
-          onTap: igActivo ? () => _abrirUrl(instagramUrl) : null,
-        ),
-        const SizedBox(width: 28),
-        _EnlaceRedMinimal(
-          icono: FontAwesomeIcons.tiktok,
-          etiqueta: 'TikTok',
-          habilitado: ttActivo,
-          onTap: ttActivo ? () => _abrirUrl(tiktokUrl) : null,
-        ),
-      ],
-    );
-  }
-
   Widget _buildSeccionActividad({
     required String nombre,
     required bool puedeVer,
@@ -848,7 +894,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     if (_cargandoDetalle) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
-        child: Center(child: CupertinoActivityIndicator()),
+        child: FernecitoLoaderCentro(size: 34),
       );
     }
     if (!puedeVer) {
@@ -871,6 +917,12 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       _detalle,
       'cantidad_amigos',
     );
+    final cantidadSquads = ServicioPerfilUsuario.enteroDeDetalle(
+      _detalle,
+      'cantidad_squads',
+    );
+    final perfilPublico = _detalle?['perfil_publico'] == true;
+    final idUsuario = _idUsuario ?? '';
 
     String ubicacion = '';
     if (ciudad.isNotEmpty && provincia.isNotEmpty) {
@@ -891,23 +943,74 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
 
     return Column(
       children: [
-        // Strip de stats (Amigos · Eventos · Locales), estilo iOS / Instagram
+        // Strip de stats (Amigos · Squads · Eventos · Locales)
         Container(
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             color: ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: ColoresApp.principalMarca.withValues(alpha: 0.12),
-            ),
-          ),
+                      ),
           child: Row(
             children: [
-              Expanded(child: _statInline('$cantidadAmigos', 'Amigos')),
+              Expanded(
+                child: _statInline(
+                  '$cantidadAmigos',
+                  'Amigos',
+                  compacto: true,
+                  onTap: perfilPublico && cantidadAmigos > 0 && idUsuario.isNotEmpty
+                      ? () => _abrirSheetActividad(
+                            tipo: PerfilActividadTipo.amigos,
+                            titulo: 'Amigos de $nombre',
+                            idUsuario: idUsuario,
+                          )
+                      : null,
+                ),
+              ),
               _divisorStat(),
-              Expanded(child: _statInline('$eventos', 'Eventos')),
+              Expanded(
+                child: _statInline(
+                  '$cantidadSquads',
+                  'Squads',
+                  compacto: true,
+                  onTap: cantidadSquads > 0 && idUsuario.isNotEmpty
+                      ? () => _abrirSheetActividad(
+                            tipo: PerfilActividadTipo.squads,
+                            titulo: 'Squads de $nombre',
+                            idUsuario: idUsuario,
+                          )
+                      : null,
+                ),
+              ),
               _divisorStat(),
-              Expanded(child: _statInline('$locales', 'Locales')),
+              Expanded(
+                child: _statInline(
+                  '$eventos',
+                  'Eventos',
+                  compacto: true,
+                  onTap: eventos > 0 && idUsuario.isNotEmpty
+                      ? () => _abrirSheetActividad(
+                            tipo: PerfilActividadTipo.eventos,
+                            titulo: 'Eventos de $nombre',
+                            idUsuario: idUsuario,
+                          )
+                      : null,
+                ),
+              ),
+              _divisorStat(),
+              Expanded(
+                child: _statInline(
+                  '$locales',
+                  'Locales',
+                  compacto: true,
+                  onTap: locales > 0 && idUsuario.isNotEmpty
+                      ? () => _abrirSheetActividad(
+                            tipo: PerfilActividadTipo.locales,
+                            titulo: 'Locales visitados de $nombre',
+                            idUsuario: idUsuario,
+                          )
+                      : null,
+                ),
+              ),
             ],
           ),
         ),
@@ -924,14 +1027,27 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     );
   }
 
-  Widget _statInline(String valor, String etiqueta) {
-    return Column(
+  void _abrirSheetActividad({
+    required PerfilActividadTipo tipo,
+    required String titulo,
+    required String idUsuario,
+  }) {
+    mostrarPerfilActividadSheet(
+      context,
+      idUsuario: idUsuario,
+      tipo: tipo,
+      titulo: titulo,
+    );
+  }
+
+  Widget _statInline(String valor, String etiqueta, {VoidCallback? onTap, bool compacto = false}) {
+    final contenido = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           valor,
           style: GoogleFonts.baloo2(
-            fontSize: 22,
+            fontSize: compacto ? 20 : 22,
             fontWeight: FontWeight.w900,
             color: ColoresApp.textoPrincipal,
             height: 1,
@@ -941,12 +1057,20 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
         Text(
           etiqueta,
           style: GoogleFonts.baloo2(
-            fontSize: 12,
+            fontSize: compacto ? 11 : 12,
             fontWeight: FontWeight.w600,
             color: ColoresApp.textoSecundario,
           ),
         ),
       ],
+    );
+
+    if (onTap == null) return contenido;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: contenido,
     );
   }
 
@@ -964,10 +1088,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(50),
-        border: Border.all(
-          color: ColoresApp.principalMarca.withValues(alpha: 0.18),
-        ),
-      ),
+              ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1095,16 +1216,27 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     }
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      useSafeArea: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
-        child: _BottomSheetAgregarASquad(
-          nombreUsuario: nombreUsuario,
-          idUsuario: idUsuario,
-        ),
-      ),
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(ctx).bottom,
+          ),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              width: double.infinity,
+              child: _BottomSheetAgregarASquad(
+                nombreUsuario: nombreUsuario,
+                idUsuario: idUsuario,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1160,11 +1292,10 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
         width: double.infinity,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(50),
-          border: Border.all(color: bordeColor, width: 2),
-        ),
+                  ),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
         child: _procesando
-            ? Center(child: CupertinoActivityIndicator(color: textColor))
+            ? Center(child: FernecitoLoader.inline(size: 22, color: textColor))
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -1180,53 +1311,6 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                   ),
                 ],
               ),
-      ),
-    );
-  }
-}
-
-class _EnlaceRedMinimal extends StatelessWidget {
-  final IconData icono;
-  final String etiqueta;
-  final bool habilitado;
-  final VoidCallback? onTap;
-
-  const _EnlaceRedMinimal({
-    required this.icono,
-    required this.etiqueta,
-    this.habilitado = true,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorIcono = habilitado
-        ? ColoresApp.principalMarca
-        : ColoresApp.textoSecundario.withValues(alpha: 0.35);
-    final colorTexto = habilitado
-        ? ColoresApp.textoSecundario
-        : ColoresApp.textoSecundario.withValues(alpha: 0.35);
-
-    return Opacity(
-      opacity: habilitado ? 1 : 0.55,
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        minimumSize: Size.zero,
-        onPressed: habilitado ? onTap : null,
-        child: Column(
-          children: [
-            FaIcon(icono, color: colorIcono, size: 22),
-            const SizedBox(height: 4),
-            Text(
-              etiqueta,
-              style: GoogleFonts.baloo2(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: colorTexto,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1310,15 +1394,13 @@ class _BottomSheetAgregarASquadState extends State<_BottomSheetAgregarASquad> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: ColoresApp.fondoPrincipal,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      width: double.infinity,
+      decoration: SuperficiesApp.bottomSheet(topRadius: 20),
       padding: EdgeInsets.fromLTRB(
         24,
         20,
         24,
-        MediaQuery.of(context).padding.bottom + 88,
+        MediaQuery.paddingOf(context).bottom + 24,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1336,7 +1418,7 @@ class _BottomSheetAgregarASquadState extends State<_BottomSheetAgregarASquad> {
           if (_cargando)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CupertinoActivityIndicator()),
+              child: FernecitoLoaderCentro(size: 34),
             )
           else if (_filas.isEmpty)
             Padding(
@@ -1419,7 +1501,7 @@ class _BottomSheetAgregarASquadState extends State<_BottomSheetAgregarASquad> {
                           ? null
                           : () => _invitar(s),
                       child: invitando
-                          ? const CupertinoActivityIndicator()
+                          ? const FernecitoLoader.inline(size: 16)
                           : Text(
                               etiquetaBoton,
                               style: GoogleFonts.baloo2(

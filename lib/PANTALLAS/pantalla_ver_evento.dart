@@ -12,9 +12,13 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
 import '../core/flujo_reporte.dart';
+import '../core/servicio_actividad_usuario.dart';
+import '../core/servicio_impresiones.dart';
 import '../core/servicio_squads.dart';
 import '../core/supabase_client.dart';
+import '../widgets/avatar_local.dart';
 import '../widgets/boton_compartir_evento.dart';
+import '../widgets/fernecito_loader.dart';
 import 'pantalla_actividad.dart';
 import 'pantalla_local_perfil.dart';
 import 'pantalla_pools.dart';
@@ -73,6 +77,8 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
   int? _cuposLibresServidor;
   bool? _cupoLimitadoServidor;
 
+  bool _clickImpresionRegistrado = false;
+
   StreamSubscription? _authSub;
 
   /// Id del evento alineado con `eventos.id_evento` / tokens (`id` o `id_evento` en el mapa).
@@ -89,6 +95,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _registrarClickImpresion());
     _cargarDatos();
     _authSub = ServicioSupabase().cliente.auth.onAuthStateChange.listen((data) {
       if (!mounted) return;
@@ -110,14 +117,29 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
     super.dispose();
   }
 
+  void _registrarClickImpresion() {
+    if (_clickImpresionRegistrado) return;
+    final idEv = _idEventoClave();
+    if (idEv.isEmpty) return;
+    var idLocal = widget.evento['idLocal']?.toString() ?? '';
+    if (idLocal.isEmpty) {
+      idLocal = _infoLocal?['id']?.toString() ?? '';
+    }
+    if (idLocal.isEmpty) return;
+    _clickImpresionRegistrado = true;
+    ServicioImpresiones.instancia.registrarClickEvento(
+      idLocal: idLocal,
+      idEvento: idEv,
+    );
+  }
+
   Future<void> _cargarDatos() async {
     if (!mounted) return;
     try {
       final sb = ServicioSupabase().cliente;
-      // Refresh de sesión por las dudas (si el JWT está por expirar, lo renueva)
       try {
-        final session = sb.auth.currentSession;
-        if (session != null && session.isExpired) {
+        final sessionRefresh = sb.auth.currentSession;
+        if (sessionRefresh != null && sessionRefresh.isExpired) {
           debugPrint('🔄 Sesión expirada, refrescando…');
           await sb.auth.refreshSession();
         }
@@ -325,7 +347,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
           final localRes = await sb
               .from('perfiles_locales')
               .select(
-                'id, nombre_local, foto_perfil_url, local_verificado, plan_suscripcion, calificacion_promedio, calificacion_cantidad, ciudad, provincia, descripcion_local',
+                'id, nombre_local, foto_perfil_url, local_verificado, plan_suscripcion, calificacion_promedio, calificacion_cantidad, ciudad, provincia, descripcion_local, es_pionero',
               )
               .eq('id', idLocal)
               .maybeSingle();
@@ -344,10 +366,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                 ? ccant
                 : (ccant != null ? int.tryParse(ccant.toString()) : null);
             _localVerificado = _infoLocal!['local_verificado'] == true;
-            _localEsPionero =
-                (_infoLocal!['plan_suscripcion']?.toString() ?? '')
-                    .toLowerCase()
-                    .contains('pionero');
+            _localEsPionero = _infoLocal!['es_pionero'] == true;
             final ciudad = _infoLocal!['ciudad']?.toString();
             final provincia = _infoLocal!['provincia']?.toString();
             if (ciudad != null && ciudad.isNotEmpty) {
@@ -487,9 +506,9 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
       backgroundColor: ColoresApp.fondoPrincipal,
       child: Stack(
         children: [
-          CustomScrollView(
+          FernecitoRefreshScrollView(
+            onRefresh: _cargarDatos,
             slivers: [
-              CupertinoSliverRefreshControl(onRefresh: _cargarDatos),
               if (widget.idInvitacionRrpp != null &&
                   widget.idInvitacionRrpp!.isNotEmpty)
                 SliverToBoxAdapter(
@@ -539,7 +558,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                                       placeholder: (_, __) => Container(
                                         color: ColoresApp.fondoSuperficie,
                                         child: const Center(
-                                          child: CupertinoActivityIndicator(),
+                                          child: FernecitoLoader.inline(size: 16),
                                         ),
                                       ),
                                       errorWidget: (_, __, ___) => Image.asset(
@@ -642,6 +661,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                                     : flyerAsset,
                                 nombreLocal: localNombre,
                                 avatarLocal: localAvatar,
+                                localEsPionero: _localEsPionero,
                               ),
                             ),
                           );
@@ -1015,6 +1035,9 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
       _mostrarDialogoReservaExitosa(context);
     }
 
+    // Invalidar Mi Actividad para que el próximo tab traiga el token nuevo.
+    ServicioActividadUsuario.instancia.invalidar();
+
     _cargarDatos().catchError(
       (Object e) => debugPrint('⚠️ reload tras reserva (ignorable): $e'),
     );
@@ -1054,11 +1077,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                     ],
                   ),
                   borderRadius: BorderRadius.circular(26),
-                  border: Border.all(
-                    color: ColoresApp.principalMarca.withOpacity(0.35),
-                    width: 1,
-                  ),
-                  boxShadow: [
+                                    boxShadow: [
                     BoxShadow(
                       color: ColoresApp.principalMarca.withOpacity(0.35),
                       blurRadius: 40,
@@ -1243,8 +1262,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                 decoration: BoxDecoration(
                   color: ColoresApp.fondoSuperficie,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: color.withOpacity(0.4)),
-                  boxShadow: [
+                                    boxShadow: [
                     BoxShadow(
                       color: color.withOpacity(0.35),
                       blurRadius: 32,
@@ -1362,10 +1380,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                 decoration: BoxDecoration(
                   color: ColoresApp.fondoSuperficie.withValues(alpha: 0.62),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: ColoresApp.textoSecundario.withValues(alpha: 0.18),
-                  ),
-                ),
+                                  ),
                 child: Column(
                   children: [
                     Icon(
@@ -1441,8 +1456,9 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok) throw Exception('No se pudo abrir');
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         _mostrarError('No pudimos abrir el link. Probá copiarlo del local.');
+      }
     }
   }
 
@@ -1600,11 +1616,7 @@ class _TarjetaInfoEvento extends StatelessWidget {
               decoration: BoxDecoration(
                 color: ColoresApp.flashPromo.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: ColoresApp.flashPromo.withOpacity(0.45),
-                  width: 1,
-                ),
-              ),
+                              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1657,8 +1669,7 @@ class _ChipInfo extends StatelessWidget {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withOpacity(0.7),
         borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: color.withOpacity(0.4), width: 1),
-      ),
+              ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1870,7 +1881,7 @@ class _TarjetaReservaYPromos extends StatelessWidget {
                       const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CupertinoActivityIndicator(color: Colors.white),
+                        child: FernecitoLoader.inline(size: 16, color: Colors.white),
                       )
                     else
                       const Icon(
@@ -1961,11 +1972,7 @@ class _TarjetaReservaYPromos extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: ColoresApp.fondoPrincipal.withOpacity(0.55),
                   borderRadius: BorderRadius.circular(50),
-                  border: Border.all(
-                    color: ColoresApp.principalMarca.withOpacity(0.55),
-                    width: 1.2,
-                  ),
-                ),
+                                  ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
@@ -2077,10 +2084,7 @@ class _BotonPoolsEvento extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: ColoresApp.principalMarca.withValues(alpha: 0.15),
-                border: Border.all(
-                  color: ColoresApp.principalMarca.withValues(alpha: 0.5),
-                ),
-              ),
+                              ),
               child: Icon(
                 CupertinoIcons.person_2_fill,
                 size: 22,
@@ -2260,10 +2264,7 @@ class _BottomSheetReservaListaState extends State<_BottomSheetReservaLista> {
                     decoration: BoxDecoration(
                       color: ColoresApp.fondoPrincipal,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: ColoresApp.principalMarca.withOpacity(0.3),
-                      ),
-                    ),
+                                          ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       mainAxisSize: MainAxisSize.min,
@@ -2315,10 +2316,7 @@ class _BottomSheetReservaListaState extends State<_BottomSheetReservaLista> {
                     decoration: BoxDecoration(
                       color: ColoresApp.flashPromo.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: ColoresApp.flashPromo.withOpacity(0.45),
-                      ),
-                    ),
+                                          ),
                     child: Row(
                       children: [
                         Icon(
@@ -2608,7 +2606,7 @@ class _CardMasOpcionesReal extends StatelessWidget {
                       placeholder: (_, __) => Container(
                         color: ColoresApp.fondoSuperficie,
                         child: const Center(
-                          child: CupertinoActivityIndicator(),
+                          child: FernecitoLoader.inline(size: 16),
                         ),
                       ),
                       errorWidget: (_, __, ___) => Container(
@@ -2696,11 +2694,17 @@ class _CardLocalDetalle extends StatelessWidget {
   // Color dorado distintivo para los locales pioneros.
   static const Color _colorPionero = Color(0xFFE0B800);
 
+  static String _badgeBestChoice(String? ubicacion) {
+    if (ubicacion == null || ubicacion.trim().isEmpty) return 'Best Choice';
+    final ciudad = ubicacion.split(',').first.trim();
+    if (ciudad.isEmpty) return 'Best Choice';
+    return 'Best Choice · $ciudad';
+  }
+
   @override
   Widget build(BuildContext context) {
     final tema = ColoresApp.principalMarca;
 
-    final acento = esPionero ? _colorPionero : tema;
     return GestureDetector(
       onTap: onVerLocal,
       behavior: HitTestBehavior.opaque,
@@ -2711,14 +2715,13 @@ class _CardLocalDetalle extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              acento.withValues(alpha: 0.20),
+              tema.withValues(alpha: 0.20),
               ColoresApp.fondoSuperficie,
             ],
           ),
-          border: Border.all(color: acento.withValues(alpha: 0.40), width: 1.5),
-          boxShadow: [
+                    boxShadow: [
             BoxShadow(
-              color: acento.withValues(alpha: 0.14),
+              color: tema.withValues(alpha: 0.14),
               blurRadius: 18,
               offset: const Offset(0, 6),
             ),
@@ -2806,20 +2809,18 @@ class _CardLocalDetalle extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            // Chip dorado de Pionero (el verificado ya se ve en la insignia)
             if (esPionero)
               Align(
                 alignment: Alignment.centerLeft,
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 14),
                   child: _ChipEstadoLocal(
-                    icono: CupertinoIcons.rosette,
-                    texto: 'Pionero',
+                    icono: CupertinoIcons.star_fill,
+                    texto: _badgeBestChoice(ubicacion),
                     color: _colorPionero,
                   ),
                 ),
               ),
-            // Calificación del lugar
             Text(
               'CALIFICACIÓN DEL LUGAR',
               style: GoogleFonts.baloo2(
@@ -2877,8 +2878,7 @@ class _ChipEstadoLocal extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: color.withValues(alpha: 0.32)),
-      ),
+              ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2905,54 +2905,19 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = esPionero
-        ? _CardLocalDetalle._colorPionero
-        : ColoresApp.principalMarca;
-    return Container(
-      width: 64,
-      height: 64,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: color.withValues(alpha: 0.55), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.28),
-            blurRadius: 12,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
-      child: ClipOval(
-        child: _avatarUrlEsAsset(avatar)
-            ? Image.asset(
-                avatar,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: ColoresApp.fondoSuperficie,
-                  child: const Icon(
-                    CupertinoIcons.bag_fill,
-                    color: ColoresApp.textoSecundario,
-                    size: 26,
-                  ),
-                ),
-              )
-            : CachedNetworkImage(
-                imageUrl: avatar,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(
-                  color: ColoresApp.fondoSuperficie,
-                  child: const CupertinoActivityIndicator(),
-                ),
-                errorWidget: (_, __, ___) => Container(
-                  color: ColoresApp.fondoSuperficie,
-                  child: const Icon(
-                    CupertinoIcons.bag_fill,
-                    color: ColoresApp.textoSecundario,
-                    size: 26,
-                  ),
-                ),
-              ),
-      ),
+    final color = AvatarLocal.colorBorde(esPionero: esPionero);
+    return AvatarLocal(
+      imageUrl: avatar,
+      size: 64,
+      esPionero: esPionero,
+      placeholderIcon: CupertinoIcons.bag_fill,
+      boxShadow: [
+        BoxShadow(
+          color: color.withValues(alpha: 0.28),
+          blurRadius: 12,
+          spreadRadius: 1,
+        ),
+      ],
     );
   }
 }
@@ -3041,8 +3006,7 @@ class _OverlayCargando extends StatelessWidget {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: ColoresApp.principalMarca.withOpacity(0.3)),
-        boxShadow: [
+                boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.4),
             blurRadius: 24,
@@ -3053,13 +3017,10 @@ class _OverlayCargando extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 36,
-            height: 36,
-            child: CupertinoActivityIndicator(
-              color: ColoresApp.principalMarca,
-              radius: 16,
-            ),
+          const FernecitoLoader(
+            size: 28,
+            compact: true,
+            circular: true,
           ),
           const SizedBox(height: 14),
           Text(
@@ -3171,7 +3132,7 @@ class _CarruselMasEventosState extends State<_CarruselMasEventos> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CupertinoActivityIndicator(radius: 11),
+              const FernecitoLoader.inline(size: 22),
               const SizedBox(height: 8),
               Text(
                 'Cargando más eventos…',
@@ -3258,8 +3219,7 @@ class _BannerInvitacionRrpp extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: acento.withOpacity(0.45), width: 1.2),
-      ),
+              ),
       child: Row(
         children: [
           Container(

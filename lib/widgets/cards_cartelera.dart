@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
+import 'avatar_local.dart';
 
 class EventoCartelera {
   const EventoCartelera({
@@ -30,6 +31,7 @@ class EventoCartelera {
     this.cupoMax,
     this.cuposLibres,
     this.localVerificado = false,
+    this.localEsPionero = false,
   });
 
   final String idEvento;
@@ -50,6 +52,7 @@ class EventoCartelera {
   final int? cupoMax;
   final int? cuposLibres;
   final bool localVerificado;
+  final bool localEsPionero;
 }
 
 /// Card grande (top / top_ultra). Aspect ratio ~9:14, flyer protagonista.
@@ -91,11 +94,7 @@ class CardEventoGrande extends StatelessWidget {
                 ),
               // Badge promo (esquina sup der)
               if (evento.tienePromo)
-                const Positioned(
-                  top: 10,
-                  right: 10,
-                  child: _BadgePromo(),
-                ),
+                const Positioned(top: 10, right: 10, child: _BadgePromo()),
               // Info al pie con badge "Quedan N 🔥" arriba del título si aplica
               Positioned(
                 left: 12,
@@ -106,6 +105,7 @@ class CardEventoGrande extends StatelessWidget {
                   nombreLocal: evento.nombreLocal,
                   avatarLocal: evento.avatarLocal,
                   localVerificado: evento.localVerificado,
+                  localEsPionero: evento.localEsPionero,
                   estiloGrande: true,
                   badgeCupos: _mostrarFomo()
                       ? _BadgeCuposFomo(
@@ -171,7 +171,11 @@ class CardEventoMediano extends StatelessWidget {
                   ),
                 ),
               if (evento.tienePromo)
-                const Positioned(top: 8, right: 8, child: _BadgePromo(compacto: true)),
+                const Positioned(
+                  top: 8,
+                  right: 8,
+                  child: _BadgePromo(compacto: true),
+                ),
               Positioned(
                 left: 10,
                 right: 10,
@@ -181,6 +185,7 @@ class CardEventoMediano extends StatelessWidget {
                   nombreLocal: evento.nombreLocal,
                   avatarLocal: evento.avatarLocal,
                   localVerificado: evento.localVerificado,
+                  localEsPionero: evento.localEsPionero,
                   estiloGrande: false,
                   badgeCupos: _mostrarFomoMediano()
                       ? _BadgeCuposFomo(
@@ -226,7 +231,11 @@ class CardEventoGrid extends StatelessWidget {
               _Flyer(url: evento.urlFlyer),
               _GradienteSobreFlyer(),
               if (evento.tienePromo)
-                const Positioned(top: 6, right: 6, child: _BadgePromo(compacto: true)),
+                const Positioned(
+                  top: 6,
+                  right: 6,
+                  child: _BadgePromo(compacto: true),
+                ),
               Positioned(
                 left: 8,
                 right: 8,
@@ -276,6 +285,7 @@ class CardLocalPopular extends StatelessWidget {
     this.urlAvatar,
     this.rubro,
     this.verificado = false,
+    this.esPionero = false,
     required this.onTap,
   });
   final String idLocal;
@@ -283,54 +293,35 @@ class CardLocalPopular extends StatelessWidget {
   final String? urlAvatar;
   final String? rubro;
   final bool verificado;
+  final bool esPionero;
   final VoidCallback onTap;
+
+  static const doradoPionero = AvatarLocal.doradoPionero;
 
   @override
   Widget build(BuildContext context) {
+    final sello = esPionero || verificado;
+    final colorSello = esPionero ? doradoPionero : ColoresApp.principalMarca;
+
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
         width: 96,
         child: Column(
           children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: verificado
-                      ? ColoresApp.principalMarca
-                      : ColoresApp.textoSecundario.withOpacity(0.25),
-                  width: 2,
+            AvatarLocal(
+              imageUrl: urlAvatar,
+              size: 88,
+              esPionero: esPionero,
+              placeholderIcon: CupertinoIcons.house_fill,
+              borderWidth: 2,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: (urlAvatar != null && urlAvatar!.isNotEmpty)
-                    ? CachedNetworkImage(
-                        imageUrl: urlAvatar!,
-                        fit: BoxFit.cover,
-                        placeholder: (c, _) =>
-                            Container(color: ColoresApp.fondoSuperficie),
-                        errorWidget: (c, _, __) => Container(
-                          color: ColoresApp.fondoSuperficie,
-                          child: const Icon(CupertinoIcons.house_fill,
-                              color: ColoresApp.textoSecundario, size: 28),
-                        ),
-                      )
-                    : Container(
-                        color: ColoresApp.fondoSuperficie,
-                        child: const Icon(CupertinoIcons.house_fill,
-                            color: ColoresApp.textoSecundario, size: 28),
-                      ),
-              ),
+              ],
             ),
             const SizedBox(height: 6),
             Row(
@@ -349,10 +340,13 @@ class CardLocalPopular extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (verificado) ...[
+                if (sello) ...[
                   const SizedBox(width: 3),
-                  Icon(CupertinoIcons.checkmark_seal_fill,
-                      size: 11, color: ColoresApp.principalMarca),
+                  Icon(
+                    CupertinoIcons.checkmark_seal_fill,
+                    size: 11,
+                    color: colorSello,
+                  ),
                 ],
               ],
             ),
@@ -387,20 +381,42 @@ class _Flyer extends StatelessWidget {
       return Container(
         color: ColoresApp.fondoSuperficie,
         alignment: Alignment.center,
-        child: const Icon(CupertinoIcons.photo,
-            color: ColoresApp.textoSecundario, size: 28),
+        child: const Icon(
+          CupertinoIcons.photo,
+          color: ColoresApp.textoSecundario,
+          size: 28,
+        ),
       );
     }
-    return CachedNetworkImage(
-      imageUrl: url,
-      fit: BoxFit.cover,
-      placeholder: (c, _) => Container(color: ColoresApp.fondoSuperficie),
-      errorWidget: (c, _, __) => Container(
-        color: ColoresApp.fondoSuperficie,
-        alignment: Alignment.center,
-        child: const Icon(CupertinoIcons.photo,
-            color: ColoresApp.textoSecundario, size: 28),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final dpr = MediaQuery.devicePixelRatioOf(context);
+        final cacheWidth = (constraints.maxWidth * dpr).clamp(320, 900).round();
+        final cacheHeight = (constraints.maxHeight * dpr)
+            .clamp(460, 1400)
+            .round();
+        return CachedNetworkImage(
+          imageUrl: url,
+          fit: BoxFit.cover,
+          memCacheWidth: cacheWidth,
+          memCacheHeight: cacheHeight,
+          maxWidthDiskCache: cacheWidth,
+          maxHeightDiskCache: cacheHeight,
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          filterQuality: FilterQuality.medium,
+          placeholder: (c, _) => Container(color: ColoresApp.fondoSuperficie),
+          errorWidget: (c, _, __) => Container(
+            color: ColoresApp.fondoSuperficie,
+            alignment: Alignment.center,
+            child: const Icon(
+              CupertinoIcons.photo,
+              color: ColoresApp.textoSecundario,
+              size: 28,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -427,7 +443,6 @@ class _GradienteSobreFlyer extends StatelessWidget {
     );
   }
 }
-
 
 class _BadgePromo extends StatelessWidget {
   const _BadgePromo({this.compacto = false});
@@ -481,8 +496,11 @@ class _BadgeCuposFomo extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(CupertinoIcons.flame_fill,
-              color: Colors.white, size: compacto ? 11 : 12),
+          Icon(
+            CupertinoIcons.flame_fill,
+            color: Colors.white,
+            size: compacto ? 11 : 12,
+          ),
           const SizedBox(width: 3),
           Text(
             compacto ? '$cuposLibres' : 'Quedan $cuposLibres',
@@ -515,13 +533,15 @@ class _BadgeFecha extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.55),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.18)),
-      ),
+              ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(CupertinoIcons.calendar,
-              size: compacto ? 11 : 12, color: Colors.white),
+          Icon(
+            CupertinoIcons.calendar,
+            size: compacto ? 11 : 12,
+            color: Colors.white,
+          ),
           const SizedBox(width: 4),
           Text(
             fechaTexto,
@@ -543,6 +563,7 @@ class _InfoEventoPie extends StatelessWidget {
     required this.nombreLocal,
     required this.avatarLocal,
     required this.localVerificado,
+    required this.localEsPionero,
     required this.estiloGrande,
     this.badgeCupos,
   });
@@ -550,6 +571,7 @@ class _InfoEventoPie extends StatelessWidget {
   final String nombreLocal;
   final String? avatarLocal;
   final bool localVerificado;
+  final bool localEsPionero;
   final bool estiloGrande;
 
   /// Badge opcional que se renderiza arriba del título (donde antes iba la fecha).
@@ -562,10 +584,7 @@ class _InfoEventoPie extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (badgeCupos != null) ...[
-          badgeCupos!,
-          const SizedBox(height: 6),
-        ],
+        if (badgeCupos != null) ...[badgeCupos!, const SizedBox(height: 6)],
         Text(
           titulo,
           maxLines: 2,
@@ -582,21 +601,14 @@ class _InfoEventoPie extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (avatarLocal != null && avatarLocal!.isNotEmpty)
-              Container(
-                width: estiloGrande ? 18 : 14,
-                height: estiloGrande ? 18 : 14,
-                margin: const EdgeInsets.only(right: 6),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white24, width: 0.5),
-                ),
-                child: ClipOval(
-                  child: CachedNetworkImage(
-                    imageUrl: avatarLocal!,
-                    fit: BoxFit.cover,
-                    errorWidget: (c, _, __) =>
-                        Container(color: Colors.white24),
-                  ),
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: AvatarLocal(
+                  imageUrl: avatarLocal,
+                  size: estiloGrande ? 18 : 14,
+                  esPionero: localEsPionero,
+                  placeholderIcon: CupertinoIcons.house_fill,
+                  borderWidth: estiloGrande ? 1.5 : 1.2,
                 ),
               ),
             Flexible(
@@ -611,11 +623,15 @@ class _InfoEventoPie extends StatelessWidget {
                 ),
               ),
             ),
-            if (localVerificado) ...[
+            if (localEsPionero || localVerificado) ...[
               const SizedBox(width: 4),
-              Icon(CupertinoIcons.checkmark_seal_fill,
-                  size: estiloGrande ? 13 : 11,
-                  color: ColoresApp.principalMarca),
+              Icon(
+                CupertinoIcons.checkmark_seal_fill,
+                size: estiloGrande ? 13 : 11,
+                color: localEsPionero
+                    ? CardLocalPopular.doradoPionero
+                    : ColoresApp.principalMarca,
+              ),
             ],
           ],
         ),

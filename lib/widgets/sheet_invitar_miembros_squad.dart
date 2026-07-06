@@ -11,6 +11,7 @@ import '../core/servicio_amigos.dart';
 import '../core/servicio_squads.dart';
 import '../models/social.dart';
 import '../PANTALLAS/pantalla_perfil_usuarios.dart';
+import 'fernecito_loader.dart';
 import 'social_ui.dart';
 
 /// Devuelve los ids invitados si el usuario confirmó.
@@ -155,7 +156,7 @@ class _InvitarMiembrosSquadSheetState extends State<_InvitarMiembrosSquadSheet> 
             child: _cargandoAmigos && !mostrarBusqueda
                 ? const Padding(
                     padding: EdgeInsets.all(24),
-                    child: CupertinoActivityIndicator(),
+                    child: FernecitoLoaderCentro(size: 28),
                   )
                 : ListView(
                     shrinkWrap: true,
@@ -164,7 +165,7 @@ class _InvitarMiembrosSquadSheetState extends State<_InvitarMiembrosSquadSheet> 
                       if (_buscando)
                         const Padding(
                           padding: EdgeInsets.all(16),
-                          child: Center(child: CupertinoActivityIndicator()),
+                          child: FernecitoLoaderCentro(size: 28),
                         ),
                       if (mostrarBusqueda) ...[
                         Padding(

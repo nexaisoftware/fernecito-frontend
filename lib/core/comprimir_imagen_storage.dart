@@ -3,12 +3,10 @@
 /// 🔁 SYNC: espejo en `frontend_locales/lib/core/comprimir_imagen_storage.dart`.
 library;
 
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image/image.dart' as img;
-import 'package:image_picker/image_picker.dart';
 
 /// Tipo de imagen → tamaño máximo del lado largo y calidad JPEG.
 enum PerfilImagenStorage {
@@ -23,6 +21,9 @@ enum PerfilImagenStorage {
 
   /// `banners_locales`.
   bannerLocal(maxLado: 1200, calidadJpg: 74, webpEnMovil: true),
+
+  /// `banners-usuarios` — portada del perfil de usuario.
+  bannerUsuario(maxLado: 1200, calidadJpg: 74, webpEnMovil: true),
 
   /// `fotos_locales` — carrusel (5 fotos).
   fotoLocal(maxLado: 1100, calidadJpg: 72, webpEnMovil: true),

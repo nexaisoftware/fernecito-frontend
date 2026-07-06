@@ -8,6 +8,12 @@
     "description": "Fernecito — descubrí la noche de Córdoba.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "permissions": [
+        {
+            "name": "geolocation",
+            "description": "Mostrarte en el mapa y centrar locales y eventos cerca tuyo."
+        }
+    ],
     "icons": [
         {
             "src": "icons/Icon-192.png",

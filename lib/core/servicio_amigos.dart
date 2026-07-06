@@ -2,6 +2,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 import '../models/social.dart';
+import 'cache_memoria.dart';
 import 'supabase_client.dart';
 
 /// Servicio de amistades. Usa los RPCs `amistad_*` (SECURITY DEFINER) del backend.
@@ -10,18 +11,36 @@ class ServicioAmigos {
   factory ServicioAmigos() => _instancia;
   ServicioAmigos._interno();
 
+  static const _ttlSuave = Duration(seconds: 90);
+  final _cache = CacheMemoria<AmistadesData>();
+
   String? get _uid => ServicioSupabase().usuarioActual?.id;
 
-  /// Trae amigos + solicitudes recibidas + enviadas en una sola llamada.
-  Future<AmistadesData> listar() async {
-    if (_uid == null) return const AmistadesData();
+  bool get tieneCache => _cache.tiene(_uid);
+  AmistadesData? get cache => _cache.tiene(_uid) ? _cache.data : null;
+
+  void invalidarCache() => _cache.clear();
+
+  /// Trae amigos + solicitudes. [forzarCompleto] ignora cache (pull-to-refresh).
+  Future<AmistadesData> listar({bool forzarCompleto = false}) async {
+    final uid = _uid;
+    if (uid == null) {
+      _cache.clear();
+      return const AmistadesData();
+    }
+    if (!forzarCompleto && _cache.fresco(uid, _ttlSuave)) {
+      return _cache.data!;
+    }
     try {
       final res = await ServicioSupabase().cliente.rpc('amistad_listar');
-      if (res is Map) return AmistadesData.fromMap(Map<String, dynamic>.from(res));
-      return const AmistadesData();
+      final data = res is Map
+          ? AmistadesData.fromMap(Map<String, dynamic>.from(res))
+          : const AmistadesData();
+      _cache.set(uid, data);
+      return data;
     } catch (e) {
       debugPrint('⚠️ amistad_listar: $e');
-      return const AmistadesData();
+      return _cache.tiene(uid) ? _cache.data! : const AmistadesData();
     }
   }
 
@@ -32,6 +51,7 @@ class ServicioAmigos {
       final res = await ServicioSupabase()
           .cliente
           .rpc('amistad_solicitar', params: {'p_destino': idDestino});
+      invalidarCache();
       if (res is Map) return res['estado']?.toString();
       return 'pendiente';
     } catch (e) {
@@ -50,6 +70,7 @@ class ServicioAmigos {
         'p_relacion': idRelacion,
         'p_aceptar': aceptar,
       });
+      invalidarCache();
       return true;
     } catch (e) {
       debugPrint('⚠️ amistad_responder: $e');
@@ -63,6 +84,7 @@ class ServicioAmigos {
       await ServicioSupabase()
           .cliente
           .rpc('amistad_eliminar', params: {'p_otro': idOtro});
+      invalidarCache();
       return true;
     } catch (e) {
       debugPrint('⚠️ amistad_eliminar: $e');

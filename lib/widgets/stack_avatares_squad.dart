@@ -71,11 +71,7 @@ class StackAvataresSquad extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: ColoresApp.principalMarca,
-                    border: Border.all(
-                      color: Colors.white,
-                      width: AvatarBordeBlanco.bordeAncho,
-                    ),
-                    boxShadow: [
+                                        boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.25),
                         blurRadius: 6,

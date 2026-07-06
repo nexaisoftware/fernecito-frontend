@@ -7,6 +7,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors;
 
 import '../core/constants.dart';
+import 'fernecito_loader.dart';
 
 /// Borde blanco estándar (rompehielo, stacks de squad, hero de perfil).
 class AvatarBordeBlanco extends StatelessWidget {
@@ -28,8 +29,7 @@ class AvatarBordeBlanco extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: bordeAncho),
-        boxShadow: [
+                boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.28),
             blurRadius: 10,
@@ -90,7 +90,7 @@ class AvatarUsuario extends StatelessWidget {
                   imageUrl: avatar,
                   fit: BoxFit.cover,
                   alignment: Alignment.center,
-                  placeholder: (_, __) => const Center(child: CupertinoActivityIndicator()),
+                  placeholder: (_, __) => const FernecitoLoaderCentro(),
                   errorWidget: (_, __, ___) => _placeholder(size),
                 ),
     );

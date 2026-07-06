@@ -32,9 +32,6 @@ class BotonRompehielo extends StatelessWidget {
         ? ColoresApp.fondoSuperficie
         : ColoresApp.principalMarca;
     final fg = esSecundario ? ColoresApp.principalMarca : Colors.white;
-    final border = esSecundario
-        ? Border.all(color: ColoresApp.principalMarca.withValues(alpha: 0.45))
-        : null;
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
@@ -45,16 +42,6 @@ class BotonRompehielo extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(16),
-          border: border,
-          boxShadow: esSecundario
-              ? null
-              : [
-                  BoxShadow(
-                    color: ColoresApp.principalMarca.withValues(alpha: 0.22),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,

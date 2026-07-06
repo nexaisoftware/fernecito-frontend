@@ -7,6 +7,19 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
+import '../core/tema_fernecito.dart';
+import 'fernecito_loader.dart';
+
+/// Reserva inferior en tab Social embebido (navbar home + switch flotante).
+const double kSocialNavHomeAltura = 70.0;
+const double kSocialSwitchFlotanteGap = 10.0;
+
+double reservaInferiorSocialEmbebido(BuildContext context) {
+  return MediaQuery.paddingOf(context).bottom +
+      kSocialNavHomeAltura +
+      kSocialSwitchFlotanteGap +
+      54;
+}
 
 /// Encabezado de sección (título + opcional subtítulo).
 class EncabezadoSeccionSocial extends StatelessWidget {
@@ -86,12 +99,6 @@ class CardSuperficieSocial extends StatelessWidget {
         ],
       ),
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(
-        color: leida
-            ? accent.withValues(alpha: 0.12)
-            : accent.withValues(alpha: 0.38),
-        width: leida ? 1 : 1.5,
-      ),
       boxShadow: leida
           ? [
               BoxShadow(
@@ -158,9 +165,6 @@ class BotonAccionSocial extends StatelessWidget {
               ? ColoresApp.fondoSuperficie.withValues(alpha: 0.9)
               : ColoresApp.principalMarca,
           borderRadius: BorderRadius.circular(50),
-          border: secundario
-              ? Border.all(color: ColoresApp.principalMarca.withValues(alpha: 0.35))
-              : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -191,12 +195,16 @@ class AvatarSocial extends StatelessWidget {
   final String url;
   final double size;
   final VoidCallback? onTap;
+  final Color? borderColor;
+  final double borderWidth;
 
   const AvatarSocial({
     super.key,
     required this.url,
     this.size = 52,
     this.onTap,
+    this.borderColor,
+    this.borderWidth = 1.5,
   });
 
   @override
@@ -204,23 +212,23 @@ class AvatarSocial extends StatelessWidget {
     final child = Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: ColoresApp.principalMarca.withValues(alpha: 0.45),
-          width: 1.5,
-        ),
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle),
       child: ClipOval(
         child: url.isEmpty
-            ? Icon(CupertinoIcons.person_fill,
-                color: ColoresApp.textoSecundario, size: size * 0.45)
+            ? Icon(
+                CupertinoIcons.person_fill,
+                color: ColoresApp.textoSecundario,
+                size: size * 0.45,
+              )
             : CachedNetworkImage(
                 imageUrl: url,
                 fit: BoxFit.cover,
-                placeholder: (_, __) => const CupertinoActivityIndicator(),
-                errorWidget: (_, __, ___) => Icon(CupertinoIcons.person_fill,
-                    color: ColoresApp.textoSecundario, size: size * 0.45),
+                placeholder: (_, __) => const FernecitoLoader.inline(size: 16),
+                errorWidget: (_, __, ___) => Icon(
+                  CupertinoIcons.person_fill,
+                  color: ColoresApp.textoSecundario,
+                  size: size * 0.45,
+                ),
               ),
       ),
     );
@@ -249,10 +257,6 @@ class InsigniaCandadoPrivado extends StatelessWidget {
         decoration: BoxDecoration(
           color: ColoresApp.fondoSuperficie,
           shape: BoxShape.circle,
-          border: Border.all(
-            color: ColoresApp.principalMarca.withValues(alpha: 0.55),
-            width: 1.2,
-          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.28),
@@ -329,10 +333,7 @@ class ChipMetricaPerfil extends StatelessWidget {
               color: ColoresApp.principalMarca.withValues(alpha: 0.14),
             ),
             child: IconTheme(
-              data: IconThemeData(
-                size: 16,
-                color: ColoresApp.principalMarca,
-              ),
+              data: IconThemeData(size: 16, color: ColoresApp.principalMarca),
               child: icono,
             ),
           ),
@@ -376,11 +377,7 @@ class AvatarSocialGlow extends StatelessWidget {
   final String url;
   final double size;
 
-  const AvatarSocialGlow({
-    super.key,
-    required this.url,
-    this.size = 52,
-  });
+  const AvatarSocialGlow({super.key, required this.url, this.size = 52});
 
   @override
   Widget build(BuildContext context) {
@@ -418,7 +415,9 @@ class AvatarSocialGlow extends StatelessWidget {
                 fit: BoxFit.cover,
                 placeholder: (_, __) => ColoredBox(
                   color: ColoresApp.fondoSuperficie,
-                  child: CupertinoActivityIndicator(radius: size * 0.12),
+                  child: FernecitoLoader.inline(
+                    size: (size * 0.24).clamp(14.0, 28.0),
+                  ),
                 ),
                 errorWidget: (_, __, ___) => ColoredBox(
                   color: ColoresApp.fondoSuperficie,
@@ -434,72 +433,202 @@ class AvatarSocialGlow extends StatelessWidget {
   }
 }
 
+/// Punto o contador de novedades (estilo iOS) sobre botones de acceso.
+class IndicadorNovedadesSocial extends StatelessWidget {
+  const IndicadorNovedadesSocial({super.key, this.cantidad = 0});
+
+  final int cantidad;
+
+  @override
+  Widget build(BuildContext context) {
+    if (cantidad > 0) {
+      final label = cantidad > 99 ? '99+' : '$cantidad';
+      return Container(
+        constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+        padding: const EdgeInsets.symmetric(horizontal: 4.5),
+        decoration: BoxDecoration(
+          color: ColoresApp.principalMarca,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: GoogleFonts.baloo2(
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+            height: 1,
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: 7,
+      height: 7,
+      decoration: BoxDecoration(
+        color: ColoresApp.principalMarca,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
 /// Toggle segmentado compacto (estilo minimalista de cartelera/notificaciones).
 class ToggleSegmentadoSocial extends StatelessWidget {
   final List<String> opciones;
   final int indice;
   final ValueChanged<int> onChanged;
+  final double anchoMaximo;
+  final double? anchoMinimo;
+  final double paddingVertical;
+  final double fontSize;
+  final bool sinBorde;
+  final bool sinGlowActivo;
+  final bool centrar;
 
   const ToggleSegmentadoSocial({
     super.key,
     required this.opciones,
     required this.indice,
     required this.onChanged,
+    this.anchoMaximo = 260,
+    this.anchoMinimo,
+    this.paddingVertical = 5,
+    this.fontSize = 13,
+    this.sinBorde = false,
+    this.sinGlowActivo = false,
+    this.centrar = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final accent = ColoresApp.principalMarca;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 260),
-        child: Container(
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: ColoresApp.fondoSuperficie.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(50),
-            border: Border.all(color: accent.withValues(alpha: 0.10)),
-          ),
-          child: Row(
-            children: List.generate(opciones.length, (i) {
-              final activo = i == indice;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => onChanged(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut,
-                    padding: const EdgeInsets.symmetric(vertical: 5),
-                    decoration: BoxDecoration(
-                      color: activo ? accent : Colors.transparent,
-                      borderRadius: BorderRadius.circular(50),
-                      boxShadow: activo
-                          ? [
-                              BoxShadow(
-                                color: accent.withValues(alpha: 0.30),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ]
-                          : null,
-                    ),
-                    child: Text(
-                      opciones[i],
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.baloo2(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: activo ? Colors.white : ColoresApp.textoSecundario,
-                      ),
+    final pill = ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: anchoMaximo,
+        minWidth: anchoMinimo ?? 0,
+      ),
+      child: Container(
+        padding: EdgeInsets.all(sinBorde ? 2 : 3),
+        decoration: BoxDecoration(
+          color: const Color(
+            0xFF1C1C20,
+          ).withValues(alpha: sinBorde ? 0.72 : 0.92),
+          borderRadius: BorderRadius.circular(50),
+        ),
+        child: Row(
+          children: List.generate(opciones.length, (i) {
+            final activo = i == indice;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => onChanged(i),
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.symmetric(vertical: paddingVertical),
+                  decoration: BoxDecoration(
+                    color: activo ? accent : Colors.transparent,
+                    borderRadius: BorderRadius.circular(50),
+                    boxShadow: activo && !sinGlowActivo
+                        ? [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.30),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Text(
+                    opciones[i],
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.baloo2(
+                      fontSize: fontSize,
+                      fontWeight: FontWeight.w800,
+                      color: activo ? Colors.white : ColoresApp.textoSecundario,
                     ),
                   ),
                 ),
-              );
-            }),
-          ),
+              ),
+            );
+          }),
         ),
       ),
+    );
+    if (!centrar) return pill;
+    return Center(child: pill);
+  }
+}
+
+/// Switch Personas/Squads flotante: sombra acotada al pill + aureola del tema.
+class SwitchExplorarFlotanteSocial extends StatelessWidget {
+  const SwitchExplorarFlotanteSocial({
+    super.key,
+    required this.indice,
+    required this.onChanged,
+  });
+
+  final int indice;
+  final ValueChanged<int> onChanged;
+
+  static const _ancho = 300.0;
+  static const _radio = 50.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Color>(
+      valueListenable: TemaFernecito.instancia.colorActual,
+      builder: (context, accent, _) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(_radio + 14),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: 0.38),
+                blurRadius: 34,
+                spreadRadius: 2,
+              ),
+              BoxShadow(
+                color: accent.withValues(alpha: 0.20),
+                blurRadius: 52,
+                spreadRadius: 8,
+              ),
+            ],
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(_radio),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.44),
+                  blurRadius: 22,
+                  spreadRadius: 0.5,
+                  offset: const Offset(0, 7),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.20),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: ToggleSegmentadoSocial(
+              opciones: const ['Personas', 'Squads'],
+              indice: indice,
+              onChanged: onChanged,
+              anchoMaximo: _ancho,
+              anchoMinimo: _ancho,
+              paddingVertical: 7,
+              fontSize: 13.5,
+              sinBorde: true,
+              sinGlowActivo: false,
+              centrar: false,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -537,11 +666,14 @@ class BarraBusquedaSocial extends StatelessWidget {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: accent.withValues(alpha: 0.25), width: 1),
       ),
       child: Row(
         children: [
-          Icon(CupertinoIcons.search, size: 19, color: ColoresApp.textoPrincipal),
+          Icon(
+            CupertinoIcons.search,
+            size: 19,
+            color: ColoresApp.textoPrincipal,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: esCampo
@@ -579,7 +711,11 @@ class BarraBusquedaSocial extends StatelessWidget {
     );
 
     final tappable = (onTap != null && !esCampo)
-        ? GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: pill)
+        ? GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: pill,
+          )
         : pill;
 
     if (trailing == null) return tappable;
@@ -619,8 +755,9 @@ class BotonCircularSocial extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: relleno ? accent : ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
-          border: relleno ? null : Border.all(color: accent.withValues(alpha: 0.35)),
+          color: relleno
+              ? accent
+              : ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
         ),
         child: Icon(
           icono,
@@ -647,7 +784,6 @@ class ChipSocial extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: c.withValues(alpha: 0.4)),
       ),
       child: Text(
         texto,

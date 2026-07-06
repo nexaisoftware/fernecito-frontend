@@ -151,11 +151,7 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
         decoration: BoxDecoration(
           color: ColoresApp.fondoSuperficie.withOpacity(0.85),
           shape: BoxShape.circle,
-          border: Border.all(
-            color: ColoresApp.principalMarca.withOpacity(0.25),
-            width: 1,
-          ),
-          boxShadow: [
+                    boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.25),
               blurRadius: 8,
@@ -179,11 +175,7 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withOpacity(0.92),
         borderRadius: BorderRadius.circular(19),
-        border: Border.all(
-          color: ColoresApp.principalMarca.withOpacity(0.45 * t),
-          width: 1,
-        ),
-        boxShadow: [
+                boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3 * t),
             blurRadius: 14 * t,
@@ -209,14 +201,7 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
               ),
               decoration: InputDecoration(
                 isCollapsed: true,
-                border: InputBorder.none,
-                hintText: 'Buscar evento, local, promo…',
-                hintStyle: GoogleFonts.baloo2(
-                  color: ColoresApp.textoSecundario,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
+                              ),
             ),
           ),
           GestureDetector(
@@ -442,11 +427,7 @@ class _Pildora extends StatelessWidget {
         decoration: BoxDecoration(
           color: ColoresApp.fondoSuperficie.withOpacity(0.85),
           borderRadius: BorderRadius.circular(19),
-          border: Border.all(
-            color: color.withOpacity(activo ? 0.55 : 0.18),
-            width: 1,
-          ),
-        ),
+                  ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -513,13 +494,7 @@ class _ChipPlan extends StatelessWidget {
               ? ColoresApp.principalMarca.withOpacity(0.18)
               : ColoresApp.fondoSuperficie.withOpacity(0.85),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: seleccionado
-                ? ColoresApp.principalMarca
-                : ColoresApp.textoSecundario.withOpacity(0.22),
-            width: 1.2,
-          ),
-        ),
+                  ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

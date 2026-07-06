@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/core/jerarquias_data.dart';
+import 'package:fernecito_frontend/core/jerarquias_data.dart';
 
 void main() {
   group('JerarquiasData.desdeSlug — slugs conocidos', () {

@@ -45,6 +45,27 @@ class ServicioSupabase {
     return cliente.storage.from('squad-banners').getPublicUrl(pathOrUrl);
   }
 
+  /// Banner de perfil de usuario (`banners-usuarios`). Path o URL absoluta.
+  String? urlBannerUsuario(String? pathOrUrl) {
+    if (pathOrUrl == null || pathOrUrl.isEmpty) return null;
+    if (pathOrUrl.startsWith('http')) return pathOrUrl;
+    return cliente.storage.from('banners-usuarios').getPublicUrl(pathOrUrl);
+  }
+
+  /// URL de banner de usuario con cache-bust opcional.
+  String? urlBannerUsuarioDisplay(
+    String? pathOrUrl, {
+    String? version,
+  }) {
+    final base = urlBannerUsuario(pathOrUrl);
+    if (base == null) return null;
+    final token = version?.trim();
+    if (token == null || token.isEmpty) return base;
+    final uri = Uri.parse(base);
+    final params = Map<String, String>.from(uri.queryParameters)..['v'] = token;
+    return uri.replace(queryParameters: params).toString();
+  }
+
   /// URL de portada con `?v=` para bust de caché (CDN + CachedNetworkImage).
   String? urlPortadaSquadDisplay(
     String? pathOrUrl, {

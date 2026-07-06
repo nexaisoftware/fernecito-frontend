@@ -24,7 +24,9 @@ import '../core/constants.dart';
 import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
+import '../widgets/recortar_avatar_sheet.dart';
 import 'pantalla_home.dart';
+import '../widgets/fernecito_loader.dart';
 
 // Textos legales mostrados en el modal de "Términos y Privacidad".
 // BORRADOR de partida — revisar con criterio legal antes de producción.
@@ -169,16 +171,23 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     try {
       final XFile? imagen = await _picker.pickImage(
         source: source,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 92,
       );
 
-      if (imagen != null) {
-        final bytes = await imagen.readAsBytes();
-        if (!mounted) return;
-        setState(() => _imagenBytes = bytes);
-      }
+      if (imagen == null) return;
+
+      final bytesOriginales = await imagen.readAsBytes();
+      if (!mounted) return;
+
+      final bytesRecortados = await mostrarRecorteAvatarSheet(
+        context,
+        bytesOriginales,
+      );
+      if (bytesRecortados == null || !mounted) return;
+
+      setState(() => _imagenBytes = bytesRecortados);
     } catch (error) {
       print('❌ Error seleccionando foto: $error');
       _mostrarError('Error al seleccionar foto');
@@ -670,12 +679,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                 padding: EdgeInsets.fromLTRB(20, 10, 20, padding.bottom + 12),
                 decoration: BoxDecoration(
                   color: ColoresApp.fondoPrincipal,
-                  border: Border(
-                    top: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.06),
-                    ),
-                  ),
-                ),
+                                  ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -690,7 +694,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                     borderRadius: BorderRadius.circular(50),
                     onPressed: puedeGuardar ? _crearPerfil : null,
                     child: _guardandoPerfil
-                        ? const CupertinoActivityIndicator(color: Colors.white)
+                        ? const FernecitoLoader.inline(size: 16, color: Colors.white)
                         : Text(
                             'Crear mi perfil',
                             style: GoogleFonts.baloo2(
@@ -727,13 +731,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
             decoration: BoxDecoration(
               color: _aceptoPoliticas ? marca : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: _aceptoPoliticas
-                    ? marca
-                    : ColoresApp.textoSecundario.withValues(alpha: 0.5),
-                width: 2,
-              ),
-            ),
+                          ),
             child: _aceptoPoliticas
                 ? const Icon(CupertinoIcons.checkmark,
                     size: 15, color: Colors.white)
@@ -900,8 +898,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: ColoresApp.fondoSuperficie,
-              border: Border.all(color: marca.withValues(alpha: 0.5), width: 2),
-            ),
+                          ),
             clipBehavior: Clip.antiAlias,
             child: _imagenBytes != null
                 ? Image.memory(_imagenBytes!, fit: BoxFit.cover)
@@ -918,9 +915,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: marca,
-                border:
-                    Border.all(color: ColoresApp.fondoPrincipal, width: 2.5),
-              ),
+                              ),
               child: Icon(CupertinoIcons.camera_fill,
                   size: size * 0.15, color: Colors.white),
             ),
@@ -955,11 +950,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: color,
-                  border: Border.all(
-                    color: sel ? Colors.white : Colors.transparent,
-                    width: 3,
-                  ),
-                  boxShadow: sel
+                                    boxShadow: sel
                       ? [
                           BoxShadow(
                             color: color.withValues(alpha: 0.5),
@@ -998,8 +989,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
+              ),
       child: Column(children: children),
     );
   }
@@ -1046,7 +1036,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     final marca = ColoresApp.principalMarca;
     Widget? trailing;
     if (_validandoUsername) {
-      trailing = const CupertinoActivityIndicator(radius: 9);
+      trailing = const FernecitoLoader.inline(size: 18);
     } else if (_usernameValidado) {
       trailing = Icon(
         _usernameDisponible

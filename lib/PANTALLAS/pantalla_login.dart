@@ -26,6 +26,7 @@ import '../core/auth_redirect.dart';
 import '../core/auth_errors.dart';
 import 'pantalla_singup.dart';
 import 'pantalla_nueva_contrasena.dart';
+import '../widgets/fernecito_loader.dart';
 
 class PantallaLogin extends StatefulWidget {
   const PantallaLogin({super.key});
@@ -503,7 +504,7 @@ class _PantallaLoginState extends State<PantallaLogin>
                     color: colorTema,
                     onPressed: _cargandoLogin ? null : _manejarLoginEmail,
                     child: _cargandoLogin
-                        ? const CupertinoActivityIndicator(color: Colors.white)
+                        ? const FernecitoLoader.inline(size: 16, color: Colors.white)
                         : Text(
                             'Iniciar sesión',
                             style: GoogleFonts.baloo2(
@@ -856,10 +857,7 @@ class _BotonGlass extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.14),
-                ),
-              ),
+                              ),
               child: Center(child: child),
             ),
           ),

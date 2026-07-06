@@ -77,10 +77,7 @@ class _BotonCompartirEventoState extends State<BotonCompartirEvento> {
             decoration: BoxDecoration(
               color: ColoresApp.fondoSuperficie.withValues(alpha: 0.8),
               borderRadius: BorderRadius.circular(50),
-              border: Border.all(
-                color: ColoresApp.principalMarca.withValues(alpha: 0.3),
-              ),
-            ),
+                          ),
             padding: const EdgeInsets.symmetric(vertical: 11),
             child: Icon(Icons.share, size: 17, color: color),
           ),

@@ -7,6 +7,7 @@ import '../core/constants.dart';
 import '../core/servicio_soporte_usuario.dart';
 import '../core/supabase_client.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
+import '../widgets/fernecito_loader.dart';
 
 /// Ayuda y soporte del usuario. El usuario ABRE una solicitud (no la cierra):
 /// se genera un código anti-estafa que queda visible hasta que el owner la
@@ -144,7 +145,7 @@ class _PantallaSoporteState extends State<PantallaSoporte> {
         child: SafeArea(
           bottom: false,
           child: _cargando
-              ? const Center(child: CupertinoActivityIndicator(radius: 14))
+              ? const FernecitoLoaderCentro(size: 28)
               : SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
                   padding: EdgeInsets.fromLTRB(20, 12, 20, padding.bottom + 28),
@@ -194,10 +195,7 @@ class _PantallaSoporteState extends State<PantallaSoporte> {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: ColoresApp.principalMarca.withValues(alpha: 0.16),
-        ),
-      ),
+              ),
       child: Row(
         children: [
           Container(
@@ -249,10 +247,7 @@ class _PantallaSoporteState extends State<PantallaSoporte> {
       decoration: BoxDecoration(
         color: ColoresApp.principalMarca.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: ColoresApp.principalMarca.withValues(alpha: 0.30),
-        ),
-      ),
+              ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -302,10 +297,7 @@ class _PantallaSoporteState extends State<PantallaSoporte> {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: ColoresApp.principalMarca.withValues(alpha: 0.22),
-        ),
-      ),
+              ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -385,10 +377,7 @@ class _PantallaSoporteState extends State<PantallaSoporte> {
             decoration: BoxDecoration(
               color: ColoresApp.peligroMarca.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: ColoresApp.peligroMarca.withValues(alpha: 0.38),
-              ),
-            ),
+                          ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -477,10 +466,7 @@ class _PantallaSoporteState extends State<PantallaSoporte> {
           decoration: BoxDecoration(
             color: ColoresApp.fondoSuperficie.withValues(alpha: 0.55),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: ColoresApp.principalMarca.withValues(alpha: 0.16),
-            ),
-          ),
+                      ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: CupertinoTextField(
             controller: _ctrlMensaje,
@@ -505,10 +491,7 @@ class _PantallaSoporteState extends State<PantallaSoporte> {
           decoration: BoxDecoration(
             color: ColoresApp.fondoSuperficie.withValues(alpha: 0.55),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: ColoresApp.principalMarca.withValues(alpha: 0.16),
-            ),
-          ),
+                      ),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: CupertinoTextField(
             controller: _ctrlTelefono,
@@ -552,7 +535,7 @@ class _PantallaSoporteState extends State<PantallaSoporte> {
           borderRadius: BorderRadius.circular(50),
           onPressed: _procesando ? null : _abrirConsulta,
           child: _procesando
-              ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+              ? const FernecitoLoader.inline(size: 16, color: CupertinoColors.white)
               : Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

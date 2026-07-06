@@ -9,6 +9,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../core/constants.dart';
 import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
+import '../widgets/fernecito_loader.dart';
 
 /// Prefijo del payload del QR de invitación de RRPP.
 /// Debe coincidir con kPrefijoQrInvitacion de la app de locales.
@@ -221,10 +222,7 @@ class _PantallaScannerInvitacionState extends State<PantallaScannerInvitacion> {
                         ? Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              CupertinoActivityIndicator(
-                                radius: 10,
-                                color: colorTema,
-                              ),
+                              FernecitoLoader.inline(size: 20, color: colorTema,),
                               const SizedBox(width: 10),
                               Text(
                                 'Validando…',
@@ -249,11 +247,7 @@ class _PantallaScannerInvitacionState extends State<PantallaScannerInvitacion> {
                                     color: ColoresApp.peligroMarca
                                         .withValues(alpha: 0.16),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: ColoresApp.peligroMarca
-                                          .withValues(alpha: 0.5),
-                                    ),
-                                  ),
+                                                                      ),
                                   child: Text(
                                     _mensajeError!,
                                     textAlign: TextAlign.center,
@@ -363,13 +357,7 @@ class _MarcoEscaneoQrState extends State<_MarcoEscaneoQr>
                   Container(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(26),
-                      border: Border.all(
-                        color: colorTema.withValues(
-                          alpha: bordeOp.clamp(0.0, 1.0),
-                        ),
-                        width: 2.5,
-                      ),
-                      boxShadow: [
+                                            boxShadow: [
                         BoxShadow(
                           color: colorTema.withValues(alpha: 0.35),
                           blurRadius: 22,

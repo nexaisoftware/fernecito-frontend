@@ -6,6 +6,7 @@
 ///  - Flyer centrado con bordes redondeados y glow del color del tema.
 ///  - Barra de progreso tipo stories + botón X para cerrar.
 ///  - Auto-avance cada 5s; tap izq/der retrocede/avanza; mantener pausa.
+///  - Deslizar hacia arriba para cerrar / saltar Top Ultra.
 ///  - Footer con local, título y botón "Ver evento".
 library;
 
@@ -18,22 +19,30 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
+import '../core/secciones_impresion.dart';
+import '../core/servicio_impresiones.dart';
 import '../core/tema_fernecito.dart';
+import '../widgets/avatar_local.dart';
+import 'fernecito_loader.dart';
 
 class EventoTopUltra {
   const EventoTopUltra({
     required this.idEvento,
+    required this.idLocal,
     required this.tituloEvento,
     required this.urlFlyer,
     required this.nombreLocal,
     this.avatarLocal,
+    this.localEsPionero = false,
     this.fechaTexto,
   });
   final String idEvento;
+  final String idLocal;
   final String tituloEvento;
   final String urlFlyer;
   final String nombreLocal;
   final String? avatarLocal;
+  final bool localEsPionero;
   final String? fechaTexto;
 }
 
@@ -126,9 +135,8 @@ class _TopUltraBadgeCarteleraState extends State<TopUltraBadgeCartelera>
                 children: [
                   DecoratedBox(
                     decoration: BoxDecoration(
-                      color: colorTema.withValues(alpha: 0.16),
+                      color: colorTema.withValues(alpha: 0.22),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: colorTema.withValues(alpha: 0.38)),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -220,8 +228,11 @@ class _TopUltraStoriesState extends State<_TopUltraStories>
   late final AnimationController _progreso;
   int _indice = 0;
   bool _pausado = false;
+  double _arrastreVertical = 0;
+  bool _cerrandoPorSwipe = false;
   static const Duration _duracionStory = Duration(seconds: 5);
   static const double _flyerRadius = 18;
+  static const double _umbralCerrarSwipe = 72;
 
   @override
   void initState() {
@@ -229,6 +240,18 @@ class _TopUltraStoriesState extends State<_TopUltraStories>
     _progreso = AnimationController(vsync: this, duration: _duracionStory)
       ..addStatusListener(_onStatus);
     _iniciar();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _registrarStoryActual());
+  }
+
+  void _registrarStoryActual() {
+    if (!mounted) return;
+    final ev = widget.eventos[_indice];
+    if (ev.idLocal.isEmpty || ev.idEvento.isEmpty) return;
+    ServicioImpresiones.instancia.registrarCartelera(
+      idLocal: ev.idLocal,
+      idEvento: ev.idEvento,
+      seccion: SeccionesImpresion.topUltraStories,
+    );
   }
 
   @override
@@ -258,6 +281,7 @@ class _TopUltraStoriesState extends State<_TopUltraStories>
     }
     setState(() => _indice++);
     _iniciar();
+    _registrarStoryActual();
   }
 
   void _anterior() {
@@ -267,6 +291,7 @@ class _TopUltraStoriesState extends State<_TopUltraStories>
     }
     setState(() => _indice--);
     _iniciar();
+    _registrarStoryActual();
   }
 
   void _onTapUp(TapUpDetails d, double ancho) {
@@ -281,9 +306,45 @@ class _TopUltraStoriesState extends State<_TopUltraStories>
     setState(() => _pausado = v);
     if (v) {
       _progreso.stop();
-    } else {
+    } else if (!_cerrandoPorSwipe) {
       _progreso.forward();
     }
+  }
+
+  void _onArrastreVerticalInicio() {
+    if (_cerrandoPorSwipe) return;
+    _setPausa(true);
+  }
+
+  void _onArrastreVerticalUpdate(DragUpdateDetails d) {
+    if (_cerrandoPorSwipe) return;
+    setState(() {
+      _arrastreVertical += d.delta.dy;
+      if (_arrastreVertical > 0) _arrastreVertical = 0;
+    });
+  }
+
+  void _onArrastreVerticalFin(DragEndDetails d) {
+    if (_cerrandoPorSwipe) return;
+    final velocidad = d.primaryVelocity ?? 0;
+    final debeCerrar =
+        _arrastreVertical.abs() > _umbralCerrarSwipe || velocidad < -520;
+    if (debeCerrar) {
+      _cerrarPorSwipe();
+      return;
+    }
+    setState(() => _arrastreVertical = 0);
+    _setPausa(false);
+  }
+
+  Future<void> _cerrarPorSwipe() async {
+    if (_cerrandoPorSwipe || !mounted) return;
+    _cerrandoPorSwipe = true;
+    _progreso.stop();
+    final alto = MediaQuery.sizeOf(context).height;
+    setState(() => _arrastreVertical = -alto * 0.22);
+    await Future<void>.delayed(const Duration(milliseconds: 160));
+    if (mounted) _cerrar();
   }
 
   void _verEvento() {
@@ -298,7 +359,20 @@ class _TopUltraStoriesState extends State<_TopUltraStories>
 
     return Material(
       color: Colors.black,
-      child: LayoutBuilder(
+      child: GestureDetector(
+        onVerticalDragStart: (_) => _onArrastreVerticalInicio(),
+        onVerticalDragUpdate: _onArrastreVerticalUpdate,
+        onVerticalDragEnd: _onArrastreVerticalFin,
+        behavior: HitTestBehavior.translucent,
+        child: AnimatedContainer(
+          duration: _cerrandoPorSwipe
+              ? const Duration(milliseconds: 160)
+              : Duration.zero,
+          curve: Curves.easeOutCubic,
+          transform: Matrix4.translationValues(0, _arrastreVertical, 0),
+          child: Opacity(
+            opacity: (1 - (_arrastreVertical.abs() / 320)).clamp(0.35, 1.0),
+            child: LayoutBuilder(
         builder: (ctx, cons) {
           return Stack(
             fit: StackFit.expand,
@@ -388,6 +462,9 @@ class _TopUltraStoriesState extends State<_TopUltraStories>
             ],
           );
         },
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -454,8 +531,7 @@ class _FlyerConGlow extends StatelessWidget {
                 placeholder: (_, __) => SizedBox(
                   height: math.min(maximo.height, 280),
                   child: Center(
-                    child: CupertinoActivityIndicator(
-                      color: colorTema.withValues(alpha: 0.8),
+                    child: FernecitoLoader.inline(size: 16, color: colorTema.withValues(alpha: 0.8),
                     ),
                   ),
                 ),
@@ -549,8 +625,7 @@ class _FlyerRecortadoState extends State<_FlyerRecortado> {
       return SizedBox(
         height: math.min(widget.maximo.height, 280),
         child: Center(
-          child: CupertinoActivityIndicator(
-            color: widget.colorTema.withValues(alpha: 0.8),
+          child: FernecitoLoader.inline(size: 16, color: widget.colorTema.withValues(alpha: 0.8),
           ),
         ),
       );
@@ -666,8 +741,7 @@ class _BadgeTopUltraHeader extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-          ),
+                      ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -703,8 +777,7 @@ class _BotonCerrar extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.10),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-        ),
+                  ),
         alignment: Alignment.center,
         child: Icon(
           CupertinoIcons.xmark,
@@ -749,21 +822,12 @@ class _Footer extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  CircleAvatar(
-                    radius: 15,
-                    backgroundColor: ColoresApp.fondoSuperficie,
-                    backgroundImage: (evento.avatarLocal != null &&
-                            evento.avatarLocal!.isNotEmpty)
-                        ? CachedNetworkImageProvider(evento.avatarLocal!)
-                        : null,
-                    child: (evento.avatarLocal == null ||
-                            evento.avatarLocal!.isEmpty)
-                        ? Icon(
-                            CupertinoIcons.house_fill,
-                            size: 15,
-                            color: Colors.white.withValues(alpha: 0.7),
-                          )
-                        : null,
+                  AvatarLocal(
+                    imageUrl: evento.avatarLocal,
+                    size: 30,
+                    esPionero: evento.localEsPionero,
+                    placeholderIcon: CupertinoIcons.house_fill,
+                    borderWidth: 1.2,
                   ),
                   const SizedBox(width: 10),
                   Flexible(

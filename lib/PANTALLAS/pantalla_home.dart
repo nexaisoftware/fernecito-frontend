@@ -26,23 +26,35 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/app_navigator.dart';
+import '../core/bootstrap_cartelera.dart';
 import '../core/constants.dart';
+import '../core/servicio_resena_post_visita.dart';
 import '../core/jerarquias_data.dart';
+import '../core/secciones_impresion.dart';
 import '../core/servicio_estado_cuenta.dart';
+import '../core/servicio_impresiones.dart';
 import '../core/servicio_notificaciones_usuarios.dart';
+import '../core/servicio_perfil_usuario.dart';
 import '../core/navegacion_evento_compartido.dart';
 import '../core/servicio_enlace_evento.dart';
 import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
 import '../core/ubicaciones_data.dart';
+import '../widgets/avatar_local.dart';
 import '../widgets/cards_cartelera.dart';
 import '../widgets/carrusel_auto_scroll.dart';
+import '../widgets/detector_impresion_cartelera.dart';
+import '../widgets/fernecito_loader.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
+import '../widgets/modal_resena_post_visita.dart';
 import '../widgets/splash_carga_fernecito.dart';
 import '../widgets/spotlight_search_bar.dart';
 import '../widgets/top_ultra_stories_overlay.dart';
+import '../widgets/mapa_ui.dart';
 import 'pantalla_actividad.dart';
 import 'pantalla_local_perfil.dart';
+import 'pantalla_mapa.dart';
 import 'pantalla_mi_perfil.dart';
 import 'pantalla_notificaciones.dart';
 import 'pantalla_social.dart';
@@ -52,22 +64,6 @@ import 'pantalla_scanner_invitacion.dart';
 // ============================================================================
 // Helpers compartidos (top-level) que usaba la cartelera vieja.
 // ============================================================================
-
-bool _esAssetUrl(dynamic url) {
-  final s = url?.toString() ?? '';
-  return s.startsWith('assets/');
-}
-
-Widget _avatarPlaceholderLocal(double size) {
-  return Container(
-    color: ColoresApp.fondoPrincipal,
-    child: Icon(
-      CupertinoIcons.building_2_fill,
-      size: size * 0.5,
-      color: ColoresApp.textoSecundario,
-    ),
-  );
-}
 
 bool _parseBool(dynamic value) {
   if (value == null) return false;
@@ -103,7 +99,14 @@ String? _claveIdLocal(dynamic raw) {
 // ============================================================================
 
 /// Altura de la navbar inferior (sin safe area del home indicator).
-const double kHomeTabBarHeight = 58.0;
+const double kHomeTabBarHeight = 66.0;
+
+/// Inset inferior del navbar: en iPhone no usar todo el safe area (queda mucho vacío).
+double homeTabBarBottomInset(BuildContext context) {
+  final safe = MediaQuery.paddingOf(context).bottom;
+  if (safe <= 10) return safe;
+  return (safe * 0.35).clamp(10.0, 14.0);
+}
 
 /// Espacio entre el FAB QR y el borde superior de la navbar.
 const double kHomeFabGapSobreNav = 14.0;
@@ -112,7 +115,7 @@ const double kHomeFabQrSize = 52.0;
 
 double homeFabBottomOffset(BuildContext context) {
   return kHomeTabBarHeight +
-      MediaQuery.of(context).padding.bottom +
+      homeTabBarBottomInset(context) +
       kHomeFabGapSobreNav;
 }
 
@@ -130,6 +133,8 @@ class PantallaHome extends StatefulWidget {
 class _PantallaHomeState extends State<PantallaHome>
     with WidgetsBindingObserver {
   String? _fotoPerfilUrl;
+  DateTime? _fotoPerfilAt;
+  static const _ttlFotoPerfil = Duration(minutes: 5);
   int _currentTabIndex = 2;
 
   /// Se incrementa al entrar al tab Actividad para forzar `_cargarActividad` (IndexedStack no recrea el hijo).
@@ -139,16 +144,19 @@ class _PantallaHomeState extends State<PantallaHome>
   /// Se incrementa al entrar al tab Notificaciones para forzar recarga
   /// (IndexedStack no recrea el hijo).
   int _notifsReloadTick = 0;
-  int _socialInitialTab = 0;
   int _socialNavToken = 0;
+  SocialVista? _socialVistaInicial;
 
   final _srvNotificaciones = ServicioNotificacionesUsuarios();
 
-  void _irATabSocialDesdeNotif(int tab) {
+  void _irATabDesdeNotif(int tab, {SocialVista? socialVista}) {
     setState(() {
-      _socialInitialTab = tab.clamp(0, 1);
-      _socialNavToken++;
-      _currentTabIndex = 1;
+      _currentTabIndex = tab.clamp(0, 4);
+      if (tab == 0) _actividadReloadTick++;
+      if (tab == 1 && socialVista != null) {
+        _socialVistaInicial = socialVista;
+        _socialNavToken++;
+      }
     });
   }
 
@@ -156,6 +164,9 @@ class _PantallaHomeState extends State<PantallaHome>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // El splash único vive en AppFernecito; acá solo cargamos datos.
+    BootstrapCartelera.reset();
+    ServicioPerfilUsuario().avatarNavbarUrl.addListener(_onAvatarNavbarCambio);
     _cargarFotoPerfil();
     _verificarCuentaPausada();
     _srvNotificaciones.refrescarContador();
@@ -163,8 +174,18 @@ class _PantallaHomeState extends State<PantallaHome>
 
   @override
   void dispose() {
+    ServicioPerfilUsuario().avatarNavbarUrl.removeListener(_onAvatarNavbarCambio);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onAvatarNavbarCambio() {
+    final url = ServicioPerfilUsuario().avatarNavbarUrl.value;
+    if (!mounted) return;
+    setState(() {
+      _fotoPerfilUrl = url;
+      _fotoPerfilAt = DateTime.now();
+    });
   }
 
   @override
@@ -182,7 +203,13 @@ class _PantallaHomeState extends State<PantallaHome>
     await ServicioEstadoCuenta.instancia.refrescar();
   }
 
-  Future<void> _cargarFotoPerfil() async {
+  Future<void> _cargarFotoPerfil({bool forzar = false}) async {
+    if (!forzar &&
+        _fotoPerfilUrl != null &&
+        _fotoPerfilAt != null &&
+        DateTime.now().difference(_fotoPerfilAt!) < _ttlFotoPerfil) {
+      return;
+    }
     try {
       final supabase = ServicioSupabase();
       final usuario = supabase.usuarioActual;
@@ -199,8 +226,16 @@ class _PantallaHomeState extends State<PantallaHome>
             final timestamp = DateTime.now().millisecondsSinceEpoch;
             _fotoPerfilUrl =
                 '${supabase.cliente.storage.from('avatars').getPublicUrl(path)}?v=$timestamp';
+          } else {
+            _fotoPerfilUrl = null;
           }
+          _fotoPerfilAt = DateTime.now();
         });
+        // Sincroniza el notifier sin disparar recargas en bucle.
+        final nav = ServicioPerfilUsuario().avatarNavbarUrl;
+        if (nav.value != _fotoPerfilUrl) {
+          nav.value = _fotoPerfilUrl;
+        }
       }
     } catch (e) {
       debugPrint('⚠️ Error cargando foto de perfil: $e');
@@ -212,8 +247,13 @@ class _PantallaHomeState extends State<PantallaHome>
 
   @override
   Widget build(BuildContext context) {
+    // Splash único en AppFernecito; acá siempre el shell (puede estar tapado).
     return Stack(
       children: [
+        const ColoredBox(
+          color: ColoresApp.fondoPrincipal,
+          child: SizedBox.expand(),
+        ),
         IndexedStack(
           index: _currentTabIndex,
           children: [
@@ -224,14 +264,16 @@ class _PantallaHomeState extends State<PantallaHome>
             CupertinoTabView(
               builder: (context) => PantallaSocial(
                 key: ValueKey('social_$_socialNavToken'),
-                initialTabIndex: _socialInitialTab,
+                vista: _socialVistaInicial ?? SocialVista.explorar,
               ),
             ),
-            CupertinoTabView(builder: (context) => const _PantallaCartelera()),
+            CupertinoTabView(
+              builder: (context) => const _PantallaCartelera(),
+            ),
             CupertinoTabView(
               builder: (context) => PantallaNotificaciones(
                 reloadTick: _notifsReloadTick,
-                onIrATabSocial: _irATabSocialDesdeNotif,
+                onIrATab: _irATabDesdeNotif,
               ),
             ),
             CupertinoTabView(
@@ -246,20 +288,27 @@ class _PantallaHomeState extends State<PantallaHome>
           bottom: 0,
           child: ValueListenableBuilder<Color>(
             valueListenable: TemaFernecito.instancia.colorActual,
-            builder: (context, _, __) => _GlassTabBar(
+            builder: (context, accent, __) => _GlassTabBar(
               height: kHomeTabBarHeight,
               iconSize: _kTabBarIconSize,
+              accentColor: accent,
               currentIndex: _currentTabIndex,
-              onTap: (index) => setState(() {
-                _currentTabIndex = index;
-                if (index == 0) _actividadReloadTick++;
-                if (index == 2) _srvNotificaciones.refrescarContador();
-                if (index == 3) {
-                  _notifsReloadTick++;
-                  _srvNotificaciones.refrescarContador();
+              onTap: (index) {
+                if (_currentTabIndex == 2 && index != 2) {
+                  ServicioImpresiones.instancia.alSalirCartelera();
                 }
-                if (index == 4) _perfilReloadTick++;
-              }),
+                setState(() {
+                  _currentTabIndex = index;
+                  if (index == 0) _actividadReloadTick++;
+                  if (index == 1) _socialVistaInicial = null;
+                  if (index == 2) _srvNotificaciones.refrescarContador();
+                  if (index == 3) {
+                    _notifsReloadTick++;
+                    _srvNotificaciones.refrescarContador(forzar: true);
+                  }
+                  if (index == 4) _perfilReloadTick++;
+                });
+              },
               fotoPerfilUrl: _fotoPerfilUrl,
             ),
           ),
@@ -269,11 +318,12 @@ class _PantallaHomeState extends State<PantallaHome>
   }
 }
 
-/// Barra de tabs con look suave de tema (sin blur para mejor rendimiento).
+/// Barra de tabs inferior con glassmorphism (blur + tinte oscuro semitransparente).
 class _GlassTabBar extends StatelessWidget {
   const _GlassTabBar({
     required this.height,
     required this.iconSize,
+    required this.accentColor,
     required this.currentIndex,
     required this.onTap,
     this.fotoPerfilUrl,
@@ -281,224 +331,232 @@ class _GlassTabBar extends StatelessWidget {
 
   final double height;
   final double iconSize;
+  final Color accentColor;
   final int currentIndex;
   final ValueChanged<int> onTap;
   final String? fotoPerfilUrl;
 
+  static const _topRadius = 12.0;
+  static const _dotSize = 5.5;
+  static const _dotTop = 5.0;
+  static const _tabsVerticalPadding = 10.0;
+  /// Social y Cartelera un poco más grandes para equilibrar la campana.
+  static const _iconBoostSocialCartelera = 1.10;
+
+  Widget _tab({
+    required IconData icon,
+    required IconData activeIcon,
+    required String label,
+    required int index,
+    required double iconSizeTab,
+    bool prominentWhenInactive = false,
+    double iconSizeScale = 1.0,
+  }) {
+    return Expanded(
+      child: _TabItem(
+        icon: icon,
+        activeIcon: activeIcon,
+        label: label,
+        isActive: currentIndex == index,
+        onTap: () => onTap(index),
+        iconSize: iconSizeTab * iconSizeScale,
+        accentColor: accentColor,
+        prominentWhenInactive: prominentWhenInactive,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    final totalHeight = height + bottomPadding;
-    final iconSizeReducido = iconSize * 0.92;
-    final iconSizeCartelera = iconSize * 1.28;
-    final iconAreaHeight = iconSizeCartelera + 2;
+    final bottomInset = homeTabBarBottomInset(context);
+    final totalHeight = height + bottomInset;
+    final iconSizeTab = iconSize * 0.94;
 
-    return SizedBox(
-      width: double.infinity,
-      height: totalHeight,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Capa de blur con gradiente más sutil (vibe iOS 18)
-          ClipRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      ColoresApp.fondoSuperficie.withOpacity(0.78),
-                      ColoresApp.fondoSuperficie.withOpacity(0.94),
-                    ],
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(_topRadius)),
+      child: SizedBox(
+        width: double.infinity,
+        height: totalHeight,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          const Color(0xFF1E1E22).withValues(alpha: 0.62),
+                          const Color(0xFF111114).withValues(alpha: 0.82),
+                        ],
+                      ),
+                      border: Border(
+                        top: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.10),
+                          width: 0.5,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          // Indicador superior más fino y centrado
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final segmentWidth = constraints.maxWidth / 5;
-                const indicatorWidth = 26.0;
-                final leftOffset =
-                    segmentWidth * currentIndex +
-                    (segmentWidth - indicatorWidth) / 2;
-                return SizedBox(
-                  height: 4,
-                  child: Stack(
+            Positioned(
+              left: 0,
+              right: 0,
+              top: _tabsVerticalPadding,
+              bottom: bottomInset,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _tab(
+                    icon: CupertinoIcons.calendar,
+                    activeIcon: CupertinoIcons.calendar_today,
+                    label: 'Actividad',
+                    index: 0,
+                    iconSizeTab: iconSizeTab,
+                  ),
+                  _tab(
+                    icon: CupertinoIcons.person_2,
+                    activeIcon: CupertinoIcons.person_2_fill,
+                    label: 'Social',
+                    index: 1,
+                    iconSizeTab: iconSizeTab,
+                    iconSizeScale: _iconBoostSocialCartelera,
+                  ),
+                  _tab(
+                    icon: CupertinoIcons.ticket,
+                    activeIcon: CupertinoIcons.ticket_fill,
+                    label: 'Cartelera',
+                    index: 2,
+                    iconSizeTab: iconSizeTab,
+                    prominentWhenInactive: true,
+                    iconSizeScale: _iconBoostSocialCartelera,
+                  ),
+                  Expanded(
+                    child: ValueListenableBuilder<int>(
+                      valueListenable:
+                          ServicioNotificacionesUsuarios().contadorNoLeidas,
+                      builder: (context, sinLeer, _) {
+                        return _TabItem(
+                          customIcon: _iconoNotificacionesConBadge(
+                            CupertinoIcons.bell,
+                            sinLeer: sinLeer,
+                            size: iconSizeTab,
+                            activo: false,
+                            accentColor: accentColor,
+                          ),
+                          customActiveIcon: _iconoNotificacionesConBadge(
+                            CupertinoIcons.bell_fill,
+                            sinLeer: sinLeer,
+                            size: iconSizeTab,
+                            activo: true,
+                            accentColor: accentColor,
+                          ),
+                          label: 'Novedades',
+                          isActive: currentIndex == 3,
+                          onTap: () => onTap(3),
+                          iconSize: iconSizeTab,
+                          accentColor: accentColor,
+                        );
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: _TabItem(
+                      customIcon: fotoPerfilUrl != null
+                          ? _avatarWidget(
+                              fotoPerfilUrl!,
+                              active: false,
+                              size: iconSizeTab,
+                              accentColor: accentColor,
+                            )
+                          : Icon(
+                              CupertinoIcons.person_circle,
+                              size: iconSizeTab,
+                              color: ColoresApp.textoSecundario,
+                            ),
+                      customActiveIcon: fotoPerfilUrl != null
+                          ? _avatarWidget(
+                              fotoPerfilUrl!,
+                              active: true,
+                              size: iconSizeTab,
+                              accentColor: accentColor,
+                            )
+                          : Icon(
+                              CupertinoIcons.person_circle_fill,
+                              size: iconSizeTab,
+                              color: accentColor,
+                            ),
+                      label: 'Perfil',
+                      isActive: currentIndex == 4,
+                      onTap: () => onTap(4),
+                      iconSize: iconSizeTab,
+                      accentColor: accentColor,
+                      activeScaleOverride: 0.96,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: _tabsVerticalPadding + 2,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final segmentWidth = constraints.maxWidth / 5;
+                  final dotLeft =
+                      segmentWidth * currentIndex +
+                      (segmentWidth - _dotSize) / 2;
+                  return Stack(
                     clipBehavior: Clip.none,
                     children: [
                       AnimatedPositioned(
                         duration: const Duration(milliseconds: 320),
                         curve: Curves.easeOutCubic,
-                        left: leftOffset,
-                        width: indicatorWidth,
-                        top: 0,
-                        child: Container(
-                          height: 2.5,
-                          decoration: BoxDecoration(
-                            color: ColoresApp.principalMarca,
-                            borderRadius: BorderRadius.circular(1.25),
-                            boxShadow: [
-                              BoxShadow(
-                                color: ColoresApp.principalMarca.withOpacity(
-                                  0.55,
+                        left: dotLeft,
+                        top: _dotTop,
+                        width: _dotSize,
+                        height: _dotSize,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: accentColor,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: accentColor.withValues(alpha: 0.65),
+                                  blurRadius: 6,
+                                  spreadRadius: 0.4,
                                 ),
-                                blurRadius: 6,
-                                spreadRadius: 0.3,
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ],
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: bottomPadding,
-            child: Center(
-              child: SizedBox(
-                height: height.clamp(0, double.infinity),
-                child: Row(
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    _wrappedTabItem(
-                      _TabItem(
-                        icon: Icon(
-                          CupertinoIcons.calendar,
-                          size: iconSizeReducido,
-                          color: ColoresApp.textoSecundario,
-                        ),
-                        activeIcon: Icon(
-                          CupertinoIcons.calendar_today,
-                          size: iconSizeReducido,
-                          color: Colors.white,
-                        ),
-                        label: 'Actividad',
-                        isActive: currentIndex == 0,
-                        onTap: () => onTap(0),
-                        iconAreaHeight: iconAreaHeight,
-                      ),
-                    ),
-                    _wrappedTabItem(
-                      _TabItem(
-                        icon: Icon(
-                          CupertinoIcons.person_2,
-                          size: iconSizeReducido,
-                          color: ColoresApp.textoSecundario,
-                        ),
-                        activeIcon: Icon(
-                          CupertinoIcons.person_2_fill,
-                          size: iconSizeReducido,
-                          color: Colors.white,
-                        ),
-                        label: 'Social',
-                        isActive: currentIndex == 1,
-                        onTap: () => onTap(1),
-                        iconAreaHeight: iconAreaHeight,
-                      ),
-                    ),
-                    _wrappedTabItem(
-                      _TabItem(
-                        icon: Icon(
-                          CupertinoIcons.ticket,
-                          size: iconSizeCartelera,
-                          color: ColoresApp.textoSecundario,
-                        ),
-                        activeIcon: Icon(
-                          CupertinoIcons.ticket_fill,
-                          size: iconSizeCartelera,
-                          color: Colors.white,
-                        ),
-                        label: 'Cartelera',
-                        isActive: currentIndex == 2,
-                        onTap: () => onTap(2),
-                        iconAreaHeight: iconAreaHeight,
-                      ),
-                    ),
-                    _wrappedTabItem(
-                      ValueListenableBuilder<int>(
-                        valueListenable:
-                            ServicioNotificacionesUsuarios().contadorNoLeidas,
-                        builder: (context, sinLeer, _) {
-                          return _TabItem(
-                            icon: _iconoNotificacionesConBadge(
-                              CupertinoIcons.bell,
-                              sinLeer: sinLeer,
-                              size: iconSizeReducido,
-                              activo: false,
-                            ),
-                            activeIcon: _iconoNotificacionesConBadge(
-                              CupertinoIcons.bell_fill,
-                              sinLeer: sinLeer,
-                              size: iconSizeReducido,
-                              activo: true,
-                            ),
-                            label: 'Novedades',
-                            isActive: currentIndex == 3,
-                            onTap: () => onTap(3),
-                            iconAreaHeight: iconAreaHeight,
-                          );
-                        },
-                      ),
-                    ),
-                    _wrappedTabItem(
-                      _TabItem(
-                        icon: fotoPerfilUrl != null
-                            ? _avatarWidget(
-                                fotoPerfilUrl!,
-                                active: false,
-                                size: iconSizeReducido,
-                              )
-                            : Icon(
-                                CupertinoIcons.person_circle,
-                                size: iconSizeReducido,
-                                color: ColoresApp.textoSecundario,
-                              ),
-                        activeIcon: fotoPerfilUrl != null
-                            ? _avatarWidget(
-                                fotoPerfilUrl!,
-                                active: true,
-                                size: iconSizeReducido,
-                              )
-                            : Icon(
-                                CupertinoIcons.person_circle_fill,
-                                size: iconSizeReducido,
-                                color: Colors.white,
-                              ),
-                        label: 'Perfil',
-                        isActive: currentIndex == 4,
-                        onTap: () => onTap(4),
-                        iconAreaHeight: iconAreaHeight,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _wrappedTabItem(Widget tabChild) {
-    return Expanded(child: SizedBox.expand(child: tabChild));
-  }
-
-  Widget _avatarWidget(String url, {required bool active, double? size}) {
+  Widget _avatarWidget(
+    String url, {
+    required bool active,
+    required Color accentColor,
+    double? size,
+  }) {
     final s = size ?? iconSize;
     return Container(
       width: s,
@@ -507,8 +565,8 @@ class _GlassTabBar extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(
           color: active
-              ? Colors.white
-              : ColoresApp.principalMarca.withOpacity(0.8),
+              ? accentColor
+              : ColoresApp.textoSecundario.withValues(alpha: 0.55),
           width: active ? 2 : 1.5,
         ),
       ),
@@ -532,8 +590,9 @@ Widget _iconoNotificacionesConBadge(
   required int sinLeer,
   required double size,
   required bool activo,
+  required Color accentColor,
 }) {
-  final color = activo ? Colors.white : ColoresApp.textoSecundario;
+  final color = activo ? accentColor : ColoresApp.textoSecundario;
   return SizedBox(
     width: 30,
     height: 26,
@@ -552,11 +611,7 @@ Widget _iconoNotificacionesConBadge(
               decoration: BoxDecoration(
                 color: const Color(0xFFEF4444),
                 borderRadius: BorderRadius.circular(50),
-                border: Border.all(
-                  color: ColoresApp.fondoSuperficie,
-                  width: 1.5,
-                ),
-              ),
+                              ),
               child: Center(
                 child: Text(
                   sinLeer > 99 ? '99+' : '$sinLeer',
@@ -575,79 +630,161 @@ Widget _iconoNotificacionesConBadge(
   );
 }
 
-class _TabItem extends StatelessWidget {
+class _TabItem extends StatefulWidget {
   const _TabItem({
-    required this.icon,
-    required this.activeIcon,
+    this.icon,
+    this.activeIcon,
+    this.customIcon,
+    this.customActiveIcon,
     required this.label,
     required this.isActive,
     required this.onTap,
-    required this.iconAreaHeight,
+    required this.iconSize,
+    required this.accentColor,
+    this.prominentWhenInactive = false,
+    this.activeScaleOverride,
   });
 
-  final Widget icon;
-  final Widget activeIcon;
+  final IconData? icon;
+  final IconData? activeIcon;
+  final Widget? customIcon;
+  final Widget? customActiveIcon;
   final String label;
   final bool isActive;
   final VoidCallback onTap;
-  final double iconAreaHeight;
+  final double iconSize;
+  final Color accentColor;
+  /// Ícono central (Cartelera) un poco más grande cuando no está activo.
+  final bool prominentWhenInactive;
+  /// Escala al activar distinta a la default (ej. avatar de perfil).
+  final double? activeScaleOverride;
 
-  static const _textSpacing = 0.5;
-  static final _textShadow = Shadow(
-    color: Colors.black.withOpacity(0.15),
-    offset: const Offset(0, 0.5),
-    blurRadius: 1,
-  );
+  static const _activeScale = 1.2;
+  static const _inactiveScale = 1.0;
+  static const _prominentInactiveScale = 1.08;
+  static const _pressedScaleFactor = 0.92;
+  static const _iconTop = 6.0;
+  static const _labelGap = 8.0;
+  static const _labelSlotHeight = 19.0;
+
+  @override
+  State<_TabItem> createState() => _TabItemState();
+}
+
+class _TabItemState extends State<_TabItem> {
+  bool _pressed = false;
+
+  double get _baseScale {
+    if (widget.isActive) {
+      return widget.activeScaleOverride ?? _TabItem._activeScale;
+    }
+    if (widget.prominentWhenInactive) return _TabItem._prominentInactiveScale;
+    return _TabItem._inactiveScale;
+  }
+
+  double get _targetScale =>
+      _pressed ? _baseScale * _TabItem._pressedScaleFactor : _baseScale;
+
+  Widget _icono(bool activo) {
+    if (activo && widget.customActiveIcon != null) {
+      return widget.customActiveIcon!;
+    }
+    if (!activo && widget.customIcon != null) {
+      return widget.customIcon!;
+    }
+    final size = widget.iconSize *
+        (widget.prominentWhenInactive && !activo ? 1.06 : 1.0);
+    return Icon(
+      activo ? widget.activeIcon! : widget.icon!,
+      size: size,
+      color: activo ? widget.accentColor : ColoresApp.textoSecundario,
+    );
+  }
+
+  Widget _slotEtiqueta() {
+    return ClipRect(
+      child: SizedBox(
+        height: widget.isActive ? _TabItem._labelSlotHeight : 0,
+        width: double.infinity,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, anim) {
+            final slide = Tween<Offset>(
+              begin: const Offset(0, 0.2),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(
+                parent: anim,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              ),
+            );
+            return SlideTransition(
+              position: slide,
+              child: FadeTransition(opacity: anim, child: child),
+            );
+          },
+          child: widget.isActive
+              ? Padding(
+                  key: ValueKey<String>('lbl-${widget.label}'),
+                  padding: const EdgeInsets.only(top: _TabItem._labelGap),
+                  child: Text(
+                    widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.baloo2(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      height: 1,
+                    ),
+                  ),
+                )
+              : SizedBox.shrink(
+                  key: ValueKey<String>('lbl-off-${widget.label}'),
+                ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? Colors.white : ColoresApp.textoSecundario;
-    return SizedBox.expand(
-      child: CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
-        minimumSize: const Size(0, 0),
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          scale: isActive ? 1.0 : 0.98,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                height: iconAreaHeight,
-                child: Center(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    transitionBuilder: (child, anim) =>
-                        FadeTransition(opacity: anim, child: child),
-                    child: KeyedSubtree(
-                      key: ValueKey<bool>(isActive),
-                      child: isActive ? activeIcon : icon,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: _textSpacing),
-              AnimatedDefaultTextStyle(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: ClipRect(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            SizedBox(height: _TabItem._iconTop),
+            AnimatedScale(
+              scale: _targetScale,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  letterSpacing: 0.1,
-                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                  color: color,
-                  shadows: isActive ? null : [_textShadow],
-                ),
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                child: KeyedSubtree(
+                  key: ValueKey<bool>(widget.isActive),
+                  child: _icono(widget.isActive),
                 ),
               ),
-            ],
-          ),
+            ),
+            _slotEtiqueta(),
+          ],
         ),
       ),
     );
@@ -692,6 +829,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   void initState() {
     super.initState();
     _seedShuffle = DateTime.now().millisecondsSinceEpoch;
+    ServicioImpresiones.instancia.asegurarTimer();
     ServicioEnlaceEvento.instancia.cambios.addListener(
       _consumirEnlaceEventoPendiente,
     );
@@ -700,6 +838,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
 
   @override
   void dispose() {
+    ServicioImpresiones.instancia.alSalirCartelera();
     ServicioEnlaceEvento.instancia.cambios.removeListener(
       _consumirEnlaceEventoPendiente,
     );
@@ -713,7 +852,12 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   /// 4. Recién ahí inicializa filtros y carga la cartelera.
   Future<void> _arrancar() async {
     final ok = await _asegurarUbicacionUsuario();
-    if (!ok || !mounted) return;
+    if (!ok || !mounted) {
+      // No bloquear el splash para siempre (sin sesión / canceló ubicación).
+      if (mounted) setState(() => _cargando = false);
+      BootstrapCartelera.marcarLista();
+      return;
+    }
     setState(() => _ubicacionLista = true);
     await _cargar();
   }
@@ -890,6 +1034,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
               'localVerificado': perfil != null
                   ? _parseBool(perfil['local_verificado'])
                   : false,
+              'localEsPionero': perfil != null
+                  ? _parseBool(perfil['es_pionero'])
+                  : false,
               'jerarquia': row['jerarquia'] ?? 'gratis',
               'tipoEvento': (row['tipo_evento']?.toString() ?? 'otro')
                   .toLowerCase(),
@@ -917,19 +1064,60 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
         _cargando = false;
         _seedShuffle = DateTime.now().millisecondsSinceEpoch;
       });
+      BootstrapCartelera.marcarLista();
 
       _consumirEnlaceEventoPendiente();
 
-      // Disparar stories de top_ultra una sola vez por sesión visual
+      // Top Ultra y luego modal de reseña sobre la cartelera.
       if (!_storiesYaMostrado) {
         _storiesYaMostrado = true;
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _abrirTopUltraStories(),
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_flujoPostCargaCartelera());
+        });
       }
     } catch (e) {
       debugPrint('⚠️ cartelera _cargar: $e');
       if (mounted) setState(() => _cargando = false);
+      BootstrapCartelera.marcarLista();
+      if (!_storiesYaMostrado) {
+        _storiesYaMostrado = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_flujoPostCargaCartelera());
+        });
+      }
+    }
+  }
+
+  Future<void> _flujoPostCargaCartelera() async {
+    debugPrint('[ResenaPostVisita] flujo: top ultra → modal');
+    try {
+      await _abrirTopUltraStories();
+    } catch (e) {
+      debugPrint('[ResenaPostVisita] top ultra: $e');
+    }
+    if (!mounted) return;
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    await _intentarModalResenaPostVisita();
+  }
+
+  Future<void> _intentarModalResenaPostVisita() async {
+    try {
+      debugPrint('[ResenaPostVisita] buscando pendiente…');
+      final pendiente =
+          await ServicioResenaPostVisita.instancia.siguientePendiente();
+      if (pendiente == null) {
+        debugPrint('[ResenaPostVisita] sin pendiente');
+        return;
+      }
+      final ctx = navigatorKey.currentContext;
+      debugPrint(
+        '[ResenaPostVisita] modal ${pendiente.nombreLocal} ctx=${ctx != null}',
+      );
+      if (ctx == null || !ctx.mounted) return;
+      await mostrarModalResenaPostVisita(ctx, pendiente: pendiente);
+    } catch (e, st) {
+      debugPrint('[ResenaPostVisita] error: $e\n$st');
     }
   }
 
@@ -943,7 +1131,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     const baseConEmbed =
         '$baseSinEmbed, '
         'perfiles_locales!eventos_id_local_fkey!inner('
-        'id, nombre_local, local_username, local_verificado, foto_perfil_url, url_foto_banner, '
+        'id, nombre_local, local_username, local_verificado, es_pionero, foto_perfil_url, url_foto_banner, '
         'foto_local_1, foto_local_2, foto_local_3, rubro, ciudad, provincia, estado_cuenta'
         ')';
     // Red de seguridad (defense-in-depth): además del estado, ocultamos los que
@@ -995,7 +1183,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       final rows = await sb
           .from('perfiles_locales')
           .select(
-            'id, nombre_local, local_username, local_verificado, foto_perfil_url, url_foto_banner, foto_local_1, foto_local_2, foto_local_3, rubro, ciudad, provincia, estado_cuenta',
+            'id, nombre_local, local_username, local_verificado, es_pionero, foto_perfil_url, url_foto_banner, foto_local_1, foto_local_2, foto_local_3, rubro, ciudad, provincia, estado_cuenta',
           )
           .inFilter('id', ids);
       final map = <String, Map<String, dynamic>>{};
@@ -1016,7 +1204,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   ) async {
     try {
       const sel =
-          'id, nombre_local, local_username, local_verificado, foto_perfil_url, '
+          'id, nombre_local, local_username, local_verificado, es_pionero, foto_perfil_url, '
           'url_foto_banner, foto_local_1, foto_local_2, rubro, ciudad, provincia';
       Map<String, dynamic> empacar(Map<String, dynamic> local) {
         final rubroRaw = local['rubro'];
@@ -1044,6 +1232,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
             ]),
           ),
           'verificado': _parseBool(local['local_verificado']),
+          'esPionero': _parseBool(local['es_pionero']),
           'rubro': rubro,
           'ciudad': local['ciudad']?.toString(),
           'provincia': local['provincia']?.toString(),
@@ -1182,13 +1371,32 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     ];
   }
 
+  bool _eventoSinFechaDeclarada(Map<String, dynamic> e) {
+    final fechaRaw = e['fechaInicio']?.toString();
+    return fechaRaw == null || fechaRaw.isEmpty;
+  }
+
   List<Map<String, dynamic>> _eventosFiltrados() {
-    return _eventos
+    final base = _eventos
         .where((e) => _coincideQuery(e))
         .where(_coincideTipoEvento)
-        .where(_coincideCiudad)
-        .where(_coincideTiempo)
-        .toList();
+        .where(_coincideCiudad);
+
+    if (_filtroTiempo == FiltroTiempo.todos) {
+      return base.toList();
+    }
+
+    // Eventos vidriera sin fecha: no entran en hoy/semana/finde, pero se muestran al final.
+    final conFecha = <Map<String, dynamic>>[];
+    final sinFecha = <Map<String, dynamic>>[];
+    for (final e in base) {
+      if (_eventoSinFechaDeclarada(e)) {
+        sinFecha.add(e);
+      } else if (_coincideTiempo(e)) {
+        conFecha.add(e);
+      }
+    }
+    return [...conFecha, ...sinFecha];
   }
 
   // ==========================================================================
@@ -1231,7 +1439,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     }
   }
 
-  void _abrirTopUltraStories() {
+  Future<void> _abrirTopUltraStories() async {
     final ultras = _eventos
         .where(
           (e) =>
@@ -1241,19 +1449,36 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
         .map(
           (e) => EventoTopUltra(
             idEvento: e['id']?.toString() ?? '',
+            idLocal: e['idLocal']?.toString() ?? '',
             tituloEvento: e['titulo']?.toString() ?? 'Evento',
             urlFlyer: e['flyer']?.toString() ?? '',
             nombreLocal: e['nombreLocal']?.toString() ?? 'Local',
             avatarLocal: e['avatarLocal']?.toString(),
+            localEsPionero: e['localEsPionero'] == true,
             fechaTexto: _fechaCortaTexto(e['fechaInicio']?.toString()),
           ),
         )
         .toList();
-    if (ultras.isEmpty) return;
-    mostrarTopUltraStoriesOverlay(
-      context,
+    if (ultras.isEmpty) {
+      debugPrint('[ResenaPostVisita] sin top ultra');
+      return;
+    }
+    final ctx = navigatorKey.currentContext ?? context;
+    await mostrarTopUltraStoriesOverlay(
+      ctx,
       eventos: ultras,
       onVerEvento: (id) => _irAEvento(id),
+    );
+  }
+
+  void _abrirCercaTuyo() {
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) => PantallaMapa(
+          provinciaInicial: _provinciaActiva,
+          ciudadesIniciales: _ciudadesActivas,
+        ),
+      ),
     );
   }
 
@@ -1300,27 +1525,23 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
 
   @override
   Widget build(BuildContext context) {
+    // El splash full-screen lo pinta [PantallaHome]; acá solo el contenido.
     if (_cargando) {
-      return const SplashCargaFernecito();
+      return const ColoredBox(color: kVerdeSplashFernecito);
     }
     return Scaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
       body: SafeArea(
+        top: false,
         bottom: false,
         child: ValueListenableBuilder<Color>(
           valueListenable: TemaFernecito.instancia.colorActual,
           builder: (context, _, __) {
             return Stack(
               children: [
-                CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  slivers: [
-                    // Pull-to-refresh nativo de Cupertino (no requiere MaterialLocalizations).
-                    CupertinoSliverRefreshControl(onRefresh: _onPullToRefresh),
-                    ..._buildSlivers(),
-                  ],
+                FernecitoRefreshScrollView(
+                  onRefresh: _onPullToRefresh,
+                  slivers: _buildSlivers(),
                 ),
                 Positioned(
                   right: 16,
@@ -1383,10 +1604,16 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       if (tieneTopUltra)
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TopUltraBadgeCartelera(onTap: _abrirTopUltraStories),
+            padding: const EdgeInsets.fromLTRB(20, 10, 16, 0),
+            child: Row(
+              children: [
+                TopUltraBadgeCartelera(onTap: _abrirTopUltraStories),
+                const Spacer(),
+                IconoMapaCarteleraAnimado(
+                  size: 24,
+                  onTap: _abrirCercaTuyo,
+                ),
+              ],
             ),
           ),
         ),
@@ -1399,6 +1626,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           porFila: CapacidadCartelera.topPorFila,
           variante: _Variante.grande,
           sentidoBase: false, // TOP: hacia la derecha
+          seccionDeEvento: _seccionImpresionCartelera,
         ),
       // RECOMENDADO FERNECITO
       if (recos.isNotEmpty)
@@ -1410,6 +1638,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           variante: _Variante.mediano,
           sentidoBase:
               true, // RECOMENDADOS: hacia la izquierda (contrario a TOP)
+          seccionFija: SeccionesImpresion.recomendadoFernecito,
         ),
       // LUGARES POPULARES (entre recomendado y normal)
       if (localesPop.isNotEmpty) _buildSeccionLocalesPopulares(localesPop),
@@ -1423,6 +1652,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           variante: _Variante.mediano,
           sentidoBase: false, // base derecha, alterna por fila
           paginar: true, // muestra 2 filas + "Ver más"
+          seccionFija: SeccionesImpresion.normal,
         ),
       // GRID GRATIS
       if (gratis.isNotEmpty) _buildSeccionGratisGrid(eventos: gratis),
@@ -1453,6 +1683,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
 
   // ---- Header con título + GPS ----
   Widget _buildHeader() {
+    final topSafe = MediaQuery.paddingOf(context).top;
     final ciudadTexto = _ciudadesActivas.isEmpty
         ? _provinciaActiva
         : (_ciudadesActivas.length == 1
@@ -1460,7 +1691,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
               : '${_ciudadesActivas.length} ciudades');
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 10, 16, 8),
+        padding: EdgeInsets.fromLTRB(20, topSafe + 4, 16, 8),
         child: Row(
           children: [
             Text(
@@ -1483,14 +1714,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: ColoresApp.fondoSuperficie.withOpacity(0.85),
+                    color: ColoresApp.fondoSuperficie,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _ciudadesActivas.isEmpty
-                          ? ColoresApp.principalMarca.withOpacity(0.35)
-                          : ColoresApp.principalMarca.withOpacity(0.75),
-                      width: 1,
-                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1573,6 +1798,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     required _Variante variante,
     bool sentidoBase = false,
     bool paginar = false,
+    String Function(Map<String, dynamic> e)? seccionDeEvento,
+    String? seccionFija,
   }) {
     final iniciales = CapacidadCartelera.normalFilasIniciales * porFila;
     final mostrar = (paginar && !_verMasNormal)
@@ -1600,6 +1827,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
                 mostrarLineaSeparadora: i < filas.length - 1,
                 sentidoBase: sentidoBase,
                 indiceFila: i,
+                seccionDeEvento: seccionDeEvento,
+                seccionFija: seccionFija,
               ),
             if (hayMas)
               Padding(
@@ -1645,6 +1874,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     bool sentidoBase =
         false, // false = hacia la derecha, true = hacia la izquierda
     int indiceFila = 0,
+    String Function(Map<String, dynamic> e)? seccionDeEvento,
+    String? seccionFija,
   }) {
     // Sentido por fila: la primera usa el sentido base de la sección y cada
     // fila siguiente gira al revés que la de arriba (intercalado estético).
@@ -1654,19 +1885,36 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     final ancho = esGrande ? 240.0 : 175.0;
 
     Widget cardAt(BuildContext ctx, int i) {
-      final ev = _aEventoCartelera(fila[i]);
+      final raw = fila[i];
+      final ev = _aEventoCartelera(raw);
+      final idLocal = raw['idLocal']?.toString() ?? '';
+      final seccion =
+          seccionFija ??
+          seccionDeEvento?.call(raw) ??
+          _seccionImpresionCartelera(raw);
+      Widget card;
       if (esGrande) {
-        return CardEventoGrande(
+        card = CardEventoGrande(
+          evento: ev,
+          ancho: ancho,
+          onTap: () => _irAEvento(ev.idEvento),
+        );
+      } else {
+        card = CardEventoMediano(
           evento: ev,
           ancho: ancho,
           onTap: () => _irAEvento(ev.idEvento),
         );
       }
-      return CardEventoMediano(
-        evento: ev,
-        ancho: ancho,
-        onTap: () => _irAEvento(ev.idEvento),
-      );
+      if (idLocal.isNotEmpty && ev.idEvento.isNotEmpty) {
+        card = DetectorImpresionCartelera(
+          idLocal: idLocal,
+          idEvento: ev.idEvento,
+          seccion: seccion,
+          child: card,
+        );
+      }
+      return RepaintBoundary(child: card);
     }
 
     // Todo carrusel con más de 1 evento se auto-scrollea suavemente (top,
@@ -1737,6 +1985,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
                     urlAvatar: l['avatar']?.toString(),
                     rubro: l['rubro']?.toString(),
                     verificado: l['verificado'] == true,
+                    esPionero: l['esPionero'] == true,
                     onTap: () => _irALocal(l),
                   );
                 }
@@ -1795,11 +2044,22 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
               childAspectRatio: 9 / 13,
             ),
             delegate: SliverChildBuilderDelegate((ctx, i) {
-              final ev = _aEventoCartelera(eventos[i]);
-              return CardEventoGrid(
+              final raw = eventos[i];
+              final ev = _aEventoCartelera(raw);
+              final idLocal = raw['idLocal']?.toString() ?? '';
+              Widget card = CardEventoGrid(
                 evento: ev,
                 onTap: () => _irAEvento(ev.idEvento),
               );
+              if (idLocal.isNotEmpty && ev.idEvento.isNotEmpty) {
+                card = DetectorImpresionCartelera(
+                  idLocal: idLocal,
+                  idEvento: ev.idEvento,
+                  seccion: SeccionesImpresion.gratis,
+                  child: card,
+                );
+              }
+              return RepaintBoundary(child: card);
             }, childCount: eventos.length),
           ),
         ),
@@ -1847,10 +2107,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     );
   }
 
-  // ==========================================================================
-  // HELPERS UI
-  // ==========================================================================
-
   EventoCartelera _aEventoCartelera(Map<String, dynamic> e) {
     final iso = e['fechaInicio']?.toString();
     return EventoCartelera(
@@ -1866,7 +2122,26 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       cupoMax: e['cupoMax'] as int?,
       cuposLibres: e['cuposLibres'] as int?,
       localVerificado: e['localVerificado'] == true,
+      localEsPionero: e['localEsPionero'] == true,
     );
+  }
+
+  String _seccionImpresionCartelera(Map<String, dynamic> e) {
+    final j = (e['jerarquia']?.toString() ?? '').toLowerCase();
+    switch (j) {
+      case 'top_ultra':
+        return SeccionesImpresion.topUltra;
+      case 'top':
+        return SeccionesImpresion.top;
+      case 'recomendado_fernecito':
+        return SeccionesImpresion.recomendadoFernecito;
+      case 'normal':
+        return SeccionesImpresion.normal;
+      case 'gratis':
+        return SeccionesImpresion.gratis;
+      default:
+        return j.isNotEmpty ? j : SeccionesImpresion.normal;
+    }
   }
 
   /// "Vie 10 Sep · 21:00" — para cards grandes (TOP).
@@ -2053,6 +2328,7 @@ class _CarruselAvataresLocalesState extends State<_CarruselAvataresLocales> {
           final nombre = (loc['nombre']?.toString() ?? 'Local');
           final idLocal = loc['idLocal']?.toString();
           final verificado = loc['verificado'] == true;
+          final esPionero = loc['esPionero'] == true;
           return Padding(
             padding: EdgeInsets.only(
               right: index < itemCountTotal - 1 ? _spacing : 20,
@@ -2074,57 +2350,23 @@ class _CarruselAvataresLocalesState extends State<_CarruselAvataresLocales> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: _avatarSize,
-                      height: _avatarSize,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: ColoresApp.principalMarca.withOpacity(0.9),
-                          width: 1.8,
+                    AvatarLocal(
+                      imageUrl: avatar,
+                      size: _avatarSize,
+                      esPionero: esPionero,
+                      placeholderIcon: CupertinoIcons.building_2_fill,
+                      memCacheWidth: (_avatarSize *
+                              MediaQuery.of(context)
+                                  .devicePixelRatio
+                                  .clamp(1.0, 2.0))
+                          .round(),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.22),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.22),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: SizedBox.expand(
-                          child: _esAssetUrl(avatar)
-                              ? Image.asset(
-                                  avatar,
-                                  fit: BoxFit.cover,
-                                  alignment: Alignment.center,
-                                  filterQuality: FilterQuality.low,
-                                  cacheWidth:
-                                      (_avatarSize *
-                                              MediaQuery.of(context)
-                                                  .devicePixelRatio
-                                                  .clamp(1.0, 2.0))
-                                          .round(),
-                                  errorBuilder: (_, __, ___) =>
-                                      _avatarPlaceholderLocal(_avatarSize),
-                                )
-                              : CachedNetworkImage(
-                                  imageUrl: avatar,
-                                  fit: BoxFit.cover,
-                                  alignment: Alignment.center,
-                                  memCacheWidth:
-                                      (_avatarSize *
-                                              MediaQuery.of(context)
-                                                  .devicePixelRatio
-                                                  .clamp(1.0, 2.0))
-                                          .round(),
-                                  placeholder: (_, __) =>
-                                      _avatarPlaceholderLocal(_avatarSize),
-                                  errorWidget: (_, __, ___) =>
-                                      _avatarPlaceholderLocal(_avatarSize),
-                                ),
-                        ),
-                      ),
+                      ],
                     ),
                     if (verificado)
                       Transform.translate(

@@ -17,6 +17,7 @@ import '../widgets/burbuja_estado.dart';
 import '../widgets/card_contexto_rompehielo.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/stack_avatares_squad.dart';
+import '../widgets/fernecito_loader.dart';
 
 // Rompe hielo persona → persona (5 mensajes)
 const List<String> _iniciadorPersona = [
@@ -776,10 +777,7 @@ class _BotonReplicar extends StatelessWidget {
         decoration: BoxDecoration(
           color: ColoresApp.principalMarca.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: ColoresApp.principalMarca.withValues(alpha: 0.45),
-          ),
-        ),
+                  ),
         child: Text(
           'Replicar',
           style: GoogleFonts.baloo2(
@@ -1032,10 +1030,7 @@ class _ComposerRompehielo extends StatelessWidget {
           decoration: BoxDecoration(
             color: ColoresApp.fondoSuperficie.withValues(alpha: 0.95),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: ColoresApp.principalMarca.withValues(alpha: 0.35),
-            ),
-            boxShadow: [
+                        boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.22),
                 blurRadius: 10,
@@ -1073,7 +1068,7 @@ class _ComposerRompehielo extends StatelessWidget {
                 padding: const EdgeInsets.all(6),
                 onPressed: enviando || !puedeEnviar ? null : onEnviar,
                 child: enviando
-                    ? const CupertinoActivityIndicator(radius: 10)
+                    ? const FernecitoLoader.inline(size: 20)
                     : Container(
                         width: 38,
                         height: 38,
@@ -1082,12 +1077,7 @@ class _ComposerRompehielo extends StatelessWidget {
                               ? ColoresApp.principalMarca
                               : ColoresApp.fondoSuperficie,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: ColoresApp.principalMarca.withValues(
-                              alpha: puedeEnviar ? 1 : 0.25,
-                            ),
-                          ),
-                        ),
+                                                  ),
                         child: Icon(
                           CupertinoIcons.arrow_up,
                           size: 18,
@@ -1173,12 +1163,7 @@ class _TemplatesChipsState extends State<_TemplatesChips> {
                   ? ColoresApp.principalMarca.withValues(alpha: 0.14)
                   : ColoresApp.fondoSuperficie.withValues(alpha: 0.88),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: ColoresApp.principalMarca.withValues(
-                  alpha: esToggle ? 0.55 : 0.28,
-                ),
-              ),
-            ),
+                          ),
             child: Text(
               msg,
               style: GoogleFonts.baloo2(

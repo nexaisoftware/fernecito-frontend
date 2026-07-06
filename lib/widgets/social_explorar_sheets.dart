@@ -1,6 +1,8 @@
 /// Bottom sheets para explorar personas y squads por ciudad.
 library;
 
+import 'dart:ui';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -14,9 +16,24 @@ import '../core/ubicaciones_data.dart';
 import '../models/social.dart';
 import 'burbuja_estado.dart';
 import 'filtro_ubicaciones_sheet.dart';
+import 'fernecito_loader.dart';
 import 'social_ui.dart';
 
 const int _kExplorarPagina = 27;
+
+/// Layout grilla personas en explorar.
+abstract final class _LayoutGridPersonasExplorar {
+  static const mainAxisSpacing = 14.0;
+  static const crossAxisSpacing = 10.0;
+  static const celdaAltura = 132.0;
+  static const padding = EdgeInsets.fromLTRB(14, 8, 14, 0);
+  static const delegate = SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: 3,
+    mainAxisSpacing: mainAxisSpacing,
+    crossAxisSpacing: crossAxisSpacing,
+    mainAxisExtent: celdaAltura,
+  );
+}
 
 String arrobaExplorar(String u) {
   final t = u.trim();
@@ -71,15 +88,22 @@ class EncabezadoExplorarUbicacion extends StatelessWidget {
     super.key,
     required this.titulo,
     required this.onEditar,
+    this.compacto = false,
   });
 
   final String titulo;
   final VoidCallback onEditar;
+  final bool compacto;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        compacto ? 6 : 16,
+        12,
+        compacto ? 4 : 8,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -128,32 +152,34 @@ Future<void> mostrarExplorarPersonasSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (ctx) => _ExplorarPersonasSheet(onPerfil: onPerfil),
+    builder: (ctx) => ExplorarPersonasContenido(
+      onPerfil: (u) {
+        Navigator.of(ctx).pop();
+        onPerfil(u);
+      },
+      embebido: false,
+    ),
   );
 }
 
-Future<void> mostrarExplorarSquadsSheet(
-  BuildContext context, {
-  required void Function(SquadExplorarItem s) onSquad,
-}) {
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (ctx) => _ExplorarSquadsSheet(onSquad: onSquad),
-  );
-}
+class ExplorarPersonasContenido extends StatefulWidget {
+  const ExplorarPersonasContenido({
+    super.key,
+    required this.onPerfil,
+    this.embebido = true,
+    this.paddingInferiorScroll = 0,
+  });
 
-class _ExplorarPersonasSheet extends StatefulWidget {
   final void Function(UsuarioBusqueda u) onPerfil;
-
-  const _ExplorarPersonasSheet({required this.onPerfil});
+  final bool embebido;
+  final double paddingInferiorScroll;
 
   @override
-  State<_ExplorarPersonasSheet> createState() => _ExplorarPersonasSheetState();
+  State<ExplorarPersonasContenido> createState() =>
+      _ExplorarPersonasContenidoState();
 }
 
-class _ExplorarPersonasSheetState extends State<_ExplorarPersonasSheet> {
+class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
   final ServicioAmigos _srv = ServicioAmigos();
   final ScrollController _scroll = ScrollController();
   String _provincia = UbicacionesData.provinciaPorDefecto;
@@ -257,20 +283,150 @@ class _ExplorarPersonasSheetState extends State<_ExplorarPersonasSheet> {
     });
   }
 
+  Widget _chipsCiudad({
+    required String? ciudad,
+    required List<String> ciudadesLista,
+  }) {
+    if (ciudadesLista.length <= 1) return const SizedBox.shrink();
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: ciudadesLista.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final c = ciudadesLista[i];
+          final sel = c == ciudad;
+          return GestureDetector(
+            onTap: () => _seleccionarCiudadChip(c),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: sel
+                    ? ColoresApp.principalMarca
+                    : ColoresApp.fondoSuperficie,
+                borderRadius: BorderRadius.circular(20),
+                              ),
+              child: Text(
+                c,
+                style: GoogleFonts.baloo2(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: sel ? Colors.white : ColoresApp.textoPrincipal,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmbebido(
+    BuildContext context,
+    String? ciudad,
+    List<String> ciudadesLista,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        EncabezadoExplorarUbicacion(
+          titulo: ciudad != null ? 'Explorar $ciudad' : 'Explorar personas',
+          onEditar: _elegirCiudad,
+        ),
+        _chipsCiudad(ciudad: ciudad, ciudadesLista: ciudadesLista),
+        if (ciudad == null)
+          Expanded(
+            child: Center(
+              child: Text(
+                'Elegí una ciudad para ver personas',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.baloo2(
+                  fontSize: 15,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ),
+            ),
+          )
+        else if (_cargando)
+          const Expanded(
+            child: FernecitoLoaderCentro(size: 28),
+          )
+        else if (_personas.isEmpty)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _errorCarga ??
+                      'No hay personas públicas en $ciudad.\n'
+                      'Solo aparecen quienes tienen ciudad en el perfil (cartelera) y perfil público.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 14,
+                    color: _errorCarga != null
+                        ? ColoresApp.principalMarca
+                        : ColoresApp.textoSecundario,
+                  ),
+                ),
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: CustomScrollView(
+              controller: _scroll,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: _LayoutGridPersonasExplorar.padding,
+                  sliver: SliverGrid(
+                    gridDelegate: _LayoutGridPersonasExplorar.delegate,
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) {
+                        final p = _personas[i];
+                        return _CeldaPersonaExplorar(
+                          username: arrobaExplorar(p.username),
+                          avatarUrl: p.avatarUrl ?? '',
+                          estado: p.estado ?? '',
+                          onTap: () => widget.onPerfil(p),
+                        );
+                      },
+                      childCount: _personas.length,
+                    ),
+                  ),
+                ),
+                if (_cargandoMas)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: FernecitoLoaderCentro(size: 28),
+                    ),
+                  ),
+                SliverToBoxAdapter(
+                  child: SizedBox(height: widget.paddingInferiorScroll),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final h = MediaQuery.sizeOf(context).height * 0.9;
     final ciudad = _ciudadActiva;
     final ciudadesLista = _ciudades.toList()..sort();
 
-    return Container(
-      height: h,
-      decoration: BoxDecoration(
-        color: ColoresApp.fondoPrincipal,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
+    if (widget.embebido) {
+      return _buildEmbebido(context, ciudad, ciudadesLista);
+    }
+
+    final cuerpo = Column(
+      children: [
+        if (!widget.embebido) ...[
           const SizedBox(height: 10),
           Container(
             width: 36,
@@ -280,12 +436,15 @@ class _ExplorarPersonasSheetState extends State<_ExplorarPersonasSheet> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          EncabezadoExplorarUbicacion(
-            titulo: ciudad != null
-                ? 'Personas de $ciudad'
-                : 'Explorar personas',
-            onEditar: _elegirCiudad,
-          ),
+        ],
+        EncabezadoExplorarUbicacion(
+          titulo: ciudad != null
+              ? (widget.embebido
+                  ? 'Explorar $ciudad'
+                  : 'Personas de $ciudad')
+              : 'Explorar personas',
+          onEditar: _elegirCiudad,
+        ),
           if (ciudadesLista.length > 1)
             SizedBox(
               height: 38,
@@ -307,11 +466,7 @@ class _ExplorarPersonasSheetState extends State<_ExplorarPersonasSheet> {
                             ? ColoresApp.principalMarca
                             : ColoresApp.fondoSuperficie,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: ColoresApp.principalMarca
-                              .withValues(alpha: sel ? 1 : 0.3),
-                        ),
-                      ),
+                                              ),
                       child: Text(
                         c,
                         style: GoogleFonts.baloo2(
@@ -343,7 +498,7 @@ class _ExplorarPersonasSheetState extends State<_ExplorarPersonasSheet> {
             )
           else if (_cargando)
             const Expanded(
-              child: Center(child: CupertinoActivityIndicator()),
+              child: FernecitoLoaderCentro(size: 28),
             )
           else if (_personas.isEmpty)
             Expanded(
@@ -372,15 +527,9 @@ class _ExplorarPersonasSheetState extends State<_ExplorarPersonasSheet> {
                 physics: const BouncingScrollPhysics(),
                 slivers: [
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    padding: _LayoutGridPersonasExplorar.padding,
                     sliver: SliverGrid(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 0.62,
-                      ),
+                      gridDelegate: _LayoutGridPersonasExplorar.delegate,
                       delegate: SliverChildBuilderDelegate(
                         (context, i) {
                           final p = _personas[i];
@@ -388,10 +537,7 @@ class _ExplorarPersonasSheetState extends State<_ExplorarPersonasSheet> {
                             username: arrobaExplorar(p.username),
                             avatarUrl: p.avatarUrl ?? '',
                             estado: p.estado ?? '',
-                            onTap: () {
-                              Navigator.of(context).pop();
-                              widget.onPerfil(p);
-                            },
+                            onTap: () => widget.onPerfil(p),
                           );
                         },
                         childCount: _personas.length,
@@ -402,19 +548,53 @@ class _ExplorarPersonasSheetState extends State<_ExplorarPersonasSheet> {
                     const SliverToBoxAdapter(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(child: CupertinoActivityIndicator()),
+                        child: FernecitoLoaderCentro(size: 28),
                       ),
                     ),
                   SliverToBoxAdapter(
-                    child: SizedBox(height: MediaQuery.paddingOf(context).bottom + 16),
+                    child: SizedBox(
+                      height: widget.embebido
+                          ? 24
+                          : MediaQuery.paddingOf(context).bottom + 16,
+                    ),
                   ),
                 ],
               ),
             ),
         ],
+    );
+
+    if (widget.embebido) {
+      return cuerpo;
+    }
+
+    return Container(
+      height: h,
+      decoration: BoxDecoration(
+        color: ColoresApp.fondoPrincipal,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      child: cuerpo,
     );
   }
+}
+
+Future<void> mostrarExplorarSquadsSheet(
+  BuildContext context, {
+  required void Function(SquadExplorarItem s) onSquad,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (ctx) => ExplorarSquadsContenido(
+      onSquad: (s) {
+        Navigator.of(ctx).pop();
+        onSquad(s);
+      },
+      embebido: false,
+    ),
+  );
 }
 
 class _CeldaPersonaExplorar extends StatelessWidget {
@@ -434,47 +614,98 @@ class _CeldaPersonaExplorar extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            username,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.baloo2(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              color: ColoresApp.principalMarca,
+      behavior: HitTestBehavior.opaque,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.topCenter,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 11),
+                  child: AvatarSocial(
+                    url: avatarUrl,
+                    size: 60,
+                    borderColor: Colors.white.withValues(alpha: 0.14),
+                    borderWidth: 1,
+                  ),
+                ),
+                _PillUsernameGlass(username: username),
+              ],
             ),
-          ),
-          const SizedBox(height: 6),
-          AvatarSocialGlow(url: avatarUrl, size: 68),
-          const SizedBox(height: 6),
-          BurbujaEstado(
-            texto: estado,
-            fontSize: 9.5,
-            maxWidth: 100,
-            maxLines: 2,
-            ajustarAnchoAlTexto: true,
-            compacta: true,
-          ),
-        ],
+            const SizedBox(height: 5),
+            BurbujaEstado(
+              texto: estado,
+              fontSize: 10.5,
+              maxWidth: 102,
+              maxLines: 2,
+              ajustarAnchoAlTexto: true,
+              compacta: true,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ExplorarSquadsSheet extends StatefulWidget {
-  final void Function(SquadExplorarItem s) onSquad;
+class _PillUsernameGlass extends StatelessWidget {
+  const _PillUsernameGlass({required this.username});
 
-  const _ExplorarSquadsSheet({required this.onSquad});
+  final String username;
 
   @override
-  State<_ExplorarSquadsSheet> createState() => _ExplorarSquadsSheetState();
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 108),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            username,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.baloo2(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: ColoresApp.textoPrincipal.withValues(alpha: 0.92),
+              letterSpacing: -0.2,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _ExplorarSquadsSheetState extends State<_ExplorarSquadsSheet> {
+class ExplorarSquadsContenido extends StatefulWidget {
+  const ExplorarSquadsContenido({
+    super.key,
+    required this.onSquad,
+    this.embebido = true,
+    this.paddingInferiorScroll = 0,
+  });
+
+  final void Function(SquadExplorarItem s) onSquad;
+  final bool embebido;
+  final double paddingInferiorScroll;
+
+  @override
+  State<ExplorarSquadsContenido> createState() =>
+      _ExplorarSquadsContenidoState();
+}
+
+class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
   final ServicioSquads _srv = ServicioSquads();
   String _provincia = UbicacionesData.provinciaPorDefecto;
   Set<String> _ciudades = {UbicacionesData.ciudadPorDefecto};
@@ -557,20 +788,164 @@ class _ExplorarSquadsSheetState extends State<_ExplorarSquadsSheet> {
     });
   }
 
+  Widget _chipsCiudadSquads({
+    required String? ciudad,
+    required List<String> ciudadesLista,
+  }) {
+    if (ciudadesLista.length <= 1) return const SizedBox.shrink();
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: ciudadesLista.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final c = ciudadesLista[i];
+          final sel = c == ciudad;
+          return GestureDetector(
+            onTap: () => _seleccionarCiudadChip(c),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: sel
+                    ? ColoresApp.principalMarca
+                    : ColoresApp.fondoSuperficie,
+                borderRadius: BorderRadius.circular(20),
+                              ),
+              child: Text(
+                c,
+                style: GoogleFonts.baloo2(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: sel ? Colors.white : ColoresApp.textoPrincipal,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSquadsEmbebido(
+    BuildContext context,
+    String? ciudad,
+    List<String> ciudadesLista,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        EncabezadoExplorarUbicacion(
+          titulo: ciudad != null ? 'Explorar $ciudad' : 'Explorar squads',
+          onEditar: _elegirCiudad,
+        ),
+        _chipsCiudadSquads(ciudad: ciudad, ciudadesLista: ciudadesLista),
+        if (ciudad == null)
+          const Expanded(
+            child: Center(child: Text('Elegí una ciudad')),
+          )
+        else if (_cargando)
+          const Expanded(
+            child: FernecitoLoaderCentro(size: 28),
+          )
+        else if (_squads.isEmpty)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  _errorCarga ??
+                      'No hay squads públicos con miembros en $ciudad.\n'
+                      'En la base no hay miembros aceptados en squads todavía.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 14,
+                    color: _errorCarga != null
+                        ? ColoresApp.principalMarca
+                        : ColoresApp.textoSecundario,
+                  ),
+                ),
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 0.88,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) {
+                        final s = _squads[i];
+                        return _CeldaSquadExplorar(
+                          nombre: s.nombre,
+                          avatares: s.avataresResueltos,
+                          portada: s.portadaUrl,
+                          portadaCacheKey: s.portadaCacheKey,
+                          total: s.cantidadMiembros,
+                          extra: s.miembrosExtra,
+                          onTap: () => widget.onSquad(s),
+                        );
+                      },
+                      childCount: _squads.length,
+                    ),
+                  ),
+                ),
+                if (_hayMas)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                      child: CupertinoButton(
+                        color: ColoresApp.fondoSuperficie,
+                        borderRadius: BorderRadius.circular(14),
+                        onPressed: _cargandoMas
+                            ? null
+                            : () => _cargar(inicial: false),
+                        child: _cargandoMas
+                            ? const FernecitoLoader.inline(size: 16)
+                            : Text(
+                                'Ver más squads',
+                                style: GoogleFonts.baloo2(
+                                  fontWeight: FontWeight.w800,
+                                  color: ColoresApp.principalMarca,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                SliverToBoxAdapter(
+                  child: SizedBox(height: widget.paddingInferiorScroll),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final h = MediaQuery.sizeOf(context).height * 0.9;
     final ciudad = _ciudadActiva;
     final ciudadesLista = _ciudades.toList()..sort();
 
-    return Container(
-      height: h,
-      decoration: BoxDecoration(
-        color: ColoresApp.fondoPrincipal,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
+    if (widget.embebido) {
+      return _buildSquadsEmbebido(context, ciudad, ciudadesLista);
+    }
+
+    final cuerpo = Column(
+      children: [
+        if (!widget.embebido) ...[
           const SizedBox(height: 10),
           Container(
             width: 36,
@@ -580,10 +955,14 @@ class _ExplorarSquadsSheetState extends State<_ExplorarSquadsSheet> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          EncabezadoExplorarUbicacion(
-            titulo: ciudad != null ? 'Squads en $ciudad' : 'Explorar squads',
-            onEditar: _elegirCiudad,
-          ),
+        ],
+        EncabezadoExplorarUbicacion(
+          titulo: ciudad != null
+              ? (widget.embebido ? 'Explorar $ciudad' : 'Squads en $ciudad')
+              : 'Explorar squads',
+          onEditar: _elegirCiudad,
+          compacto: widget.embebido,
+        ),
           if (ciudadesLista.length > 1)
             SizedBox(
               height: 38,
@@ -605,11 +984,7 @@ class _ExplorarSquadsSheetState extends State<_ExplorarSquadsSheet> {
                             ? ColoresApp.principalMarca
                             : ColoresApp.fondoSuperficie,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: ColoresApp.principalMarca
-                              .withValues(alpha: sel ? 1 : 0.3),
-                        ),
-                      ),
+                                              ),
                       child: Text(
                         c,
                         style: GoogleFonts.baloo2(
@@ -630,7 +1005,7 @@ class _ExplorarSquadsSheetState extends State<_ExplorarSquadsSheet> {
               ),
             )
           else if (_cargando)
-            const Expanded(child: Center(child: CupertinoActivityIndicator()))
+            const Expanded(child: FernecitoLoaderCentro(size: 28))
           else if (_squads.isEmpty)
             Expanded(
               child: Center(
@@ -676,10 +1051,7 @@ class _ExplorarSquadsSheetState extends State<_ExplorarSquadsSheet> {
                             portadaCacheKey: s.portadaCacheKey,
                             total: s.cantidadMiembros,
                             extra: s.miembrosExtra,
-                            onTap: () {
-                              Navigator.of(context).pop();
-                              widget.onSquad(s);
-                            },
+                            onTap: () => widget.onSquad(s),
                           );
                         },
                         childCount: _squads.length,
@@ -689,7 +1061,14 @@ class _ExplorarSquadsSheetState extends State<_ExplorarSquadsSheet> {
                   if (_hayMas)
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          4,
+                          20,
+                          widget.embebido
+                              ? 24
+                              : MediaQuery.paddingOf(context).bottom + 16,
+                        ),
                         child: CupertinoButton(
                           color: ColoresApp.fondoSuperficie,
                           borderRadius: BorderRadius.circular(14),
@@ -697,7 +1076,7 @@ class _ExplorarSquadsSheetState extends State<_ExplorarSquadsSheet> {
                               ? null
                               : () => _cargar(inicial: false),
                           child: _cargandoMas
-                              ? const CupertinoActivityIndicator()
+                              ? const FernecitoLoader.inline(size: 16)
                               : Text(
                                   'Ver más squads',
                                   style: GoogleFonts.baloo2(
@@ -712,7 +1091,19 @@ class _ExplorarSquadsSheetState extends State<_ExplorarSquadsSheet> {
               ),
             ),
         ],
+    );
+
+    if (widget.embebido) {
+      return cuerpo;
+    }
+
+    return Container(
+      height: h,
+      decoration: BoxDecoration(
+        color: ColoresApp.fondoPrincipal,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      child: cuerpo,
     );
   }
 }
@@ -890,13 +1281,7 @@ class _StackAvataresExplorar extends StatelessWidget {
                   color: bordeClaro
                       ? ColoresApp.principalMarca.withValues(alpha: 0.85)
                       : ColoresApp.principalMarca.withValues(alpha: 0.2),
-                  border: Border.all(
-                    color: bordeClaro
-                        ? Colors.white
-                        : ColoresApp.principalMarca.withValues(alpha: 0.5),
-                    width: bordeClaro ? 2 : 1,
-                  ),
-                ),
+                                  ),
                 child: Text(
                   '+$extra',
                   style: GoogleFonts.baloo2(
@@ -918,11 +1303,7 @@ class _StackAvataresExplorar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(
-          color: bordeClaro ? Colors.white : ColoresApp.fondoPrincipal,
-          width: bordeClaro ? 2 : 2,
-        ),
-        boxShadow: bordeClaro
+                boxShadow: bordeClaro
             ? [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.35),

@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/constants.dart';
 import '../models/social.dart';
 import '../widgets/avatar_usuario.dart';
+import '../widgets/fernecito_loader.dart';
 import '../widgets/social_ui.dart';
 import '../widgets/stack_avatares_squad.dart';
 
@@ -125,9 +126,7 @@ class SquadHeroZona extends StatelessWidget {
             if (subiendo)
               Container(
                 color: Colors.black.withValues(alpha: 0.55),
-                child: const Center(
-                  child: CupertinoActivityIndicator(color: Colors.white, radius: 18),
-                ),
+                child: const FernecitoLoaderCentro(size: 34),
               ),
             SafeArea(
               bottom: false,
@@ -545,8 +544,7 @@ class _CeldaMiembroCompacta extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFFD4AF37),
                       borderRadius: BorderRadius.circular(7),
-                      border: Border.all(color: Colors.white, width: 1),
-                    ),
+                                          ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -667,8 +665,7 @@ class SquadBadgeUbicacion extends StatelessWidget {
         decoration: BoxDecoration(
           color: ColoresApp.fondoSuperficie.withValues(alpha: 0.72),
           borderRadius: BorderRadius.circular(50),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
+                  ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

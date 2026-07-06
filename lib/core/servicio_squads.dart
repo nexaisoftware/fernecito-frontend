@@ -3,6 +3,7 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/social.dart';
+import 'cache_memoria.dart';
 import 'comprimir_imagen_storage.dart';
 import 'supabase_client.dart';
 
@@ -13,54 +14,105 @@ class ServicioSquads {
   ServicioSquads._interno();
 
   static const _bucketPortadas = 'squad-banners';
+  static const _ttlSuave = Duration(seconds: 90);
+
+  final _cacheMios = CacheMemoria<List<SquadResumen>>();
+  final _cacheInvs = CacheMemoria<List<SquadResumen>>();
+  final _cacheDetalle = CachePorClave<SquadDetalle>();
 
   String? get _uid => ServicioSupabase().usuarioActual?.id;
 
+  bool get tieneCacheListas =>
+      _cacheMios.tiene(_uid) && _cacheInvs.tiene(_uid);
+
+  List<SquadResumen>? get misSquadsCache =>
+      _cacheMios.tiene(_uid) ? _cacheMios.data : null;
+
+  List<SquadResumen>? get invitacionesCache =>
+      _cacheInvs.tiene(_uid) ? _cacheInvs.data : null;
+
+  void invalidarListas() {
+    _cacheMios.clear();
+    _cacheInvs.clear();
+  }
+
+  void invalidarDetalle(String idGrupo) => _cacheDetalle.invalidate(idGrupo);
+
   /// Squads donde soy miembro aceptado.
-  Future<List<SquadResumen>> misSquads() async {
-    if (_uid == null) return const [];
+  Future<List<SquadResumen>> misSquads({bool forzarCompleto = false}) async {
+    final uid = _uid;
+    if (uid == null) {
+      _cacheMios.clear();
+      return const [];
+    }
+    if (!forzarCompleto && _cacheMios.fresco(uid, _ttlSuave)) {
+      return _cacheMios.data!;
+    }
     try {
       final res = await ServicioSupabase().cliente.rpc('squad_listar_mios');
-      if (res is List) {
-        return res
-            .map((e) => SquadResumen.fromMap(Map<String, dynamic>.from(e as Map)))
-            .toList();
-      }
-      return const [];
+      final list = res is List
+          ? res
+              .map((e) =>
+                  SquadResumen.fromMap(Map<String, dynamic>.from(e as Map)))
+              .toList()
+          : const <SquadResumen>[];
+      _cacheMios.set(uid, list);
+      return list;
     } catch (e) {
       debugPrint('⚠️ squad_listar_mios: $e');
-      return const [];
+      return _cacheMios.tiene(uid) ? _cacheMios.data! : const [];
     }
   }
 
   /// Invitaciones a squads pendientes para mí.
-  Future<List<SquadResumen>> invitaciones() async {
-    if (_uid == null) return const [];
-    try {
-      final res = await ServicioSupabase().cliente.rpc('squad_listar_invitaciones');
-      if (res is List) {
-        return res
-            .map((e) => SquadResumen.fromMap(Map<String, dynamic>.from(e as Map)))
-            .toList();
-      }
+  Future<List<SquadResumen>> invitaciones({bool forzarCompleto = false}) async {
+    final uid = _uid;
+    if (uid == null) {
+      _cacheInvs.clear();
       return const [];
+    }
+    if (!forzarCompleto && _cacheInvs.fresco(uid, _ttlSuave)) {
+      return _cacheInvs.data!;
+    }
+    try {
+      final res =
+          await ServicioSupabase().cliente.rpc('squad_listar_invitaciones');
+      final list = res is List
+          ? res
+              .map((e) =>
+                  SquadResumen.fromMap(Map<String, dynamic>.from(e as Map)))
+              .toList()
+          : const <SquadResumen>[];
+      _cacheInvs.set(uid, list);
+      return list;
     } catch (e) {
       debugPrint('⚠️ squad_listar_invitaciones: $e');
-      return const [];
+      return _cacheInvs.tiene(uid) ? _cacheInvs.data! : const [];
     }
   }
 
   /// Detalle de un squad con miembros y mi relación.
-  Future<SquadDetalle?> detalle(String idGrupo) async {
+  Future<SquadDetalle?> detalle(
+    String idGrupo, {
+    bool forzarCompleto = false,
+  }) async {
+    if (!forzarCompleto &&
+        _cacheDetalle.fresco(idGrupo, _ttlSuave)) {
+      return _cacheDetalle.get(idGrupo);
+    }
     try {
       final res = await ServicioSupabase()
           .cliente
           .rpc('squad_detalle', params: {'p_grupo': idGrupo});
-      if (res is Map) return SquadDetalle.fromMap(Map<String, dynamic>.from(res));
+      if (res is Map) {
+        final d = SquadDetalle.fromMap(Map<String, dynamic>.from(res));
+        _cacheDetalle.set(idGrupo, d);
+        return d;
+      }
       return null;
     } catch (e) {
       debugPrint('⚠️ squad_detalle: $e');
-      return null;
+      return _cacheDetalle.get(idGrupo);
     }
   }
 
@@ -113,6 +165,7 @@ class ServicioSquads {
         'p_es_publico': esPublico,
         'p_vibe': vibe,
       });
+      invalidarListas();
       return res?.toString();
     } catch (e) {
       debugPrint('⚠️ squad_crear: $e');
@@ -139,6 +192,8 @@ class ServicioSquads {
         'p_estado': estado,
         'p_vibe': vibe,
       });
+      invalidarListas();
+      invalidarDetalle(idGrupo);
       return true;
     } catch (e) {
       debugPrint('⚠️ squad_editar: $e');
@@ -151,6 +206,8 @@ class ServicioSquads {
       await ServicioSupabase()
           .cliente
           .rpc('squad_eliminar', params: {'p_grupo': idGrupo});
+      invalidarListas();
+      invalidarDetalle(idGrupo);
       return true;
     } catch (e) {
       debugPrint('⚠️ squad_eliminar: $e');
@@ -164,6 +221,7 @@ class ServicioSquads {
         'p_grupo': idGrupo,
         'p_usuario': idUsuario,
       });
+      invalidarDetalle(idGrupo);
       return true;
     } catch (e) {
       debugPrint('⚠️ squad_invitar: $e');
@@ -177,6 +235,8 @@ class ServicioSquads {
         'p_grupo': idGrupo,
         'p_aceptar': aceptar,
       });
+      invalidarListas();
+      invalidarDetalle(idGrupo);
       return true;
     } catch (e) {
       debugPrint('⚠️ squad_responder_invitacion: $e');
@@ -189,6 +249,8 @@ class ServicioSquads {
       await ServicioSupabase()
           .cliente
           .rpc('squad_salir', params: {'p_grupo': idGrupo});
+      invalidarListas();
+      invalidarDetalle(idGrupo);
       return true;
     } catch (e) {
       debugPrint('⚠️ squad_salir: $e');
@@ -202,6 +264,7 @@ class ServicioSquads {
         'p_grupo': idGrupo,
         'p_usuario': idUsuario,
       });
+      invalidarDetalle(idGrupo);
       return true;
     } catch (e) {
       debugPrint('⚠️ squad_expulsar: $e');
@@ -316,6 +379,7 @@ class ServicioSquads {
         'p_usuario': idUsuario,
         'p_aceptar': aceptar,
       });
+      invalidarDetalle(idGrupo);
       return true;
     } catch (e) {
       debugPrint('⚠️ squad_aprobar_miembro: $e');

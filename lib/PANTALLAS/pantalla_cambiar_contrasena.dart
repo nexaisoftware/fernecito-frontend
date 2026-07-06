@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/constants.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
+import '../widgets/fernecito_loader.dart';
 
 class PantallaCambiarContrasena extends StatefulWidget {
   const PantallaCambiarContrasena({super.key});
@@ -249,8 +250,7 @@ class _PantallaCambiarContrasenaState extends State<PantallaCambiarContrasena> {
                         ),
                         child: Center(
                           child: _procesando
-                              ? const CupertinoActivityIndicator(
-                                  color: ColoresApp.textoPrincipal)
+                              ? const FernecitoLoader.inline(size: 16, color: ColoresApp.textoPrincipal)
                               : Text(
                                   'Cambiar contraseña',
                                   style: GoogleFonts.baloo2(
@@ -271,10 +271,7 @@ class _PantallaCambiarContrasenaState extends State<PantallaCambiarContrasena> {
                       decoration: BoxDecoration(
                         color: ColoresApp.fondoSuperficie.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: ColoresApp.principalMarca.withOpacity(0.25),
-                        ),
-                      ),
+                                              ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
