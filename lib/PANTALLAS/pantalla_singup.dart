@@ -16,10 +16,15 @@
 /// Stack: Cupertino widgets + Google Fonts + Font Awesome + Supabase Auth
 library;
 
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
@@ -51,6 +56,8 @@ class _PantallaSignupState extends State<PantallaSignup>
   bool _mostrarMensajeContrasena = false;
   bool _ocultarContrasena = true;
   bool _ocultarConfirmarContrasena = true;
+  bool get _mostrarAppleSignIn =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   // Animación para el mensaje de contraseña
   late AnimationController _controladorAnimacion;
@@ -154,9 +161,9 @@ class _PantallaSignupState extends State<PantallaSignup>
     try {
       // Registrar usuario en Supabase con deep link para confirmación
       final supabase = ServicioSupabase();
-      
+
       print('📝 Registrando usuario: $email');
-      
+
       final respuesta = await supabase.cliente.auth.signUp(
         email: email,
         password: contrasena,
@@ -169,7 +176,7 @@ class _PantallaSignupState extends State<PantallaSignup>
 
       if (respuesta.user != null) {
         // Usuario creado o ya existe
-        
+
         if (respuesta.session == null) {
           // No hay sesión - requiere confirmación de email
           print('📧 Requiere confirmación de email');
@@ -195,7 +202,7 @@ class _PantallaSignupState extends State<PantallaSignup>
       } else {
         // No se obtuvo usuario (raro pero posible)
         print('⚠️ No se obtuvo usuario en respuesta');
-        
+
         if (mounted) {
           _mostrarError('No se pudo crear la cuenta.\n\nIntentá de nuevo.');
         }
@@ -203,7 +210,7 @@ class _PantallaSignupState extends State<PantallaSignup>
     } catch (error) {
       // Usar el traductor de errores centralizado
       print('❌ Error en signup: $error');
-      
+
       if (mounted) {
         final mensajeError = TraductorErroresAuth.traducir(error);
         _mostrarError(mensajeError);
@@ -233,11 +240,48 @@ class _PantallaSignupState extends State<PantallaSignup>
     } catch (error) {
       print('❌ Error en OAuth Google: $error');
       if (mounted) {
-        _mostrarError('No se pudo conectar con Google.\n\nProbá de nuevo en unos segundos.');
+        _mostrarError(
+          'No se pudo conectar con Google.\n\nProbá de nuevo en unos segundos.',
+        );
       }
     }
   }
 
+  Future<void> _manejarAppleSignIn() async {
+    try {
+      debugPrint('Iniciando registro/login con Apple...');
+
+      final supabase = ServicioSupabase();
+      final rawNonce = supabase.cliente.auth.generateRawNonce();
+      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: hashedNonce,
+      );
+
+      final idToken = credential.identityToken;
+      if (idToken == null) {
+        throw const AuthException('Apple no devolvio identityToken.');
+      }
+
+      await supabase.cliente.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
+    } catch (error) {
+      debugPrint('Error en OAuth Apple: $error');
+      if (mounted) {
+        _mostrarError(
+          'No se pudo conectar con Apple.\n\nProbá de nuevo en unos segundos.',
+        );
+      }
+    }
+  }
 
   // Mostrar diálogo de error
   void _mostrarError(String mensaje) {
@@ -298,33 +342,6 @@ class _PantallaSignupState extends State<PantallaSignup>
     );
   }
 
-  // Mostrar diálogo de advertencia (para confirmación de email)
-  void _mostrarAdvertencia(String titulo, String mensaje) {
-    showCupertinoDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => CupertinoAlertDialog(
-        title: Row(
-          children: [
-            const Icon(CupertinoIcons.mail, color: ColoresApp.promoMarca),
-            const SizedBox(width: 8),
-            Text(titulo),
-          ],
-        ),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 8.0),
-          child: Text(mensaje),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Entendido'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final tamanioPantalla = MediaQuery.of(context).size;
@@ -336,10 +353,15 @@ class _PantallaSignupState extends State<PantallaSignup>
       child: FondoGradienteFernecito(
         corto: true,
         child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(24, padding.top + 32, 24, padding.bottom + 32),
-          child: Column(
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              24,
+              padding.top + 32,
+              24,
+              padding.bottom + 32,
+            ),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Row(
@@ -347,14 +369,19 @@ class _PantallaSignupState extends State<PantallaSignup>
                     CupertinoButton(
                       padding: EdgeInsets.zero,
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Icon(CupertinoIcons.back, color: ColoresApp.textoPrincipal),
+                      child: const Icon(
+                        CupertinoIcons.back,
+                        color: ColoresApp.textoPrincipal,
+                      ),
                     ),
                     Expanded(
                       child: Image.asset(
                         'assets/imagenes/logoprincipal.png',
                         height: 32,
-                        errorBuilder: (context, error, stackTrace) =>
-                            Icon(CupertinoIcons.app, color: ColoresApp.principalMarca),
+                        errorBuilder: (context, error, stackTrace) => Icon(
+                          CupertinoIcons.app,
+                          color: ColoresApp.principalMarca,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 44),
@@ -424,7 +451,7 @@ class _PantallaSignupState extends State<PantallaSignup>
                       decoration: BoxDecoration(
                         color: ColoresApp.principalMarca.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
-                                              ),
+                      ),
                       child: Row(
                         children: [
                           Icon(
@@ -492,7 +519,7 @@ class _PantallaSignupState extends State<PantallaSignup>
             ),
           ),
         ),
-        ),
+      ),
     );
   }
 
@@ -583,7 +610,10 @@ class _PantallaSignupState extends State<PantallaSignup>
         ),
         child: Center(
           child: _cargandoRegistro
-              ? const FernecitoLoader.inline(size: 16, color: ColoresApp.textoPrincipal)
+              ? const FernecitoLoader.inline(
+                  size: 16,
+                  color: ColoresApp.textoPrincipal,
+                )
               : Text(
                   'Crea tu cuenta!',
                   style: GoogleFonts.baloo2(
@@ -609,6 +639,19 @@ class _PantallaSignupState extends State<PantallaSignup>
           ancho: anchoPantalla * 0.85,
           onPressed: _cargandoRegistro ? () {} : _manejarGoogleSignIn,
         ),
+        if (_mostrarAppleSignIn) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: anchoPantalla * 0.85,
+            child: SignInWithAppleButton(
+              onPressed: _cargandoRegistro ? null : _manejarAppleSignIn,
+              text: 'Continuar con Apple',
+              height: 56,
+              borderRadius: const BorderRadius.all(Radius.circular(50)),
+              style: SignInWithAppleButtonStyle.black,
+            ),
+          ),
+        ],
       ],
     );
   }

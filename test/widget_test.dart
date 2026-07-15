@@ -1,18 +1,31 @@
 /// Tests de widgets para la aplicación Fernecito.
-/// 
+///
 /// Este archivo contiene tests básicos de widgets usando flutter_test.
 /// Verifica que los componentes principales se construyan correctamente.
-/// 
+///
 /// Para ejecutar: `flutter test`
-/// 
+///
 /// Nota: Los tests que requieren Supabase pueden necesitar mocks o configuración
 /// de test environment (ver test/helpers/ si se crean).
 library;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fernecito_frontend/app.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await Supabase.initialize(
+      url: 'https://example.supabase.co',
+      anonKey:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
+          'eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIn0.'
+          'test-signature',
+    );
+  });
+
   testWidgets('La app se construye correctamente', (WidgetTester tester) async {
     // Construye la app y renderiza un frame
     await tester.pumpWidget(const AppFernecito());

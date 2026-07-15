@@ -225,7 +225,9 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
 
       // Subir con upsert (reemplaza si ya existe)
       try {
-        await supabase.cliente.storage.from('avatars').uploadBinary(
+        await supabase.cliente.storage
+            .from('avatars')
+            .uploadBinary(
               pathRelativo,
               bytes,
               fileOptions: FileOptions(
@@ -253,7 +255,8 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                 'Conflicto al subir la foto.\n\nIntenta de nuevo o contacta a soporte.';
             break;
           case '413':
-            mensajeError = 'La foto es demasiado grande.\n\nElige una más pequeña.';
+            mensajeError =
+                'La foto es demasiado grande.\n\nElige una más pequeña.';
             break;
           default:
             mensajeError =
@@ -351,9 +354,10 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
         'perfil_publico': _perfilPublico,
         'instagram_url':
             _perfilPublico && _controladorInstagram.text.trim().isNotEmpty
-                ? _controladorInstagram.text.trim()
-                : null,
-        'tiktok_url': _perfilPublico && _controladorTikTok.text.trim().isNotEmpty
+            ? _controladorInstagram.text.trim()
+            : null,
+        'tiktok_url':
+            _perfilPublico && _controladorTikTok.text.trim().isNotEmpty
             ? _controladorTikTok.text.trim()
             : null,
         // Regla: perfil_completo = true cuando username + nombre existen
@@ -373,7 +377,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
         // Navegar inmediatamente a Home sin diálogos
         // (más rápido y evita conflictos)
         print('➡️ Navegando a Home...');
-        
+
         Navigator.of(context).pushReplacement(
           CupertinoPageRoute(builder: (context) => const PantallaHome()),
         );
@@ -567,7 +571,8 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     final avatarSize = (size.width * 0.30).clamp(100.0, 132.0).toDouble();
     final marca = ColoresApp.principalMarca;
     final nombreOk = _controladorNombre.text.trim().isNotEmpty;
-    final puedeGuardar = _usernameValidado &&
+    final puedeGuardar =
+        _usernameValidado &&
         _usernameDisponible &&
         nombreOk &&
         _edadSeleccionada != null &&
@@ -639,8 +644,11 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                         _campoTexto(
                           controller: _controladorNombre,
                           placeholder: 'Tu nombre o apodo',
-                          icono: Icon(CupertinoIcons.person_fill,
-                              size: 18, color: marca),
+                          icono: Icon(
+                            CupertinoIcons.person_fill,
+                            size: 18,
+                            color: marca,
+                          ),
                           onChanged: (_) => setState(() {}),
                         ),
                       ]),
@@ -658,15 +666,21 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                           _campoTexto(
                             controller: _controladorInstagram,
                             placeholder: 'Instagram (link o usuario)',
-                            icono: const FaIcon(FontAwesomeIcons.instagram,
-                                size: 18, color: Color(0xFFE1306C)),
+                            icono: const FaIcon(
+                              FontAwesomeIcons.instagram,
+                              size: 18,
+                              color: Color(0xFFE1306C),
+                            ),
                           ),
                           _hairline(),
                           _campoTexto(
                             controller: _controladorTikTok,
                             placeholder: 'TikTok (link o usuario)',
-                            icono: const FaIcon(FontAwesomeIcons.tiktok,
-                                size: 18, color: Color(0xFF00F2EA)),
+                            icono: const FaIcon(
+                              FontAwesomeIcons.tiktok,
+                              size: 18,
+                              color: Color(0xFF00F2EA),
+                            ),
                           ),
                         ],
                       ]),
@@ -677,34 +691,35 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
               // ── Barra inferior con el botón (siempre visible) ──
               Container(
                 padding: EdgeInsets.fromLTRB(20, 10, 20, padding.bottom + 12),
-                decoration: BoxDecoration(
-                  color: ColoresApp.fondoPrincipal,
-                                  ),
+                decoration: BoxDecoration(color: ColoresApp.fondoPrincipal),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _filaPoliticas(),
                     const SizedBox(height: 10),
                     SizedBox(
-                  width: double.infinity,
-                  child: CupertinoButton(
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    color: marca,
-                    disabledColor: marca.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(50),
-                    onPressed: puedeGuardar ? _crearPerfil : null,
-                    child: _guardandoPerfil
-                        ? const FernecitoLoader.inline(size: 16, color: Colors.white)
-                        : Text(
-                            'Crear mi perfil',
-                            style: GoogleFonts.baloo2(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                  ),
-                ),
+                      width: double.infinity,
+                      child: CupertinoButton(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        color: marca,
+                        disabledColor: marca.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(50),
+                        onPressed: puedeGuardar ? _crearPerfil : null,
+                        child: _guardandoPerfil
+                            ? const FernecitoLoader.inline(
+                                size: 16,
+                                color: Colors.white,
+                              )
+                            : Text(
+                                'Crear mi perfil',
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -729,12 +744,30 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
             height: 22,
             margin: const EdgeInsets.only(top: 1),
             decoration: BoxDecoration(
-              color: _aceptoPoliticas ? marca : Colors.transparent,
+              // Desactivado: relleno sutil + borde gris visible (antes era
+              // transparente sin borde y no se veía). Activado: color de marca.
+              color: _aceptoPoliticas
+                  ? marca
+                  : ColoresApp.textoSecundario.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
-                          ),
+              border: Border.all(
+                color: _aceptoPoliticas ? Colors.white : Colors.white,
+                width: _aceptoPoliticas ? 2 : 1.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
             child: _aceptoPoliticas
-                ? const Icon(CupertinoIcons.checkmark,
-                    size: 15, color: Colors.white)
+                ? const Icon(
+                    CupertinoIcons.checkmark,
+                    size: 15,
+                    color: Colors.white,
+                  )
                 : null,
           ),
         ),
@@ -812,8 +845,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
           height: MediaQuery.of(ctx).size.height * 0.82,
           decoration: BoxDecoration(
             color: ColoresApp.fondoPrincipal,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(22)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           ),
           child: SafeArea(
             top: false,
@@ -850,8 +882,9 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                           'Última actualización: junio 2026.',
                           style: GoogleFonts.baloo2(
                             fontSize: 11,
-                            color: ColoresApp.textoSecundario
-                                .withValues(alpha: 0.7),
+                            color: ColoresApp.textoSecundario.withValues(
+                              alpha: 0.7,
+                            ),
                           ),
                         ),
                       ],
@@ -898,13 +931,15 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: ColoresApp.fondoSuperficie,
-                          ),
+            ),
             clipBehavior: Clip.antiAlias,
             child: _imagenBytes != null
                 ? Image.memory(_imagenBytes!, fit: BoxFit.cover)
-                : Icon(CupertinoIcons.person_fill,
+                : Icon(
+                    CupertinoIcons.person_fill,
                     size: size * 0.5,
-                    color: ColoresApp.textoSecundario.withValues(alpha: 0.7)),
+                    color: ColoresApp.textoSecundario.withValues(alpha: 0.7),
+                  ),
           ),
           Positioned(
             right: 0,
@@ -912,12 +947,12 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
             child: Container(
               width: size * 0.3,
               height: size * 0.3,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: marca,
-                              ),
-              child: Icon(CupertinoIcons.camera_fill,
-                  size: size * 0.15, color: Colors.white),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: marca),
+              child: Icon(
+                CupertinoIcons.camera_fill,
+                size: size * 0.15,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -950,7 +985,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: color,
-                                    boxShadow: sel
+                  boxShadow: sel
                       ? [
                           BoxShadow(
                             color: color.withValues(alpha: 0.5),
@@ -960,8 +995,11 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                       : null,
                 ),
                 child: sel
-                    ? const Icon(CupertinoIcons.checkmark_alt,
-                        size: 18, color: Colors.white)
+                    ? const Icon(
+                        CupertinoIcons.checkmark_alt,
+                        size: 18,
+                        color: Colors.white,
+                      )
                     : null,
               ),
             );
@@ -989,16 +1027,16 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(18),
-              ),
+      ),
       child: Column(children: children),
     );
   }
 
   Widget _hairline() => Container(
-        height: 1,
-        margin: const EdgeInsets.only(left: 48),
-        color: Colors.white.withValues(alpha: 0.06),
-      );
+    height: 1,
+    margin: const EdgeInsets.only(left: 48),
+    color: Colors.white.withValues(alpha: 0.06),
+  );
 
   // ── Campo de texto genérico (una fila dentro de la card) ──
   Widget _campoTexto({
@@ -1018,10 +1056,14 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
               controller: controller,
               placeholder: placeholder,
               onChanged: onChanged,
-              placeholderStyle:
-                  TextStyle(color: ColoresApp.textoSecundario, fontSize: 15),
+              placeholderStyle: TextStyle(
+                color: ColoresApp.textoSecundario,
+                fontSize: 15,
+              ),
               style: GoogleFonts.baloo2(
-                  fontSize: 15, color: ColoresApp.textoPrincipal),
+                fontSize: 15,
+                color: ColoresApp.textoPrincipal,
+              ),
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: const BoxDecoration(),
             ),
@@ -1056,11 +1098,14 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
               SizedBox(
                 width: 24,
                 child: Center(
-                  child: Text('@',
-                      style: GoogleFonts.baloo2(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: marca)),
+                  child: Text(
+                    '@',
+                    style: GoogleFonts.baloo2(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: marca,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1072,17 +1117,18 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                   enableSuggestions: false,
                   onChanged: _onUsernameChanged,
                   placeholderStyle: TextStyle(
-                      color: ColoresApp.textoSecundario, fontSize: 15),
+                    color: ColoresApp.textoSecundario,
+                    fontSize: 15,
+                  ),
                   style: GoogleFonts.baloo2(
-                      fontSize: 15, color: ColoresApp.textoPrincipal),
+                    fontSize: 15,
+                    color: ColoresApp.textoPrincipal,
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: const BoxDecoration(),
                 ),
               ),
-              if (trailing != null) ...[
-                const SizedBox(width: 8),
-                trailing,
-              ],
+              if (trailing != null) ...[const SizedBox(width: 8), trailing],
             ],
           ),
           if (_usernameMsg != null)
@@ -1093,9 +1139,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                 style: GoogleFonts.baloo2(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: _usernameDisponible
-                      ? marca
-                      : ColoresApp.peligroMarca,
+                  color: _usernameDisponible ? marca : ColoresApp.peligroMarca,
                 ),
               ),
             ),
@@ -1117,8 +1161,11 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
             SizedBox(
               width: 24,
               child: Center(
-                child: FaIcon(FontAwesomeIcons.cakeCandles,
-                    size: 16, color: ColoresApp.principalMarca),
+                child: FaIcon(
+                  FontAwesomeIcons.cakeCandles,
+                  size: 16,
+                  color: ColoresApp.principalMarca,
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -1134,8 +1181,11 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                 ),
               ),
             ),
-            Icon(CupertinoIcons.chevron_right,
-                size: 16, color: ColoresApp.textoSecundario),
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 16,
+              color: ColoresApp.textoSecundario,
+            ),
           ],
         ),
       ),
@@ -1157,35 +1207,45 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
               children: [
                 CupertinoButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: Text('Cancelar',
-                      style: GoogleFonts.baloo2(
-                          color: ColoresApp.textoSecundario)),
+                  child: Text(
+                    'Cancelar',
+                    style: GoogleFonts.baloo2(
+                      color: ColoresApp.textoSecundario,
+                    ),
+                  ),
                 ),
                 CupertinoButton(
                   onPressed: () {
                     setState(() => _edadSeleccionada = seleccion + 16);
                     Navigator.pop(ctx);
                   },
-                  child: Text('Listo',
-                      style: GoogleFonts.baloo2(
-                          fontWeight: FontWeight.w800,
-                          color: ColoresApp.principalMarca)),
+                  child: Text(
+                    'Listo',
+                    style: GoogleFonts.baloo2(
+                      fontWeight: FontWeight.w800,
+                      color: ColoresApp.principalMarca,
+                    ),
+                  ),
                 ),
               ],
             ),
             Expanded(
               child: CupertinoPicker(
-                scrollController:
-                    FixedExtentScrollController(initialItem: seleccion),
+                scrollController: FixedExtentScrollController(
+                  initialItem: seleccion,
+                ),
                 itemExtent: 40,
                 onSelectedItemChanged: (i) => seleccion = i,
                 children: List.generate(
                   84,
                   (i) => Center(
-                    child: Text('${i + 16} años',
-                        style: GoogleFonts.baloo2(
-                            fontSize: 20,
-                            color: ColoresApp.textoPrincipal)),
+                    child: Text(
+                      '${i + 16} años',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 20,
+                        color: ColoresApp.textoPrincipal,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1205,8 +1265,11 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
           SizedBox(
             width: 24,
             child: Center(
-              child: Icon(CupertinoIcons.globe,
-                  size: 18, color: ColoresApp.principalMarca),
+              child: Icon(
+                CupertinoIcons.globe,
+                size: 18,
+                color: ColoresApp.principalMarca,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -1214,15 +1277,20 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Perfil público',
-                    style: GoogleFonts.baloo2(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: ColoresApp.textoPrincipal)),
+                Text(
+                  'Perfil público',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: ColoresApp.textoPrincipal,
+                  ),
+                ),
                 Text(
                   'Otros pueden verte y sumarte. Si no, solo te encuentran por @username.',
                   style: GoogleFonts.baloo2(
-                      fontSize: 12, color: ColoresApp.textoSecundario),
+                    fontSize: 12,
+                    color: ColoresApp.textoSecundario,
+                  ),
                 ),
               ],
             ),

@@ -80,7 +80,7 @@
       <img src="icons/Icon-192.png" alt="Fernecito" onerror="this.style.display='none'">
       <h1>Política de Privacidad</h1>
     </header>
-    <p class="sub">Aplicación: <strong>Fernecito</strong> · Última actualización: 1 de junio de 2026</p>
+    <p class="sub">Aplicación: <strong>Fernecito</strong> · Última actualización: 8 de julio de 2026</p>
 
     <div class="card">
       <h2>1. Quiénes somos</h2>
@@ -95,9 +95,14 @@
       <p>Recopilamos únicamente los datos necesarios para que la aplicación funcione:</p>
       <ul>
         <li><strong>Datos de cuenta:</strong> nombre, dirección de correo electrónico y
-          foto de perfil, provistos al registrarte por email o al iniciar sesión con Google.</li>
+          foto de perfil, provistos al registrarte por email o al iniciar sesión con Google
+          o con Apple.</li>
         <li><strong>Contenido que subís:</strong> foto de perfil y, en su caso, imágenes
           asociadas a tu cuenta.</li>
+        <li><strong>Ubicación:</strong> con tu permiso, la ubicación de tu dispositivo, para
+          mostrarte locales y eventos cercanos en el mapa (ver sección 5).</li>
+        <li><strong>Token de notificaciones:</strong> si activás las notificaciones, un
+          identificador del dispositivo (token de push) para poder enviártelas (ver sección 6).</li>
         <li><strong>Datos técnicos básicos:</strong> información mínima necesaria para
           mantener tu sesión iniciada y operar el servicio de forma segura.</li>
       </ul>
@@ -111,55 +116,83 @@
       </ul>
       <p>No vendemos tus datos personales ni los usamos para publicidad de terceros.</p>
 
-      <h2>4. Inicio de sesión con Google</h2>
+      <h2>4. Inicio de sesión con Google y con Apple</h2>
       <p>
         Si elegís iniciar sesión con Google, accedemos únicamente a tu nombre, dirección de
         correo electrónico y foto de perfil de tu cuenta de Google, con el solo fin de crear
         e identificar tu cuenta en Fernecito. No accedemos a ningún otro dato de tu cuenta de Google.
       </p>
+      <p>
+        Si elegís <strong>Iniciar sesión con Apple</strong>, recibimos tu nombre y una dirección
+        de correo electrónico para crear e identificar tu cuenta. Apple te permite ocultar tu correo
+        real mediante su función "Ocultar mi correo"; en ese caso recibimos una dirección de reenvío
+        anónima y no tu correo personal. No accedemos a ningún otro dato de tu cuenta de Apple.
+      </p>
 
-      <h2>5. Dónde se almacenan</h2>
+      <h2>5. Ubicación</h2>
+      <p>
+        Con tu permiso expreso, usamos la ubicación de tu dispositivo para mostrarte locales y
+        eventos cercanos en el mapa. Podés negar o revocar este permiso en cualquier momento desde
+        los ajustes de tu dispositivo; la aplicación sigue funcionando sin él. No usamos tu ubicación
+        para rastrearte ni la compartimos con terceros con fines publicitarios.
+      </p>
+
+      <h2>6. Notificaciones push</h2>
+      <p>
+        Si activás las notificaciones, generamos y almacenamos un identificador del dispositivo
+        (token de notificaciones) para poder enviarte avisos sobre eventos, novedades y actividad de
+        tu cuenta. Para entregar estas notificaciones usamos <strong>Firebase Cloud Messaging</strong>,
+        un servicio de Google. Podés desactivar las notificaciones en cualquier momento desde los
+        ajustes de tu dispositivo.
+      </p>
+
+      <h2>7. Dónde se almacenan</h2>
       <p>
         Los datos se almacenan de forma segura a través de <strong>Supabase</strong>, nuestro
         proveedor de infraestructura y base de datos. El acceso está protegido y restringido.
       </p>
 
-      <h2>6. Compartir con terceros</h2>
+      <h2>8. Compartir con terceros</h2>
       <p>Solo compartimos datos con proveedores estrictamente necesarios para operar el servicio:</p>
       <ul>
-        <li><strong>Google</strong> — autenticación (inicio de sesión).</li>
         <li><strong>Supabase</strong> — almacenamiento de datos y autenticación.</li>
+        <li><strong>Google</strong> — autenticación (inicio de sesión) y envío de
+          notificaciones push (Firebase Cloud Messaging).</li>
+        <li><strong>Apple</strong> — autenticación (Iniciar sesión con Apple).</li>
       </ul>
       <p>No compartimos tus datos con anunciantes ni los vendemos a terceros.</p>
 
-      <h2>7. Tus derechos</h2>
+      <h2>9. Tus derechos</h2>
       <p>
-        Podés solicitar en cualquier momento el acceso, la rectificación o la
-        <strong>eliminación</strong> de tu cuenta y de tus datos personales escribiéndonos a
+        Podés <strong>eliminar tu cuenta y tus datos personales</strong> directamente desde la
+        aplicación (Perfil → Eliminar cuenta). También podés solicitar en cualquier momento el
+        acceso, la rectificación o la eliminación de tus datos escribiéndonos a
         <a href="mailto:nexaisoftware@gmail.com">nexaisoftware@gmail.com</a>. Procesaremos tu
         solicitud en un plazo razonable.
       </p>
 
-      <h2>8. Retención</h2>
+      <h2>10. Retención</h2>
       <p>
         Conservamos tus datos mientras tu cuenta esté activa. Si solicitás la eliminación de
         tu cuenta, borramos tus datos personales salvo aquellos que debamos conservar por
         obligaciones legales.
       </p>
 
-      <h2>9. Menores de edad</h2>
+      <h2>11. Menores de edad</h2>
       <p>
-        Fernecito está orientada a personas mayores de edad. No recopilamos
-        intencionalmente datos de menores.
+        Fernecito está orientada a personas de 13 años o más. Si sos menor de
+        edad, debés usar la app con autorización y supervisión de tu madre,
+        padre o tutor legal. No recopilamos intencionalmente datos de personas
+        menores de 13 años.
       </p>
 
-      <h2>10. Cambios en esta política</h2>
+      <h2>12. Cambios en esta política</h2>
       <p>
         Podemos actualizar esta política ocasionalmente. Publicaremos la versión vigente en
         esta misma página, indicando la fecha de última actualización.
       </p>
 
-      <h2>11. Contacto</h2>
+      <h2>13. Contacto</h2>
       <p>
         Ante cualquier consulta sobre esta Política de Privacidad o sobre el tratamiento de
         tus datos, escribinos a

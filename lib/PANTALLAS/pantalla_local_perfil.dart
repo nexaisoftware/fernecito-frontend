@@ -11,6 +11,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
+import '../core/flujo_bloqueo.dart';
 import '../core/flujo_reporte.dart';
 import '../core/servicio_impresiones.dart';
 import '../core/servicio_locales_megusta.dart';
@@ -437,6 +438,14 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
             },
             child: const Text('Reportar local'),
           ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _bloquearLocal();
+            },
+            child: const Text('Bloquear local'),
+          ),
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(ctx),
@@ -455,6 +464,19 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
       targetTipo: 'local',
       targetId: id,
     );
+  }
+
+  Future<void> _bloquearLocal() async {
+    final id = widget.idLocal;
+    if (id == null || id.isEmpty) return;
+    final bloqueado = await mostrarFlujoBloqueo(
+      context: context,
+      entidad: 'este local',
+      targetTipo: 'local',
+      targetId: id,
+    );
+    // Al bloquear, volvemos atrás: ya no deberías ver este local.
+    if (bloqueado && mounted) Navigator.of(context).maybePop();
   }
 
   Widget _buildLocalBloqueado(BuildContext context) {
@@ -887,34 +909,29 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                         ),
                       ),
                     ),
+                    if (widget.idLocal != null &&
+                        widget.idLocal!.isNotEmpty &&
+                        !_bloqueado)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: BotonMegustaLocalHero(
+                            cantidad: _cantidadMegusta,
+                            activo: _yoMegusta,
+                            habilitado:
+                                ServicioSupabase().usuarioActual != null,
+                            cargando: _toggleMegusta,
+                            onTap: _onToggleMegusta,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
             ),
-
-            if (widget.idLocal != null &&
-                widget.idLocal!.isNotEmpty &&
-                !_bloqueado)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontalPadding,
-                    2,
-                    horizontalPadding,
-                    0,
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: BotonMegustaLocalHero(
-                      cantidad: _cantidadMegusta,
-                      activo: _yoMegusta,
-                      habilitado: ServicioSupabase().usuarioActual != null,
-                      cargando: _toggleMegusta,
-                      onTap: _onToggleMegusta,
-                    ),
-                  ),
-                ),
-              ),
 
             // Info del lugar (solo texto + flecha a la derecha, sin contenedor; al tocar despliega)
             SliverToBoxAdapter(

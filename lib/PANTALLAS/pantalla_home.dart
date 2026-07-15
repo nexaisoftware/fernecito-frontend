@@ -1446,6 +1446,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
               (e['jerarquia']?.toString() ?? '') ==
               JerarquiasData.topUltra.slug,
         )
+        // Solo top_ultra de la(s) ciudad(es) seleccionada(s) en la cartelera.
+        .where(_coincideCiudad)
         .map(
           (e) => EventoTopUltra(
             idEvento: e['id']?.toString() ?? '',
@@ -1592,7 +1594,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     final normales = _porJerarquia(filtrados, JerarquiasData.normal.slug);
     final gratis = _porJerarquia(filtrados, JerarquiasData.gratis.slug);
     final localesPop = _localesPopularesFiltrados();
-    final tieneTopUltra = _eventos.any(
+    // El badge de stories solo aparece si hay top_ultra en la(s) ciudad(es)
+    // seleccionada(s) — consistente con que las stories ahora filtran por ciudad.
+    final tieneTopUltra = _eventos.where(_coincideCiudad).any(
       (e) => (e['jerarquia']?.toString() ?? '') == JerarquiasData.topUltra.slug,
     );
 

@@ -107,6 +107,7 @@ class ServicioPush {
         'registrar_push_token',
         body: {
           'token': token,
+          'app': 'usuarios',
           'plataforma': kIsWeb
               ? 'web'
               : (defaultTargetPlatform == TargetPlatform.iOS

@@ -15,6 +15,7 @@ import '../core/servicio_amigos.dart';
 import '../core/rompehielo_navegacion.dart';
 import '../core/servicio_locales_megusta.dart';
 import '../core/servicio_perfil_usuario.dart';
+import '../core/flujo_bloqueo.dart';
 import '../core/flujo_reporte.dart';
 import '../core/servicio_squads.dart';
 import '../core/supabase_client.dart';
@@ -214,6 +215,14 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
             },
             child: const Text('Reportar perfil'),
           ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _bloquearUsuario();
+            },
+            child: const Text('Bloquear perfil'),
+          ),
         ],
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(ctx),
@@ -232,6 +241,19 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       targetTipo: 'usuario',
       targetId: id,
     );
+  }
+
+  Future<void> _bloquearUsuario() async {
+    final id = _idUsuario;
+    if (id == null || id.isEmpty) return;
+    final bloqueado = await mostrarFlujoBloqueo(
+      context: context,
+      entidad: 'este perfil',
+      targetTipo: 'usuario',
+      targetId: id,
+    );
+    // Al bloquear, volvemos atrás: ya no deberías ver a esta persona.
+    if (bloqueado && mounted) Navigator.of(context).maybePop();
   }
 
   Future<void> _onAccionAmistad() async {

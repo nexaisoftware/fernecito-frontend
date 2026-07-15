@@ -6,10 +6,14 @@
 		<string>Se necesita acceso a la cámara para escanear códigos QR de invitación a eventos.</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>Fernecito usa tu ubicación para mostrarte locales y eventos en el mapa cerca tuyo.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>Si autorizas acceso permanente, Fernecito App puede usar tu ubicación para mantener actualizada la información de locales y eventos cercanos vinculados a tus salidas.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Fernecito necesita acceder a tus fotos para que puedas elegir imagenes de perfil, squads y contenido relacionado.</string>
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>Fernecito</string>
+		<string>Fernecito App</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -17,7 +21,7 @@
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 		<key>CFBundleName</key>
-		<string>Fernecito</string>
+		<string>Fernecito App</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -49,6 +53,10 @@
 		<true/>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>remote-notification</string>
+		</array>
 		<key>CFBundleURLTypes</key>
 		<array>
 			<dict>
@@ -65,6 +73,8 @@
 		<key>UIStatusBarHidden</key>
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
+		<false/>
+		<key>ITSAppUsesNonExemptEncryption</key>
 		<false/>
 	</dict>
 </plist>

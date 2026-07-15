@@ -10,13 +10,17 @@
 /// Stack: Cupertino widgets + Google Fonts + Font Awesome
 library;
 
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/constants.dart';
@@ -50,6 +54,8 @@ class _PantallaLoginState extends State<PantallaLogin>
 
   bool _cargandoLogin = false;
   bool _ocultarContrasenaLogin = true;
+  bool get _mostrarAppleSignIn =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   @override
   void initState() {
@@ -140,7 +146,8 @@ class _PantallaLoginState extends State<PantallaLogin>
   }
 
   void _mostrarError(String mensaje, {String? email}) {
-    final esErrorConfirmacion = mensaje.contains('falta confirmar') ||
+    final esErrorConfirmacion =
+        mensaje.contains('falta confirmar') ||
         mensaje.contains('confirmar tu email');
 
     showCupertinoDialog(
@@ -252,6 +259,41 @@ class _PantallaLoginState extends State<PantallaLogin>
     }
   }
 
+  Future<void> _manejarLoginApple() async {
+    try {
+      debugPrint('Iniciando login con Apple...');
+      final supabase = ServicioSupabase();
+      final rawNonce = supabase.cliente.auth.generateRawNonce();
+      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: hashedNonce,
+      );
+
+      final idToken = credential.identityToken;
+      if (idToken == null) {
+        throw const AuthException('Apple no devolvio identityToken.');
+      }
+
+      await supabase.cliente.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
+    } catch (error) {
+      debugPrint('Error en login con Apple: $error');
+      if (mounted) {
+        _mostrarError(
+          'No se pudo conectar con Apple.\n\nProbá de nuevo en unos segundos.',
+        );
+      }
+    }
+  }
+
   void _irARecuperacionPassword() {
     Navigator.of(context).push(
       CupertinoPageRoute(builder: (context) => const PantallaNuevaContrasena()),
@@ -275,32 +317,36 @@ class _PantallaLoginState extends State<PantallaLogin>
                   controller: _controladorScroll,
                   physics: const BouncingScrollPhysics(),
                   child: ConstrainedBox(
-                    constraints:
-                        BoxConstraints(minHeight: constraints.maxHeight),
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
                     child: Padding(
                       padding: EdgeInsets.symmetric(
                         vertical: math.max(size.height * 0.04, 24),
                       ),
                       child: Center(
                         child: ConstrainedBox(
-                          constraints:
-                              BoxConstraints(maxWidth: anchoContenido),
+                          constraints: BoxConstraints(maxWidth: anchoContenido),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               _construirLogo(),
-                      const SizedBox(height: 22),
-                      _construirTitulo(),
-                      const SizedBox(height: 12),
-                      _construirFrase(),
-                      const SizedBox(height: 40),
-                      _construirBotonGoogle(),
-                      const SizedBox(height: 14),
-                      _construirBotonEmail(),
-                      _construirAcordeonEmail(),
-                      const SizedBox(height: 28),
-                      _construirSeparador(),
-                      const SizedBox(height: 22),
+                              const SizedBox(height: 22),
+                              _construirTitulo(),
+                              const SizedBox(height: 12),
+                              _construirFrase(),
+                              const SizedBox(height: 40),
+                              _construirBotonGoogle(),
+                              if (_mostrarAppleSignIn) ...[
+                                const SizedBox(height: 14),
+                                _construirBotonApple(),
+                              ],
+                              const SizedBox(height: 14),
+                              _construirBotonEmail(),
+                              _construirAcordeonEmail(),
+                              const SizedBox(height: 28),
+                              _construirSeparador(),
+                              const SizedBox(height: 22),
                               _construirLinkRegistro(),
                             ],
                           ),
@@ -423,6 +469,16 @@ class _PantallaLoginState extends State<PantallaLogin>
     );
   }
 
+  Widget _construirBotonApple() {
+    return SignInWithAppleButton(
+      onPressed: _manejarLoginApple,
+      text: 'Continuar con Apple',
+      height: 56,
+      borderRadius: const BorderRadius.all(Radius.circular(16)),
+      style: SignInWithAppleButtonStyle.black,
+    );
+  }
+
   Widget _construirBotonEmail() {
     return ValueListenableBuilder<Color>(
       valueListenable: TemaFernecito.instancia.colorActual,
@@ -504,7 +560,10 @@ class _PantallaLoginState extends State<PantallaLogin>
                     color: colorTema,
                     onPressed: _cargandoLogin ? null : _manejarLoginEmail,
                     child: _cargandoLogin
-                        ? const FernecitoLoader.inline(size: 16, color: Colors.white)
+                        ? const FernecitoLoader.inline(
+                            size: 16,
+                            color: Colors.white,
+                          )
                         : Text(
                             'Iniciar sesión',
                             style: GoogleFonts.baloo2(
@@ -639,9 +698,7 @@ class _GlowAnimadoFondo extends StatelessWidget {
     return RepaintBoundary(
       child: Stack(
         children: [
-          const Positioned.fill(
-            child: ColoredBox(color: Color(0xFF0A0A0A)),
-          ),
+          const Positioned.fill(child: ColoredBox(color: Color(0xFF0A0A0A))),
           Positioned.fill(
             child: ImageFiltered(
               imageFilter: ImageFilter.blur(sigmaX: 45, sigmaY: 45),
@@ -857,7 +914,7 @@ class _BotonGlass extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                              ),
+              ),
               child: Center(child: child),
             ),
           ),

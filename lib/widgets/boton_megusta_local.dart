@@ -1,10 +1,108 @@
 library;
 
+import 'dart:ui';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../core/constants.dart';
 import 'fernecito_loader.dart';
+
+const _rojoMegusta = Color(0xFFE91E63);
+const _navBlurSigma = 18.0;
+const _navGlassTop = Color(0xFF1E1E22);
+const _navGlassBottom = Color(0xFF111114);
+
+String _formatearCantidadMegusta(int cantidad) {
+  if (cantidad >= 1000000) {
+    final m = cantidad / 1000000;
+    return m >= 10
+        ? '${m.round()}M'
+        : '${m.toStringAsFixed(1).replaceAll('.0', '')}M';
+  }
+  if (cantidad >= 1000) {
+    final k = cantidad / 1000;
+    return k >= 10
+        ? '${k.round()}K'
+        : '${k.toStringAsFixed(1).replaceAll('.0', '')}K';
+  }
+  return '$cantidad';
+}
+
+class _PillGlassMegusta extends StatelessWidget {
+  const _PillGlassMegusta({
+    required this.activo,
+    required this.child,
+    this.compacto = false,
+  });
+
+  final bool activo;
+  final Widget child;
+  final bool compacto;
+
+  BoxDecoration _decoracionPill(bool activo) {
+    return BoxDecoration(
+      borderRadius: BorderRadius.circular(999),
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: activo
+            ? [
+                _rojoMegusta.withValues(alpha: 0.34),
+                _rojoMegusta.withValues(alpha: 0.48),
+              ]
+            : [
+                _navGlassTop.withValues(alpha: 0.62),
+                _navGlassBottom.withValues(alpha: 0.82),
+              ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: _navBlurSigma,
+          sigmaY: _navBlurSigma,
+        ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(
+            horizontal: compacto ? 10 : 12,
+            vertical: compacto ? 6 : 7,
+          ),
+          decoration: _decoracionPill(activo),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+Color _colorContenidoMegusta({required bool activo, required bool esIcono}) {
+  if (activo) {
+    return esIcono ? _rojoMegusta : Colors.white;
+  }
+  return ColoresApp.textoSecundario;
+}
+
+TextStyle _estiloTextoMegusta({
+  required bool activo,
+  required double fontSize,
+  FontWeight fontWeight = FontWeight.w800,
+}) {
+  return GoogleFonts.baloo2(
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    color: _colorContenidoMegusta(activo: activo, esIcono: false),
+    height: 1,
+  );
+}
 
 /// Botón de me gusta + contador para perfil de local.
 class BotonMegustaLocal extends StatelessWidget {
@@ -25,28 +123,12 @@ class BotonMegustaLocal extends StatelessWidget {
   final VoidCallback? onTap;
   final bool compacto;
 
-  String get _textoCantidad {
-    if (cantidad >= 1000000) {
-      final m = cantidad / 1000000;
-      return m >= 10
-          ? '${m.round()}M'
-          : '${m.toStringAsFixed(1).replaceAll('.0', '')}M';
-    }
-    if (cantidad >= 1000) {
-      final k = cantidad / 1000;
-      return k >= 10
-          ? '${k.round()}K'
-          : '${k.toStringAsFixed(1).replaceAll('.0', '')}K';
-    }
-    return '$cantidad';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final colorActivo = const Color(0xFFE91E63);
-    final fondo = activo
-        ? colorActivo.withValues(alpha: 0.22)
-        : Colors.black.withValues(alpha: 0.28);
+    final iconSize = compacto ? 15.0 : 17.0;
+    final textoCantidad = _formatearCantidadMegusta(cantidad);
+    final textoAccion = activo ? 'Te gusta' : 'Me gusta';
+    final colorContenido = _colorContenidoMegusta(activo: activo, esIcono: false);
 
     return GestureDetector(
       onTap: habilitado && !cargando
@@ -56,62 +138,47 @@ class BotonMegustaLocal extends StatelessWidget {
             }
           : null,
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: EdgeInsets.symmetric(
-          horizontal: compacto ? 12 : 16,
-          vertical: compacto ? 7 : 9,
-        ),
-        decoration: BoxDecoration(
-          color: fondo,
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
+      child: _PillGlassMegusta(
+        activo: activo,
+        compacto: compacto,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (cargando)
               SizedBox(
-                width: compacto ? 16 : 18,
-                height: compacto ? 16 : 18,
+                width: iconSize,
+                height: iconSize,
                 child: FernecitoLoader.inline(
-                  size: compacto ? 14 : 16,
-                  color: Colors.white,
+                  size: compacto ? 13 : 14,
+                  color: colorContenido,
                 ),
               )
             else
               Icon(
                 activo ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-                size: compacto ? 17 : 19,
-                color: activo ? colorActivo : Colors.white,
+                size: iconSize,
+                color: _colorContenidoMegusta(activo: activo, esIcono: true),
               ),
-            const SizedBox(width: 8),
-            Text(
-              _textoCantidad,
-              style: GoogleFonts.baloo2(
-                fontSize: compacto ? 15 : 17,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                height: 1,
-              ),
-            ),
-            if (!compacto) ...[
-              const SizedBox(width: 6),
+            if (cantidad > 0) ...[
+              const SizedBox(width: 3),
               Text(
-                activo ? 'Te gusta' : 'Me gusta',
-                style: GoogleFonts.baloo2(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white.withValues(alpha: 0.92),
+                textoCantidad,
+                style: _estiloTextoMegusta(
+                  activo: activo,
+                  fontSize: compacto ? 13.5 : 15,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ],
+            const SizedBox(width: 6),
+            Text(
+              textoAccion,
+              style: _estiloTextoMegusta(
+                activo: activo,
+                fontSize: compacto ? 11.5 : 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
       ),
@@ -119,7 +186,7 @@ class BotonMegustaLocal extends StatelessWidget {
   }
 }
 
-/// Variante integrada al banner: sin cápsula visible, solo corazón + contador.
+/// Variante integrada al banner: pill glass, corazón + contador + texto en una fila.
 class BotonMegustaLocalHero extends StatefulWidget {
   const BotonMegustaLocalHero({
     super.key,
@@ -194,45 +261,13 @@ class _BotonMegustaLocalHeroState extends State<BotonMegustaLocalHero>
     super.dispose();
   }
 
-  String get _textoCantidad {
-    final cantidad = widget.cantidad;
-    if (cantidad >= 1000000) {
-      final m = cantidad / 1000000;
-      return m >= 10
-          ? '${m.round()}M'
-          : '${m.toStringAsFixed(1).replaceAll('.0', '')}M';
-    }
-    if (cantidad >= 1000) {
-      final k = cantidad / 1000;
-      return k >= 10
-          ? '${k.round()}K'
-          : '${k.toStringAsFixed(1).replaceAll('.0', '')}K';
-    }
-    return '$cantidad';
-  }
-
-  String get _textoAccion => widget.activo ? 'Te gusta' : 'Me gusta';
-
-  TextStyle _textoStyle({required double fontSize}) {
-    return GoogleFonts.baloo2(
-      fontSize: fontSize,
-      fontWeight: FontWeight.w900,
-      color: Colors.white,
-      height: 1,
-      shadows: [
-        Shadow(
-          color: Colors.black.withValues(alpha: 0.72),
-          blurRadius: 10,
-          offset: const Offset(0, 2),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    const rojo = Color(0xFFE91E63);
     final habilitado = widget.habilitado && !widget.cargando;
+    final textoCantidad = _formatearCantidadMegusta(widget.cantidad);
+    final textoAccion = widget.activo ? 'Te gusta' : 'Me gusta';
+    final colorContenido =
+        _colorContenidoMegusta(activo: widget.activo, esIcono: false);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -243,49 +278,64 @@ class _BotonMegustaLocalHeroState extends State<BotonMegustaLocalHero>
               widget.onTap?.call();
             }
           : null,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 2),
-        child: Column(
+      child: _PillGlassMegusta(
+        activo: widget.activo,
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ScaleTransition(
-                  scale: _scale,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    switchInCurve: Curves.easeOutBack,
-                    switchOutCurve: Curves.easeOut,
-                    transitionBuilder: (child, animation) => ScaleTransition(
-                      scale: animation,
-                      child: FadeTransition(opacity: animation, child: child),
-                    ),
-                    child: Icon(
-                      widget.activo
-                          ? CupertinoIcons.heart_fill
-                          : CupertinoIcons.heart,
-                      key: ValueKey(widget.activo),
-                      size: 31,
-                      color: widget.activo ? rojo : Colors.white,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          blurRadius: 12,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+            if (widget.cargando)
+              SizedBox(
+                width: 19,
+                height: 19,
+                child: FernecitoLoader.inline(
+                  size: 15,
+                  color: colorContenido,
+                ),
+              )
+            else
+              ScaleTransition(
+                scale: _scale,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  switchInCurve: Curves.easeOutBack,
+                  switchOutCurve: Curves.easeOut,
+                  transitionBuilder: (child, animation) => ScaleTransition(
+                    scale: animation,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: Icon(
+                    widget.activo
+                        ? CupertinoIcons.heart_fill
+                        : CupertinoIcons.heart,
+                    key: ValueKey(widget.activo),
+                    size: 19,
+                    color: _colorContenidoMegusta(
+                      activo: widget.activo,
+                      esIcono: true,
                     ),
                   ),
                 ),
-                if (widget.cantidad > 0) ...[
-                  const SizedBox(width: 6),
-                  Text(_textoCantidad, style: _textoStyle(fontSize: 18)),
-                ],
-              ],
+              ),
+            if (widget.cantidad > 0) ...[
+              const SizedBox(width: 3),
+              Text(
+                textoCantidad,
+                style: _estiloTextoMegusta(
+                  activo: widget.activo,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+            const SizedBox(width: 6),
+            Text(
+              textoAccion,
+              style: _estiloTextoMegusta(
+                activo: widget.activo,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            const SizedBox(height: 2),
-            Text(_textoAccion, style: _textoStyle(fontSize: 11.5)),
           ],
         ),
       ),

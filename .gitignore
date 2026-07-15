@@ -47,3 +47,15 @@ app.*.map.json
 # Variables de entorno (credenciales de Supabase)
 # NUNCA subir este archivo a Git
 .env
+
+# --- Firebase configs (repo PÚBLICO: no exponer) ---
+**/google-services.json
+**/GoogleService-Info.plist
+
+# --- Config de firma / export de iOS (local) ---
+ios/ExportOptions.plist
+ios/UploadOptions.plist
+
+# --- Artefactos de build de Gradle ---
+android/build/
+**/build/
