@@ -3,7 +3,7 @@
 Main user-facing app for Fernecito, an event discovery and nightlife platform.
 
 [![Google Play](https://img.shields.io/badge/Google_Play-Download-414141?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=com.nexaisoftware.fernecitoapp)
-[![App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?logo=appstore&logoColor=white)](APP_STORE_URL)
+[![App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?logo=appstore&logoColor=white)](https://apps.apple.com/mx/app/fernecito-app-salidas/id6788588345)
 [![PWA](https://img.shields.io/badge/PWA-Live-5A0FC8?logo=pwa&logoColor=white)](https://appusuarios.fernecitoapp.com)
 
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?logo=flutter&logoColor=white)
