@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'ubicacion_navegador.dart';
 
@@ -48,13 +49,35 @@ class ServicioUbicacionDispositivo {
   ServicioUbicacionDispositivo._();
   static final instancia = ServicioUbicacionDispositivo._();
 
+  /// Última posición conocida en la sesión (para "a X km de ti" sin re-pedir permiso).
+  LatLng? _ultimaPos;
+  LatLng? get ultimaPosicionConocida => _ultimaPos;
+
+  /// Posición aproximada SIN prompt: cache de sesión o last-known nativo. null si no hay.
+  Future<LatLng?> posicionAproximadaSinPrompt() async {
+    if (_ultimaPos != null) return _ultimaPos;
+    if (kIsWeb) return null;
+    try {
+      final p = await Geolocator.getLastKnownPosition();
+      if (p != null) _ultimaPos = LatLng(p.latitude, p.longitude);
+    } catch (_) {
+      // sin permiso o sin fix previo → sin badge
+    }
+    return _ultimaPos;
+  }
+
   /// Debe llamarse de forma **síncrona** desde un gesto del usuario (tap / botón
   /// de diálogo). No hagas `await` antes de invocar este método.
   Future<ResultadoUbicacionDispositivo> iniciarDesdeGestoUsuario() {
-    if (kIsWeb) {
-      return _resolverFuturoWeb(_iniciarLecturaWeb());
-    }
-    return _resolverFuturoNativo(_iniciarLecturaNativa());
+    final fut = kIsWeb
+        ? _resolverFuturoWeb(_iniciarLecturaWeb())
+        : _resolverFuturoNativo(_iniciarLecturaNativa());
+    return fut.then((r) {
+      if (r.exito && r.latitud != null && r.longitud != null) {
+        _ultimaPos = LatLng(r.latitud!, r.longitud!);
+      }
+      return r;
+    });
   }
 
   Future<({double lat, double lng})> _iniciarLecturaWeb() {
