@@ -328,6 +328,15 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
                 ],
               ),
             ),
+            // Conversación empezada: el alcance sube acá (libera la zona del pulgar).
+            if (hayChat)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: _ToggleAlcance(
+                  todas: _alcanceTodas,
+                  onChanged: (v) => setState(() => _alcanceTodas = v),
+                ),
+              ),
             Expanded(
               child: hayChat
                   ? ListView.builder(
@@ -352,19 +361,16 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
                     )
                   : _EmptyHint(nombre: _cache.nombreUsuario),
             ),
-            // Contexto de la conversación: mensajes restantes + nueva consulta.
-            if (hayChat)
+            // Mientras quedan seguimientos: mensajes restantes + nueva consulta.
+            if (hayChat && puedeSeguir)
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
                 child: Row(
                   children: [
                     Expanded(
                       child: _PillContexto(
-                        texto: puedeSeguir
-                            ? 'Te quedan ${_cache.seguimientosRestantes} '
-                                'mensaje${_cache.seguimientosRestantes == 1 ? '' : 's'} en esta conversación'
-                            : 'Conversación completa — tu próxima pregunta abre una nueva',
-                        alerta: !puedeSeguir,
+                        texto: 'Te quedan ${_cache.seguimientosRestantes} '
+                            'mensaje${_cache.seguimientosRestantes == 1 ? '' : 's'} en esta conversación',
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -372,15 +378,22 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
                   ],
                 ),
               ),
-            // Alcance de búsqueda (mi zona / toda la app).
-            _ToggleAlcance(
-              todas: _alcanceTodas,
-              onChanged: (v) => setState(() => _alcanceTodas = v),
-            ),
-            const SizedBox(height: 8),
-            // Sugerencias rápidas: tocar = poner en el textfield y enviar.
-            if (!_cargando) _ChipsSugerencias(onTap: _usarSugerencia),
-            const SizedBox(height: 8),
+            // Solo al INICIAR: alcance abajo (zona del pulgar) + chips de ideas.
+            if (!hayChat) ...[
+              _ToggleAlcance(
+                todas: _alcanceTodas,
+                onChanged: (v) => setState(() => _alcanceTodas = v),
+              ),
+              const SizedBox(height: 8),
+              if (!_cargando) _ChipsSugerencias(onTap: _usarSugerencia),
+              const SizedBox(height: 8),
+            ],
+            if (hayChat && !puedeSeguir)
+              Padding(
+                padding: EdgeInsets.fromLTRB(14, 4, 14, 10 + bottomSafe),
+                child: _BotonNuevaGrande(onTap: _nuevaConsulta),
+              )
+            else
             Padding(
               padding: EdgeInsets.fromLTRB(14, 4, 14, 10 + bottomSafe),
               child: Container(
@@ -490,13 +503,12 @@ class _EmptyHint extends StatelessWidget {
 }
 
 class _PillContexto extends StatelessWidget {
-  const _PillContexto({required this.texto, this.alerta = false});
+  const _PillContexto({required this.texto});
   final String texto;
-  final bool alerta;
 
   @override
   Widget build(BuildContext context) {
-    final c = alerta ? _kDorado : Colors.white54;
+    const c = Colors.white54;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -506,10 +518,8 @@ class _PillContexto extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            alerta
-                ? CupertinoIcons.exclamationmark_circle
-                : CupertinoIcons.chat_bubble_2,
+          const Icon(
+            CupertinoIcons.chat_bubble_2,
             size: 13,
             color: c,
           ),
@@ -557,6 +567,48 @@ class _BotonNueva extends StatelessWidget {
                 color: _kVioleta,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BotonNuevaGrande extends StatelessWidget {
+  const _BotonNuevaGrande({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [_kDorado, Color(0xFFF5D76E)]),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: _kDorado.withValues(alpha: 0.28),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(CupertinoIcons.arrow_2_circlepath, size: 18, color: _kVioletaOscuro),
+            const SizedBox(width: 8),
+            Text(
+              'Nueva conversación',
+              style: GoogleFonts.baloo2(
+                color: _kVioletaOscuro,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
