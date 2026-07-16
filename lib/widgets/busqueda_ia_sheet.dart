@@ -13,6 +13,7 @@ import '../core/coordenadas_ciudades.dart';
 import '../core/estado_busqueda_ia.dart';
 import '../core/servicio_busqueda_ia.dart';
 import '../core/servicio_ubicacion_dispositivo.dart';
+import '../core/ubicaciones_data.dart';
 import '../PANTALLAS/pantalla_local_perfil.dart';
 import '../PANTALLAS/pantalla_ver_evento.dart';
 import 'avatar_local.dart';
@@ -105,8 +106,8 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
   final _scroll = ScrollController();
   final _cache = EstadoBusquedaIaCache.instancia;
   bool _cargando = false;
-  /// true = seguir conversación (default si hay historial y quedan cupos)
-  bool _modoSeguir = true;
+  /// Alcance de búsqueda: false = mi zona (ciudades activas), true = toda la app.
+  bool _alcanceTodas = false;
 
   /// Posición del usuario para el badge "a X km de ti" (null = sin badge).
   LatLng? _refUsuario;
@@ -116,7 +117,6 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
     super.initState();
     final init = widget.preguntaInicial?.trim() ?? '';
     if (init.isNotEmpty) _ctrl.text = init;
-    if (_cache.mensajes.isEmpty) _modoSeguir = false;
 
     _refUsuario = ServicioUbicacionDispositivo.instancia.ultimaPosicionConocida;
     if (_refUsuario == null) {
@@ -152,9 +152,11 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
     final texto = _ctrl.text.trim();
     if (texto.length < 3) return;
 
-    final seguir = _modoSeguir &&
-        _cache.mensajes.isNotEmpty &&
-        _cache.puedeSeguir;
+    // Si se agotaron los seguimientos, la próxima pregunta abre conversación nueva.
+    if (_cache.mensajes.isNotEmpty && !_cache.puedeSeguir) {
+      _cache.resetConversacion();
+    }
+    final seguir = _cache.mensajes.isNotEmpty && _cache.puedeSeguir;
 
     HapticFeedback.selectionClick();
     _ctrl.clear();
@@ -165,11 +167,13 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
       _cache.agregarUsuario(texto);
       _cache.agregarEscribiendo();
     });
-    _scrollAlFinal();
+    _scrollAlFinal(); // al MANDAR sí baja al final (se ve la pregunta + escribiendo)
 
     final res = await ServicioBusquedaIa.instancia.buscar(
       pregunta: texto,
       ciudades: widget.ciudades,
+      ciudadesDisponibles: UbicacionesData.todasLasCiudades,
+      alcanceTodas: _alcanceTodas,
       seguirConversacion: seguir,
       historial: seguir ? _cache.historialParaEdge() : const [],
     );
@@ -187,15 +191,20 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
         recomendados: res.ok ? res.recomendados : const [],
         esError: !res.ok,
       );
-      if (!_cache.puedeSeguir) _modoSeguir = false;
     });
-    _scrollAlFinal();
+    // Al RECIBIR la respuesta NO bajamos el scroll: el usuario queda viendo el
+    // mensaje de la IA (arriba de las cards) y scrollea si quiere ver más.
+  }
+
+  void _usarSugerencia(String texto) {
+    if (_cargando) return;
+    _ctrl.text = texto;
+    _enviar();
   }
 
   void _nuevaConsulta() {
     setState(() {
       _cache.resetConversacion();
-      _modoSeguir = false;
       _ctrl.clear();
     });
     Future<void>.delayed(const Duration(milliseconds: 80), () {
@@ -343,42 +352,35 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
                     )
                   : _EmptyHint(nombre: _cache.nombreUsuario),
             ),
+            // Contexto de la conversación: mensajes restantes + nueva consulta.
             if (hayChat)
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
                 child: Row(
                   children: [
-                    if (puedeSeguir) ...[
-                      Expanded(
-                        child: _ChipModo(
-                          label: 'Seguir conversación',
-                          activo: _modoSeguir,
-                          onTap: () => setState(() => _modoSeguir = true),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
                     Expanded(
-                      child: _ChipModo(
-                        label: 'Nueva consulta',
-                        activo: !puedeSeguir || !_modoSeguir,
-                        onTap: _nuevaConsulta,
+                      child: _PillContexto(
+                        texto: puedeSeguir
+                            ? 'Te quedan ${_cache.seguimientosRestantes} '
+                                'mensaje${_cache.seguimientosRestantes == 1 ? '' : 's'} en esta conversación'
+                            : 'Conversación completa — tu próxima pregunta abre una nueva',
+                        alerta: !puedeSeguir,
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    _BotonNueva(onTap: _nuevaConsulta),
                   ],
                 ),
               ),
-            if (hayChat && puedeSeguir)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  'Seguimientos: ${_cache.seguimientosRestantes} restantes',
-                  style: GoogleFonts.baloo2(
-                    color: Colors.white38,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
+            // Alcance de búsqueda (mi zona / toda la app).
+            _ToggleAlcance(
+              todas: _alcanceTodas,
+              onChanged: (v) => setState(() => _alcanceTodas = v),
+            ),
+            const SizedBox(height: 8),
+            // Sugerencias rápidas: tocar = poner en el textfield y enviar.
+            if (!_cargando) _ChipsSugerencias(onTap: _usarSugerencia),
+            const SizedBox(height: 8),
             Padding(
               padding: EdgeInsets.fromLTRB(14, 4, 14, 10 + bottomSafe),
               child: Container(
@@ -409,9 +411,9 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
                           isCollapsed: true,
                           counterText: '',
                           hintText: hayChat
-                              ? (_modoSeguir && puedeSeguir
-                                  ? 'Seguí la conversación…'
-                                  : 'Nueva consulta…')
+                              ? (puedeSeguir
+                                  ? 'Seguí preguntando…'
+                                  : 'Tu próxima pregunta abre una nueva…')
                               : '¿Qué querés hacer?',
                           hintStyle: GoogleFonts.baloo2(
                             color: Colors.white38,
@@ -487,38 +489,186 @@ class _EmptyHint extends StatelessWidget {
   }
 }
 
-class _ChipModo extends StatelessWidget {
-  const _ChipModo({
-    required this.label,
-    required this.activo,
-    required this.onTap,
-  });
-  final String label;
-  final bool activo;
+class _PillContexto extends StatelessWidget {
+  const _PillContexto({required this.texto, this.alerta = false});
+  final String texto;
+  final bool alerta;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = alerta ? _kDorado : Colors.white54;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            alerta
+                ? CupertinoIcons.exclamationmark_circle
+                : CupertinoIcons.chat_bubble_2,
+            size: 13,
+            color: c,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              texto,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.baloo2(
+                color: c,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BotonNueva extends StatelessWidget {
+  const _BotonNueva({required this.onTap});
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        alignment: Alignment.center,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: activo
-              ? _kVioleta.withValues(alpha: 0.22)
-              : Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
+          color: _kVioleta.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: Text(
-          label,
-          style: GoogleFonts.baloo2(
-            color: activo ? _kVioleta : Colors.white70,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(CupertinoIcons.plus_circle, size: 14, color: _kVioleta),
+            const SizedBox(width: 5),
+            Text(
+              'Nueva consulta',
+              style: GoogleFonts.baloo2(
+                color: _kVioleta,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToggleAlcance extends StatelessWidget {
+  const _ToggleAlcance({required this.todas, required this.onChanged});
+  final bool todas;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget opt(String label, IconData ic, bool sel, VoidCallback onTap) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: sel ? _kVioleta.withValues(alpha: 0.22) : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(ic, size: 13, color: sel ? _kVioleta : Colors.white54),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: GoogleFonts.baloo2(
+                    color: sel ? _kVioleta : Colors.white54,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            opt('Mi zona', CupertinoIcons.location_solid, !todas, () => onChanged(false)),
+            opt('Toda la app', CupertinoIcons.globe, todas, () => onChanged(true)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChipsSugerencias extends StatelessWidget {
+  const _ChipsSugerencias({required this.onTap});
+  final ValueChanged<String> onTap;
+
+  static const _items = <(String, String)>[
+    ('🌙', '¿Qué hago esta noche?'),
+    ('🎉', 'Quiero una fiesta este finde'),
+    ('🍺', 'Un lugar para tomar algo'),
+    ('🍔', '¿Dónde puedo comer rico?'),
+    ('☕', 'Un café tranqui'),
+    ('🎶', '¿Hay música en vivo?'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 34,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        itemCount: _items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final (emoji, texto) = _items[i];
+          return GestureDetector(
+            onTap: () => onTap(texto),
+            child: Container(
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 13),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: _kVioleta.withValues(alpha: 0.22)),
+              ),
+              child: Text(
+                '$emoji  $texto',
+                style: GoogleFonts.baloo2(
+                  color: Colors.white70,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
