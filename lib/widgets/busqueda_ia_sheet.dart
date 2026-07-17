@@ -70,6 +70,57 @@ class _BadgeDistanciaIa extends StatelessWidget {
   }
 }
 
+class _BadgePromoIa extends StatelessWidget {
+  const _BadgePromoIa({required this.texto});
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: _kDorado,
+        borderRadius: BorderRadius.circular(9),
+        boxShadow: [
+          BoxShadow(
+            color: _kDorado.withValues(alpha: 0.22),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Text(
+        texto,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.baloo2(
+          color: _kVioletaOscuro,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          height: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _PromoBadgesIa extends StatelessWidget {
+  const _PromoBadgesIa({required this.badges});
+  final List<String> badges;
+
+  @override
+  Widget build(BuildContext context) {
+    if (badges.isEmpty) return const SizedBox.shrink();
+    return Wrap(
+      spacing: 6,
+      runSpacing: 5,
+      children: [
+        for (final b in badges.take(3)) _BadgePromoIa(texto: b),
+      ],
+    );
+  }
+}
+
 Future<void> mostrarBusquedaIaSheet(
   BuildContext context, {
   required Set<String> ciudades,
@@ -100,7 +151,8 @@ class _BusquedaIaChatSheet extends StatefulWidget {
   State<_BusquedaIaChatSheet> createState() => _BusquedaIaChatSheetState();
 }
 
-class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
+class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
+    with WidgetsBindingObserver {
   final _ctrl = TextEditingController();
   final _focus = FocusNode();
   final _scroll = ScrollController();
@@ -112,9 +164,13 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
   /// Posición del usuario para el badge "a X km de ti" (null = sin badge).
   LatLng? _refUsuario;
 
+  /// Último inset de teclado (px) — para reacomodar el scroll al abrirse.
+  double _keyboardPrev = 0;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final init = widget.preguntaInicial?.trim() ?? '';
     if (init.isNotEmpty) _ctrl.text = init;
 
@@ -130,10 +186,27 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ctrl.dispose();
     _focus.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    // El sheet se achica con el teclado; el ListView no se reacomoda solo.
+    // Al crecer el inset, bajamos al final para que el chat quede arriba del input.
+    final bottom = WidgetsBinding
+            .instance.platformDispatcher.views.first.viewInsets.bottom /
+        WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
+    if (bottom > _keyboardPrev + 40) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scroll.hasClients) return;
+        _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      });
+    }
+    _keyboardPrev = bottom;
   }
 
   void _scrollAlFinal() {
@@ -247,7 +320,12 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
   Widget build(BuildContext context) {
     final bottomSafe = MediaQuery.of(context).padding.bottom;
     final keyboard = MediaQuery.of(context).viewInsets.bottom;
-    final altura = MediaQuery.of(context).size.height * 0.92;
+    final screenH = MediaQuery.of(context).size.height;
+    // Con teclado: el sheet no puede seguir midiendo 92% de pantalla completa
+    // (si no, el Column no se achica y el chat queda tapado). Altura = min(92%,
+    // espacio libre sobre el teclado).
+    final altura = (screenH * 0.92).clamp(0.0, screenH - keyboard);
+    final padBottomInput = 10 + (keyboard > 0 ? 0.0 : bottomSafe);
     final hayChat = _cache.mensajes.isNotEmpty;
     final puedeSeguir = _cache.puedeSeguir && hayChat;
 
@@ -390,12 +468,12 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet> {
             ],
             if (hayChat && !puedeSeguir)
               Padding(
-                padding: EdgeInsets.fromLTRB(14, 4, 14, 10 + bottomSafe),
+                padding: EdgeInsets.fromLTRB(14, 4, 14, padBottomInput),
                 child: _BotonNuevaGrande(onTap: _nuevaConsulta),
               )
             else
             Padding(
-              padding: EdgeInsets.fromLTRB(14, 4, 14, 10 + bottomSafe),
+              padding: EdgeInsets.fromLTRB(14, 4, 14, padBottomInput),
               child: Container(
                 padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
                 decoration: BoxDecoration(
@@ -940,9 +1018,9 @@ class _CardEventoIa extends StatelessWidget {
                       imageUrl: img,
                       fit: BoxFit.cover,
                       memCacheWidth: 280,
-                      placeholder: (_, __) =>
+                      placeholder: (context, url) =>
                           const ColoredBox(color: Color(0xFF252528)),
-                      errorWidget: (_, __, ___) =>
+                      errorWidget: (context, url, error) =>
                           const ColoredBox(color: Color(0xFF252528)),
                     ),
             ),
@@ -981,15 +1059,20 @@ class _CardEventoIa extends StatelessWidget {
                       const SizedBox(height: 6),
                       _BadgeDistanciaIa(texto: dist),
                     ],
+                    if (item.promoBadges.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      _PromoBadgesIa(badges: item.promoBadges),
+                    ],
                     const SizedBox(height: 6),
                     Text(
                       item.porQue,
                       maxLines: 4,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.baloo2(
-                        color: Colors.white60,
+                        color: Colors.white.withValues(alpha: 0.78),
                         fontSize: 12.5,
                         height: 1.3,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const Spacer(),
@@ -1138,13 +1221,18 @@ class _CardLocalIa extends StatelessWidget {
             const SizedBox(height: 10),
             _BadgeDistanciaIa(texto: dist),
           ],
+          if (item.promoBadges.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _PromoBadgesIa(badges: item.promoBadges),
+          ],
           const SizedBox(height: 10),
           Text(
             item.porQue,
             style: GoogleFonts.baloo2(
-              color: Colors.white60,
+              color: Colors.white.withValues(alpha: 0.78),
               fontSize: 13,
               height: 1.35,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 12),

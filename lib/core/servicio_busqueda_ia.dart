@@ -13,6 +13,7 @@ class RecomendacionIa {
     required this.titulo,
     required this.porQue,
     this.tags = const [],
+    this.promoBadges = const [],
     this.imagenUrl,
     this.ciudad,
     this.tipoEvento,
@@ -33,6 +34,7 @@ class RecomendacionIa {
   final String titulo;
   final String porQue;
   final List<String> tags;
+  final List<String> promoBadges;
   final String? imagenUrl;
   final String? ciudad;
   final String? tipoEvento;
@@ -51,6 +53,7 @@ class RecomendacionIa {
 
   factory RecomendacionIa.fromJson(Map<String, dynamic> j) {
     final tagsRaw = j['tags'];
+    final promoBadgesRaw = j['promo_badges'];
     double? cal;
     final calRaw = j['calificacion_promedio'];
     if (calRaw is num) {
@@ -72,6 +75,13 @@ class RecomendacionIa {
       porQue: j['por_que']?.toString() ?? '',
       tags: tagsRaw is List
           ? tagsRaw.map((e) => e.toString()).where((s) => s.isNotEmpty).toList()
+          : const [],
+      promoBadges: promoBadgesRaw is List
+          ? promoBadgesRaw
+              .map((e) => e.toString().trim())
+              .where((s) => s.isNotEmpty)
+              .take(3)
+              .toList()
           : const [],
       imagenUrl: j['imagen_url']?.toString(),
       ciudad: j['ciudad']?.toString(),
@@ -142,7 +152,7 @@ class ServicioBusquedaIa {
   ServicioBusquedaIa._();
   static final instancia = ServicioBusquedaIa._();
 
-  static const maxPregunta = 500;
+  static const maxPregunta = 900;
 
   SupabaseClient get _sb => ServicioSupabase().cliente;
 
@@ -165,7 +175,7 @@ class ServicioBusquedaIa {
     if (q.length > maxPregunta) {
       return const ResultadoBusquedaIa(
         ok: false,
-        error: 'Máximo 500 caracteres ✂️',
+        error: 'Máximo 900 caracteres ✂️',
         code: 'pregunta_larga',
       );
     }
@@ -216,10 +226,19 @@ class ServicioBusquedaIa {
         return ResultadoBusquedaIa.fromJson(Map<String, dynamic>.from(details));
       }
       if (e.status == 429) {
+        final code = details is Map ? details['code']?.toString() : null;
+        if (code == 'rate_daily') {
+          return const ResultadoBusquedaIa(
+            ok: false,
+            mensaje:
+                'Por hoy llegaste al tope de consultas nuevas 🙌 Mañana seguimos armando planes — o usá «Seguir conversación» en la misma charla ✨',
+            code: 'rate_daily',
+          );
+        }
         return const ResultadoBusquedaIa(
           ok: false,
           mensaje:
-              'Ey! ⏳ Dale un toquecito y volvé a preguntar en un momentito, ¿sí?',
+              'Ey! ⏳ Estamos con muchas consultas ahora. Dale un respiro de unos segundos y volvé a preguntar ✨',
           code: 'rate_limited',
         );
       }
