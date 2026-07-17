@@ -76,6 +76,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
   /// Cupos desde tabla `eventos` (sobreescribe lo que venga del mapa de navegación).
   int? _cuposLibresServidor;
   bool? _cupoLimitadoServidor;
+  String? _modoListaServidor;
 
   bool _clickImpresionRegistrado = false;
 
@@ -192,6 +193,11 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
             final modo = extra['modo_evento']?.toString();
             _modoEventoCargado = (modo != null && modo.trim().isNotEmpty)
                 ? modo.trim()
+                : null;
+            final modoListaExtra = extra['modo_lista']?.toString();
+            _modoListaServidor =
+                (modoListaExtra != null && modoListaExtra.trim().isNotEmpty)
+                ? modoListaExtra.trim()
                 : null;
             final rawMax = extra['cupo_lista_max'];
             final maxParsed = rawMax is int
@@ -430,6 +436,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
       m['cuposLibres'] = _cuposLibresServidor;
       m['cupoLimitado'] = _cupoLimitadoServidor == true;
     }
+    if (_modoListaServidor != null) m['modoLista'] = _modoListaServidor;
     return m;
   }
 
@@ -1749,6 +1756,9 @@ class _TarjetaReservaYPromos extends StatelessWidget {
 
     final cupoLimitado = evento['cupoLimitado'] == true;
     final cuposLibres = evento['cuposLibres'] as int?;
+    final modoLista = evento['modoLista']?.toString();
+    // Pase libre: cupo infinito + lista automática (el local no la acepta a mano).
+    final esPaseLibre = !cupoLimitado && modoLista == 'auto';
     final tokenEstado = miToken?['estado_token']?.toString();
     final tokenAceptado = tokenEstado == 'aceptada';
     final yaReservadoActivo =
@@ -1760,7 +1770,9 @@ class _TarjetaReservaYPromos extends StatelessWidget {
         tokenEstado == 'rechazada' ||
         tokenEstado == 'cancelada';
     final yaReservado = yaReservadoActivo;
-    final labelEntrar = esModoInvitacion ? 'Entrar a lista' : 'Reservar lista';
+    final labelEntrar = esModoInvitacion
+        ? 'Entrar a lista'
+        : (esPaseLibre ? 'Asistiré' : 'Reservar lista');
     final labelProcesando = esModoInvitacion ? 'Entrando…' : 'Reservando…';
 
     return Container(
@@ -1852,6 +1864,37 @@ class _TarjetaReservaYPromos extends StatelessWidget {
             ],
           ],
 
+          if (puedeReservarDeNuevo && esPaseLibre && !esModoInvitacion) ...[
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: ColoresApp.principalMarca.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      CupertinoIcons.ticket_fill,
+                      size: 11,
+                      color: ColoresApp.principalMarca,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Pase libre · confirmá tu asistencia',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: ColoresApp.principalMarca,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           if (puedeReservarDeNuevo)
             CupertinoButton(
               padding: EdgeInsets.zero,

@@ -10,8 +10,9 @@
 library;
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show DefaultMaterialLocalizations, Material, ScaffoldMessenger;
+import 'package:flutter/material.dart' show Material, ScaffoldMessenger;
 import 'package:flutter/services.dart' show AnnotatedRegion, SystemUiOverlayStyle;
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/constants.dart';
 import 'core/supabase_client.dart';
 import 'core/auth_gate.dart';
@@ -146,10 +147,15 @@ class _AppFernecitoState extends State<AppFernecito>
           // Delegates necesarios para usar Material widgets (Scaffold, RefreshIndicator,
           // InkWell, TextField, FilledButton, etc.) dentro de un CupertinoApp.
           localizationsDelegates: const [
-            DefaultMaterialLocalizations.delegate,
-            DefaultCupertinoLocalizations.delegate,
-            DefaultWidgetsLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
           ],
+          supportedLocales: const [
+            Locale('es', 'AR'),
+            Locale('es'),
+          ],
+          locale: const Locale('es', 'AR'),
           title: CadenasApp.nombreApp,
           theme: CupertinoThemeData(
             brightness: Brightness.dark,

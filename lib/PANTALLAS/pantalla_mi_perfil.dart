@@ -2,7 +2,7 @@
 ///
 /// Permite ver y editar el perfil del usuario con estilo iOS moderno:
 /// - Foto de perfil con edición (tomar/galería/eliminar)
-/// - Username, nombre, edad
+/// - Username, nombre, cumpleaños
 /// - Configuración de perfil público
 /// - Redes sociales (Instagram, TikTok) con iconos SVG
 /// - Estado personalizado (70 caracteres, 2 líneas)
@@ -58,7 +58,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   final TextEditingController _controladorInstagram = TextEditingController();
   final TextEditingController _controladorTikTok = TextEditingController();
   final TextEditingController _controladorEstado = TextEditingController();
-  
+
   // FocusNode para el textfield del estado
   final FocusNode _focusNombre = FocusNode();
   final FocusNode _focusEstado = FocusNode();
@@ -68,6 +68,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   String _username = '';
   String _nombre = '';
   int? _edad;
+  DateTime? _fechaNacimiento;
   bool _perfilPublico = false;
   String? _instagramUrl;
   String? _tiktokUrl;
@@ -76,6 +77,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   bool _guardando = false;
   bool _subiendoFoto = false;
   bool _subiendoBanner = false;
+  bool _pedidoCumpleMostrado = false;
   String? _bannerPath;
   String? _bannerPerfilUrl;
   bool _editandoNombreInline = false;
@@ -139,7 +141,16 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
         setState(() {
           _username = respuesta['username'] ?? '';
           _nombre = respuesta['nombre'] ?? '';
-          _edad = respuesta['edad'];
+          final fechaRaw = respuesta['fecha_nacimiento']?.toString() ?? '';
+          _fechaNacimiento = fechaRaw.isEmpty
+              ? null
+              : DateTime.tryParse(fechaRaw);
+          final edadRaw = respuesta['edad'];
+          _edad = _fechaNacimiento != null
+              ? _edadDesdeFecha(_fechaNacimiento!)
+              : (edadRaw is int
+                    ? edadRaw
+                    : int.tryParse(edadRaw?.toString() ?? ''));
           _perfilPublico = respuesta['perfil_publico'] ?? false;
           _instagramUrl = respuesta['instagram_url'];
           _tiktokUrl = respuesta['tiktok_url'];
@@ -151,15 +162,16 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           if (respuesta['foto_perfil_url'] != null) {
             final path = respuesta['foto_perfil_url'] as String;
             final timestamp = DateTime.now().millisecondsSinceEpoch;
-            _fotoPerfilUrl = '${supabase.cliente.storage
-                    .from('avatars')
-                    .getPublicUrl(path)}?v=$timestamp';
+            _fotoPerfilUrl =
+                '${supabase.cliente.storage.from('avatars').getPublicUrl(path)}?v=$timestamp';
           } else {
             _fotoPerfilUrl = null;
           }
 
           final bannerPath = respuesta['url_foto_banner'] as String?;
-          _bannerPath = (bannerPath ?? '').trim().isEmpty ? null : bannerPath!.trim();
+          _bannerPath = (bannerPath ?? '').trim().isEmpty
+              ? null
+              : bannerPath!.trim();
           if (_bannerPath != null) {
             final ts = DateTime.now().millisecondsSinceEpoch;
             final base = supabase.urlBannerUsuario(_bannerPath);
@@ -178,6 +190,12 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           _cargando = false;
         });
         _cargarMetricasPerfil(usuario.id);
+        if (_fechaNacimiento == null && !_pedidoCumpleMostrado) {
+          _pedidoCumpleMostrado = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _mostrarPedidoCumple();
+          });
+        }
       }
     } catch (error) {
       print('❌ Error cargando perfil: $error');
@@ -204,8 +222,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(CupertinoIcons.camera,
-                    color: ColoresApp.principalMarca),
+                Icon(CupertinoIcons.camera, color: ColoresApp.principalMarca),
                 const SizedBox(width: 12),
                 Text(
                   'Tomar otra foto',
@@ -225,8 +242,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(CupertinoIcons.photo,
-                    color: ColoresApp.principalMarca),
+                Icon(CupertinoIcons.photo, color: ColoresApp.principalMarca),
                 const SizedBox(width: 12),
                 Text(
                   'Seleccionar de galería',
@@ -248,8 +264,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(CupertinoIcons.trash,
-                      color: ColoresApp.peligroMarca),
+                  const Icon(
+                    CupertinoIcons.trash,
+                    color: ColoresApp.peligroMarca,
+                  ),
                   const SizedBox(width: 12),
                   Text(
                     'Eliminar foto',
@@ -378,21 +396,21 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
 
       // Subir con upsert
 
-      await supabase.cliente.storage.from('avatars').uploadBinary(
+      await supabase.cliente.storage
+          .from('avatars')
+          .uploadBinary(
             pathRelativo,
             bytes,
-            fileOptions: FileOptions(
-              contentType: contentType,
-              upsert: true,
-            ),
+            fileOptions: FileOptions(contentType: contentType, upsert: true),
           );
 
       print('✅ Foto actualizada: $pathRelativo');
 
       // Actualizar DB
-      await supabase.cliente.from('perfiles_usuarios').update({
-        'foto_perfil_url': pathRelativo,
-      }).eq('id', usuario.id);
+      await supabase.cliente
+          .from('perfiles_usuarios')
+          .update({'foto_perfil_url': pathRelativo})
+          .eq('id', usuario.id);
 
       // Recargar perfil
       await _cargarDatosPerfil();
@@ -517,7 +535,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
         }
       } catch (_) {}
 
-      await supabase.cliente.storage.from('banners-usuarios').uploadBinary(
+      await supabase.cliente.storage
+          .from('banners-usuarios')
+          .uploadBinary(
             pathRelativo,
             comprimida.bytes,
             fileOptions: FileOptions(
@@ -526,9 +546,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
             ),
           );
 
-      await supabase.cliente.from('perfiles_usuarios').update({
-        'url_foto_banner': pathRelativo,
-      }).eq('id', usuario.id);
+      await supabase.cliente
+          .from('perfiles_usuarios')
+          .update({'url_foto_banner': pathRelativo})
+          .eq('id', usuario.id);
 
       await _cargarDatosPerfil();
 
@@ -549,8 +570,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   Future<void> _eliminarBanner() async {
     final confirmado = await _mostrarDialogoConfirmacion(
       titulo: '¿Quitar banner?',
-      mensaje:
-          'Se volverá a usar tu foto de perfil como fondo del banner.',
+      mensaje: 'Se volverá a usar tu foto de perfil como fondo del banner.',
       textoConfirmar: 'Quitar',
       esDestructivo: true,
     );
@@ -563,15 +583,16 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
       final usuario = supabase.usuarioActual;
       if (usuario == null) throw Exception('No hay usuario autenticado');
 
-      await supabase.cliente.from('perfiles_usuarios').update({
-        'url_foto_banner': null,
-      }).eq('id', usuario.id);
+      await supabase.cliente
+          .from('perfiles_usuarios')
+          .update({'url_foto_banner': null})
+          .eq('id', usuario.id);
 
       if (_bannerPath != null && !_bannerPath!.startsWith('http')) {
         try {
-          await supabase.cliente.storage
-              .from('banners-usuarios')
-              .remove([_bannerPath!]);
+          await supabase.cliente.storage.from('banners-usuarios').remove([
+            _bannerPath!,
+          ]);
         } catch (_) {}
       }
 
@@ -600,9 +621,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.48),
           borderRadius: BorderRadius.circular(50),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.22),
-          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -611,14 +630,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
               const SizedBox(
                 width: 16,
                 height: 16,
-                child: FernecitoLoader.inline(size: 16, color: Colors.white,),
+                child: FernecitoLoader.inline(size: 16, color: Colors.white),
               )
             else
-              const Icon(
-                CupertinoIcons.pencil,
-                size: 14,
-                color: Colors.white,
-              ),
+              const Icon(CupertinoIcons.pencil, size: 14, color: Colors.white),
             const SizedBox(width: 6),
             Text(
               'Cambiar banner',
@@ -654,9 +669,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
       }
 
       // Actualizar DB (poner null)
-      await supabase.cliente.from('perfiles_usuarios').update({
-        'foto_perfil_url': null,
-      }).eq('id', usuario.id);
+      await supabase.cliente
+          .from('perfiles_usuarios')
+          .update({'foto_perfil_url': null})
+          .eq('id', usuario.id);
 
       // Recargar perfil
       await _cargarDatosPerfil();
@@ -688,12 +704,18 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
       _cantidadAmigos = amistades.amigos.length;
       _lugaresMegusta = lugares;
       if (det != null) {
-        _localesVisitados =
-            ServicioPerfilUsuario.enteroDeDetalle(det, 'locales_visitados');
-        _eventosAsistidos =
-            ServicioPerfilUsuario.enteroDeDetalle(det, 'eventos_asistidos');
-        _cantidadSquads =
-            ServicioPerfilUsuario.enteroDeDetalle(det, 'cantidad_squads');
+        _localesVisitados = ServicioPerfilUsuario.enteroDeDetalle(
+          det,
+          'locales_visitados',
+        );
+        _eventosAsistidos = ServicioPerfilUsuario.enteroDeDetalle(
+          det,
+          'eventos_asistidos',
+        );
+        _cantidadSquads = ServicioPerfilUsuario.enteroDeDetalle(
+          det,
+          'cantidad_squads',
+        );
         final ciudadDet = (det['ciudad'] as String?)?.trim() ?? '';
         final provDet = (det['provincia'] as String?)?.trim() ?? '';
         if (ciudadDet.isNotEmpty) _ciudad = ciudadDet;
@@ -727,10 +749,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
       final usuario = supabase.usuarioActual;
       if (usuario == null) throw Exception('No hay usuario autenticado');
 
-      await supabase.cliente.from('perfiles_usuarios').update({
-        'provincia': res.provincia,
-        'ciudad': res.ciudad,
-      }).eq('id', usuario.id);
+      await supabase.cliente
+          .from('perfiles_usuarios')
+          .update({'provincia': res.provincia, 'ciudad': res.ciudad})
+          .eq('id', usuario.id);
 
       if (mounted) {
         setState(() {
@@ -747,22 +769,159 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     }
   }
 
-  // Actualizar edad
-  Future<void> _actualizarEdad() async {
-    final nuevaEdad = await _mostrarDialogoEditar(
-      titulo: '¿Cuántos años tenés?',
-      valorActual: _edad?.toString() ?? '',
-      placeholder: 'Ej: 25',
-      tipoTeclado: TextInputType.number,
-    );
+  int _edadDesdeFecha(DateTime fecha) {
+    final hoy = DateTime.now();
+    var edad = hoy.year - fecha.year;
+    final yaCumplio =
+        hoy.month > fecha.month ||
+        (hoy.month == fecha.month && hoy.day >= fecha.day);
+    if (!yaCumplio) edad -= 1;
+    return edad;
+  }
 
-    if (nuevaEdad != null && nuevaEdad.trim().isNotEmpty) {
-      final edadInt = int.tryParse(nuevaEdad.trim());
-      if (edadInt != null && edadInt > 0 && edadInt <= 120) {
-        await _actualizarCampo('edad', edadInt);
-      } else {
-        _mostrarError('Ingresa una edad válida');
-      }
+  String _fechaIso(DateTime fecha) {
+    final y = fecha.year.toString().padLeft(4, '0');
+    final m = fecha.month.toString().padLeft(2, '0');
+    final d = fecha.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  String _fechaCumpleTexto(DateTime fecha) {
+    final d = fecha.day.toString().padLeft(2, '0');
+    final m = fecha.month.toString().padLeft(2, '0');
+    return '$d/$m/${fecha.year}';
+  }
+
+  String get _textoCumple {
+    final fecha = _fechaNacimiento;
+    if (fecha == null) return _edad != null ? '${_edad!} años' : 'Tu cumple';
+    return '${_fechaCumpleTexto(fecha)} · ${_edadDesdeFecha(fecha)} años';
+  }
+
+  void _mostrarPedidoCumple() {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Queremos saber cuándo es tu cumple'),
+        content: const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text(
+            'Ahora usamos tu cumpleaños para calcular tu edad bien y recomendarte planes más acordes.',
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Después'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('Completar'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _actualizarEdad();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Actualizar cumpleaños
+  Future<void> _actualizarEdad() async {
+    final hoy = DateTime.now();
+    final maxDate = DateTime(hoy.year - 13, hoy.month, hoy.day);
+    final minDate = DateTime(1920, 1, 1);
+    var seleccion =
+        _fechaNacimiento ??
+        (_edad != null
+            ? DateTime(hoy.year - _edad!, hoy.month, hoy.day)
+            : DateTime(hoy.year - 18, hoy.month, hoy.day));
+    if (seleccion.isAfter(maxDate)) seleccion = maxDate;
+
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => Container(
+        height: 330,
+        color: ColoresApp.fondoSuperficie,
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(
+                    'Cancelar',
+                    style: GoogleFonts.baloo2(
+                      color: ColoresApp.textoSecundario,
+                    ),
+                  ),
+                ),
+                CupertinoButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _guardarFechaNacimiento(seleccion);
+                  },
+                  child: Text(
+                    'Listo',
+                    style: GoogleFonts.baloo2(
+                      fontWeight: FontWeight.w800,
+                      color: ColoresApp.principalMarca,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Text(
+                'Tu edad se actualiza sola cada año.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.baloo2(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ),
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: seleccion,
+                minimumDate: minDate,
+                maximumDate: maxDate,
+                onDateTimeChanged: (fecha) => seleccion = fecha,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _guardarFechaNacimiento(DateTime fecha) async {
+    setState(() => _guardando = true);
+    try {
+      final supabase = ServicioSupabase();
+      final usuario = supabase.usuarioActual;
+      if (usuario == null) throw Exception('No hay usuario autenticado');
+
+      await supabase.cliente
+          .from('perfiles_usuarios')
+          .update({
+            'fecha_nacimiento': _fechaIso(fecha),
+            'edad': _edadDesdeFecha(fecha),
+          })
+          .eq('id', usuario.id);
+
+      await _cargarDatosPerfil();
+      if (mounted) _mostrarExito('Cumpleaños guardado correctamente');
+    } catch (error) {
+      debugPrint('❌ Error actualizando fecha_nacimiento: $error');
+      if (mounted) _mostrarError('No se pudo guardar tu cumple');
+    } finally {
+      if (mounted) setState(() => _guardando = false);
     }
   }
 
@@ -774,16 +933,18 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
       final usuario = supabase.usuarioActual;
       if (usuario == null) throw Exception('No hay usuario autenticado');
 
-      await supabase.cliente.from('perfiles_usuarios').update({
-        'perfil_publico': valor,
-      }).eq('id', usuario.id);
+      await supabase.cliente
+          .from('perfiles_usuarios')
+          .update({'perfil_publico': valor})
+          .eq('id', usuario.id);
 
       await _cargarDatosPerfil();
       if (mounted) _mostrarExito('Cambios guardados correctamente');
     } catch (error) {
       debugPrint('❌ Error actualizando perfil_publico: $error');
       await _cargarDatosPerfil();
-      if (mounted) _mostrarError('No se pudo cambiar la visibilidad del perfil');
+      if (mounted)
+        _mostrarError('No se pudo cambiar la visibilidad del perfil');
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
@@ -805,7 +966,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   Future<void> _actualizarMiEstado() async {
     // Quitar el focus del textfield
     _focusEstado.unfocus();
-    
+
     final estado = _controladorEstado.text.trim();
     if (estado.length > 50) {
       _mostrarError('El estado no puede tener más de 50 caracteres');
@@ -855,9 +1016,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
         throw Exception('No hay usuario autenticado');
       }
 
-      await supabase.cliente.from('perfiles_usuarios').update({
-        campo: valor,
-      }).eq('id', usuario.id);
+      await supabase.cliente
+          .from('perfiles_usuarios')
+          .update({campo: valor})
+          .eq('id', usuario.id);
 
       print('✅ Campo $campo actualizado: $valor');
 
@@ -885,7 +1047,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   Future<void> _cerrarSesion() async {
     try {
       print('🔓 Cerrando sesión...');
-      
+
       final supabase = ServicioSupabase();
       await supabase.cliente.auth.signOut();
 
@@ -908,7 +1070,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
       context: context,
       builder: (ctx) => CupertinoActionSheet(
         title: const Text('Eliminar cuenta'),
-        message: const Text('Elegí qué querés eliminar. Esta acción no se puede deshacer.'),
+        message: const Text(
+          'Elegí qué querés eliminar. Esta acción no se puede deshacer.',
+        ),
         actions: [
           CupertinoActionSheetAction(
             onPressed: () {
@@ -927,7 +1091,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                 ),
               );
             },
-            child: const Text('Eliminar TODO mi Fernecito (usuario + locales + staff)'),
+            child: const Text(
+              'Eliminar TODO mi Fernecito (usuario + locales + staff)',
+            ),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
@@ -986,7 +1152,8 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
         throw Exception('Respuesta no OK (status ${res.status}): ${res.data}');
       }
       print('✅ Cuenta eliminada ($modo). Cerrando sesión...');
-      if (mounted) Navigator.of(context, rootNavigator: true).pop(); // cierra loader
+      if (mounted)
+        Navigator.of(context, rootNavigator: true).pop(); // cierra loader
       await supabase.cliente.auth.signOut();
       // AuthGate detecta signedOut y navega a Login.
     } catch (error) {
@@ -996,25 +1163,6 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
         _mostrarError('No se pudo eliminar la cuenta.\n\nDetalle: $error');
       }
     }
-  }
-
-  // Mostrar diálogo de edición
-  Future<String?> _mostrarDialogoEditar({
-    required String titulo,
-    required String valorActual,
-    required String placeholder,
-    TextInputType tipoTeclado = TextInputType.text,
-  }) {
-    return showCupertinoDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => _DialogoEditarCampoPerfil(
-        titulo: titulo,
-        valorActual: valorActual,
-        placeholder: placeholder,
-        tipoTeclado: tipoTeclado,
-      ),
-    );
   }
 
   // Mostrar diálogo de confirmación
@@ -1054,8 +1202,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
       builder: (context) => CupertinoAlertDialog(
         title: const Row(
           children: [
-            Icon(CupertinoIcons.exclamationmark_circle,
-                color: ColoresApp.peligroMarca),
+            Icon(
+              CupertinoIcons.exclamationmark_circle,
+              color: ColoresApp.peligroMarca,
+            ),
             SizedBox(width: 8),
             Text('Error'),
           ],
@@ -1081,8 +1231,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
       builder: (context) => CupertinoAlertDialog(
         title: Row(
           children: [
-            Icon(CupertinoIcons.check_mark_circled,
-                color: ColoresApp.principalMarca),
+            Icon(
+              CupertinoIcons.check_mark_circled,
+              color: ColoresApp.principalMarca,
+            ),
             SizedBox(width: 8),
             Text('Éxito'),
           ],
@@ -1117,7 +1269,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(18),
-              ),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -1127,11 +1279,11 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
               compacto: true,
               onTap: _cantidadAmigos > 0 && idUsuario.isNotEmpty
                   ? () => mostrarPerfilActividadSheet(
-                        context,
-                        idUsuario: idUsuario,
-                        tipo: PerfilActividadTipo.amigos,
-                        titulo: 'Mis amigos',
-                      )
+                      context,
+                      idUsuario: idUsuario,
+                      tipo: PerfilActividadTipo.amigos,
+                      titulo: 'Mis amigos',
+                    )
                   : null,
             ),
           ),
@@ -1143,11 +1295,11 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
               compacto: true,
               onTap: _cantidadSquads > 0 && idUsuario.isNotEmpty
                   ? () => mostrarPerfilActividadSheet(
-                        context,
-                        idUsuario: idUsuario,
-                        tipo: PerfilActividadTipo.squads,
-                        titulo: 'Mis squads',
-                      )
+                      context,
+                      idUsuario: idUsuario,
+                      tipo: PerfilActividadTipo.squads,
+                      titulo: 'Mis squads',
+                    )
                   : null,
             ),
           ),
@@ -1159,11 +1311,11 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
               compacto: true,
               onTap: _eventosAsistidos > 0 && idUsuario.isNotEmpty
                   ? () => mostrarPerfilActividadSheet(
-                        context,
-                        idUsuario: idUsuario,
-                        tipo: PerfilActividadTipo.eventos,
-                        titulo: 'Mis eventos',
-                      )
+                      context,
+                      idUsuario: idUsuario,
+                      tipo: PerfilActividadTipo.eventos,
+                      titulo: 'Mis eventos',
+                    )
                   : null,
             ),
           ),
@@ -1175,11 +1327,11 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
               compacto: true,
               onTap: _localesVisitados > 0 && idUsuario.isNotEmpty
                   ? () => mostrarPerfilActividadSheet(
-                        context,
-                        idUsuario: idUsuario,
-                        tipo: PerfilActividadTipo.locales,
-                        titulo: 'Locales visitados',
-                      )
+                      context,
+                      idUsuario: idUsuario,
+                      tipo: PerfilActividadTipo.locales,
+                      titulo: 'Locales visitados',
+                    )
                   : null,
             ),
           ),
@@ -1188,7 +1340,12 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     );
   }
 
-  Widget _statInlineMP(String valor, String etiqueta, {VoidCallback? onTap, bool compacto = false}) {
+  Widget _statInlineMP(
+    String valor,
+    String etiqueta, {
+    VoidCallback? onTap,
+    bool compacto = false,
+  }) {
     final contenido = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1235,16 +1392,17 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     required IconData icono,
     required String texto,
     required VoidCallback onEditar,
+    bool editable = true,
   }) {
     return GestureDetector(
-      onTap: onEditar,
+      onTap: editable ? onEditar : null,
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(50),
-                  ),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1264,9 +1422,11 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
             ),
             const SizedBox(width: 6),
             Icon(
-              CupertinoIcons.pencil,
+              editable ? CupertinoIcons.pencil : CupertinoIcons.lock_fill,
               size: 12,
-              color: ColoresApp.principalMarca,
+              color: editable
+                  ? ColoresApp.principalMarca
+                  : ColoresApp.textoPrincipal.withValues(alpha: 0.35),
             ),
           ],
         ),
@@ -1287,9 +1447,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   Widget _cardSoporte() {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => Navigator.of(context).push(
-        CupertinoPageRoute(builder: (_) => const PantallaSoporte()),
-      ),
+      onTap: () => Navigator.of(
+        context,
+      ).push(CupertinoPageRoute(builder: (_) => const PantallaSoporte())),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: SuperficiesApp.card(radius: 18, temaTint: 0.16),
@@ -1375,30 +1535,36 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                   ? ColoredBox(
                       color: ColoresApp.fondoSuperficie,
                       child: Center(
-                        child: FernecitoLoader.inline(size: 16, color: ColoresApp.principalMarca),
+                        child: FernecitoLoader.inline(
+                          size: 16,
+                          color: ColoresApp.principalMarca,
+                        ),
                       ),
                     )
                   : _fotoPerfilUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: _fotoPerfilUrl!,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => ColoredBox(
-                            color: ColoresApp.fondoSuperficie,
-                            child: Center(
-                              child: FernecitoLoader.inline(size: 16, color: ColoresApp.principalMarca),
-                            ),
+                  ? CachedNetworkImage(
+                      imageUrl: _fotoPerfilUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => ColoredBox(
+                        color: ColoresApp.fondoSuperficie,
+                        child: Center(
+                          child: FernecitoLoader.inline(
+                            size: 16,
+                            color: ColoresApp.principalMarca,
                           ),
-                          errorWidget: (context, url, error) => Icon(
-                            CupertinoIcons.person_circle_fill,
-                            size: size * 0.7,
-                            color: ColoresApp.textoSecundario,
-                          ),
-                        )
-                      : Icon(
-                          CupertinoIcons.person_circle_fill,
-                          size: size * 0.7,
-                          color: ColoresApp.textoSecundario,
                         ),
+                      ),
+                      errorWidget: (context, url, error) => Icon(
+                        CupertinoIcons.person_circle_fill,
+                        size: size * 0.7,
+                        color: ColoresApp.textoSecundario,
+                      ),
+                    )
+                  : Icon(
+                      CupertinoIcons.person_circle_fill,
+                      size: size * 0.7,
+                      color: ColoresApp.textoSecundario,
+                    ),
             ),
           ),
         ),
@@ -1435,9 +1601,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           children: [
             Positioned.fill(
               child: Padding(
-                padding: EdgeInsets.only(
-                  right: _editandoNombreInline ? 92 : 0,
-                ),
+                padding: EdgeInsets.only(right: _editandoNombreInline ? 92 : 0),
                 child: Center(
                   child: _editandoNombreInline
                       ? CupertinoTextField(
@@ -1481,11 +1645,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                                   style: GoogleFonts.baloo2(
                                     fontSize: 23,
                                     fontWeight: FontWeight.w900,
-                                    color: _controladorNombre.text
-                                            .trim()
-                                            .isEmpty
+                                    color:
+                                        _controladorNombre.text.trim().isEmpty
                                         ? ColoresApp.textoSecundario
-                                            .withOpacity(0.7)
+                                              .withOpacity(0.7)
                                         : ColoresApp.textoPrincipal,
                                   ),
                                 ),
@@ -1513,7 +1676,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                     borderRadius: BorderRadius.circular(20),
                     onPressed: _guardando ? null : _guardarNombreInline,
                     child: _guardando
-                        ? const FernecitoLoader.inline(size: 16, color: Colors.white)
+                        ? const FernecitoLoader.inline(
+                            size: 16,
+                            color: Colors.white,
+                          )
                         : Text(
                             'Guardar',
                             style: GoogleFonts.baloo2(
@@ -1540,9 +1706,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           children: [
             Positioned.fill(
               child: Padding(
-                padding: EdgeInsets.only(
-                  right: _editandoEstadoInline ? 88 : 0,
-                ),
+                padding: EdgeInsets.only(right: _editandoEstadoInline ? 88 : 0),
                 child: Center(
                   child: _editandoEstadoInline
                       ? Container(
@@ -1612,7 +1776,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                     borderRadius: BorderRadius.circular(18),
                     onPressed: _guardando ? null : _guardarEstadoInline,
                     child: _guardando
-                        ? const FernecitoLoader.inline(size: 16, color: Colors.white)
+                        ? const FernecitoLoader.inline(
+                            size: 16,
+                            color: Colors.white,
+                          )
                         : Text(
                             'Guardar',
                             style: GoogleFonts.baloo2(
@@ -1634,9 +1801,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final screenHeight = MediaQuery.sizeOf(context).height;
     final isNarrow = screenWidth < 400;
-    final avatarSize = isNarrow
-        ? 68.0
-        : (screenHeight < 700 ? 76.0 : 84.0);
+    final avatarSize = isNarrow ? 68.0 : (screenHeight < 700 ? 76.0 : 84.0);
     final ig = (_instagramUrl ?? '').trim();
     final tt = (_tiktokUrl ?? '').trim();
     final fondoBanner = _bannerPerfilUrl ?? _fotoPerfilUrl ?? '';
@@ -1652,8 +1817,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           ? RedesSocialesBannerPerfil(
               instagramUrl: ig,
               tiktokUrl: tt,
-              onInstagram:
-                  ig.isNotEmpty ? () => _abrirUrlRed(ig) : null,
+              onInstagram: ig.isNotEmpty ? () => _abrirUrlRed(ig) : null,
               onTikTok: tt.isNotEmpty ? () => _abrirUrlRed(tt) : null,
             )
           : null,
@@ -1679,12 +1843,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           slivers: [
             SliverToBoxAdapter(child: _buildBannerMiPerfil()),
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                18,
-                24,
-                padding.bottom + 24,
-              ),
+              padding: EdgeInsets.fromLTRB(24, 18, 24, padding.bottom + 24),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   Center(
@@ -1739,7 +1898,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                     children: [
                       _chipEditableMP(
                         icono: CupertinoIcons.gift_fill,
-                        texto: _edad != null ? '${_edad!} años' : 'Tu edad',
+                        texto: _textoCumple,
+                        // El cumple queda fijo una vez cargado (como el username).
+                        editable: _fechaNacimiento == null,
                         onEditar: _actualizarEdad,
                       ),
                       _chipEditableMP(
@@ -1783,8 +1944,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                           borderRadius: BorderRadius.circular(12),
                           onPressed: () => Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  const PantallaCambiarContrasena(),
+                              builder: (_) => const PantallaCambiarContrasena(),
                             ),
                           ),
                           child: Text(
@@ -1870,10 +2030,12 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: TemaFernecito.colores[i],
-                                            boxShadow: seleccionado
+                      boxShadow: seleccionado
                           ? [
                               BoxShadow(
-                                color: TemaFernecito.colores[i].withOpacity(0.5),
+                                color: TemaFernecito.colores[i].withOpacity(
+                                  0.5,
+                                ),
                                 blurRadius: 12,
                                 spreadRadius: 2,
                               ),
@@ -1924,12 +2086,13 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: (_perfilPublico
-                      ? ColoresApp.principalMarca
-                      : ColoresApp.textoSecundario)
-                  .withValues(alpha: 0.1),
+              color:
+                  (_perfilPublico
+                          ? ColoresApp.principalMarca
+                          : ColoresApp.textoSecundario)
+                      .withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(14),
-                          ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1973,14 +2136,8 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                     spacing: 8,
                     runSpacing: 6,
                     children: [
-                      _chipVisibilidad(
-                        CupertinoIcons.compass,
-                        'Explorar',
-                      ),
-                      _chipVisibilidad(
-                        CupertinoIcons.person_2_fill,
-                        'Pools',
-                      ),
+                      _chipVisibilidad(CupertinoIcons.compass, 'Explorar'),
+                      _chipVisibilidad(CupertinoIcons.person_2_fill, 'Pools'),
                       _chipVisibilidad(
                         CupertinoIcons.chat_bubble_text_fill,
                         'Tu estado',
@@ -2006,7 +2163,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                     decoration: BoxDecoration(
                       color: ColoresApp.principalMarca.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
-                                          ),
+                    ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -2145,8 +2302,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     required VoidCallback onGuardar,
   }) {
     final bool tieneValor = valor != null && valor.isNotEmpty;
-    final String valorMostrado =
-        tieneValor ? _truncarTexto(valor, 35) : 'No configurado';
+    final String valorMostrado = tieneValor
+        ? _truncarTexto(valor, 35)
+        : 'No configurado';
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2154,11 +2312,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
         Expanded(
           child: Row(
             children: [
-              FaIcon(
-                icono,
-                size: 16,
-                color: ColoresApp.principalMarca,
-              ),
+              FaIcon(icono, size: 16, color: ColoresApp.principalMarca),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -2219,7 +2373,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     required VoidCallback onGuardar,
   }) async {
     final tempController = TextEditingController(text: controlador.text);
-    
+
     // Placeholder específico según la red
     final placeholder = etiqueta.contains('Instagram')
         ? 'https://instagram.com/tu_usuario'
@@ -2254,79 +2408,6 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Diálogo para editar un campo de texto del perfil. Devuelve el nuevo valor
-/// (String) al confirmar, o null al cancelar.
-class _DialogoEditarCampoPerfil extends StatefulWidget {
-  final String titulo;
-  final String valorActual;
-  final String placeholder;
-  final TextInputType tipoTeclado;
-
-  const _DialogoEditarCampoPerfil({
-    required this.titulo,
-    required this.valorActual,
-    required this.placeholder,
-    this.tipoTeclado = TextInputType.text,
-  });
-
-  @override
-  State<_DialogoEditarCampoPerfil> createState() =>
-      _DialogoEditarCampoPerfilState();
-}
-
-class _DialogoEditarCampoPerfilState extends State<_DialogoEditarCampoPerfil> {
-  late final TextEditingController _ctrl;
-  final FocusNode _focus = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = TextEditingController(text: widget.valorActual);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focus.requestFocus();
-    });
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoAlertDialog(
-      title: Text(
-        widget.titulo,
-        style: GoogleFonts.baloo2(fontWeight: FontWeight.w800),
-      ),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: CupertinoTextField(
-          controller: _ctrl,
-          focusNode: _focus,
-          keyboardType: widget.tipoTeclado,
-          placeholder: widget.placeholder,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
-        ),
-      ),
-      actions: [
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
-        CupertinoDialogAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(context).pop(_ctrl.text.trim()),
-          child: const Text('Guardar'),
-        ),
-      ],
     );
   }
 }
