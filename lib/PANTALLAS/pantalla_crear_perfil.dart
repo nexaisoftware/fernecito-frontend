@@ -24,6 +24,7 @@ import '../core/constants.dart';
 import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
+import '../widgets/burbuja_estado.dart';
 import '../widgets/recortar_avatar_sheet.dart';
 import 'pantalla_home.dart';
 import '../widgets/fernecito_loader.dart';
@@ -76,9 +77,12 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
   final TextEditingController _controladorNombre = TextEditingController();
   final TextEditingController _controladorInstagram = TextEditingController();
   final TextEditingController _controladorTikTok = TextEditingController();
+  final TextEditingController _controladorEstado = TextEditingController();
+  final FocusNode _focusEstado = FocusNode();
+  bool _editandoEstado = false;
 
   // Estado
-  int? _edadSeleccionada; // Obligatorio
+  DateTime? _fechaNacimientoSeleccionada; // Obligatorio
   Uint8List? _imagenBytes;
   bool _perfilPublico = false;
   bool _validandoUsername = false;
@@ -100,6 +104,8 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     _controladorNombre.dispose();
     _controladorInstagram.dispose();
     _controladorTikTok.dispose();
+    _controladorEstado.dispose();
+    _focusEstado.dispose();
     super.dispose();
   }
 
@@ -299,8 +305,8 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
       return;
     }
 
-    if (_edadSeleccionada == null) {
-      _mostrarError('Elegí tu edad para continuar');
+    if (_fechaNacimientoSeleccionada == null) {
+      _mostrarError('Contanos cuándo es tu cumple para continuar');
       return;
     }
 
@@ -348,9 +354,13 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
         'id': usuario.id,
         'username': _controladorUsername.text.trim().toLowerCase(),
         'nombre': nombreIngresado,
-        // Opcionales
-        'edad': _edadSeleccionada, // Puede ser null
+        // Cumpleaños real. La DB mantiene edad derivada para compatibilidad.
+        'fecha_nacimiento': _fechaIso(_fechaNacimientoSeleccionada!),
+        'edad': _edadDesdeFecha(_fechaNacimientoSeleccionada!),
         'foto_perfil_url': pathFotoRelativo, // Path relativo o null
+        'mi_estado': _controladorEstado.text.trim().isEmpty
+            ? null
+            : _controladorEstado.text.trim(),
         'perfil_publico': _perfilPublico,
         'instagram_url':
             _perfilPublico && _controladorInstagram.text.trim().isNotEmpty
@@ -575,7 +585,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
         _usernameValidado &&
         _usernameDisponible &&
         nombreOk &&
-        _edadSeleccionada != null &&
+        _fechaNacimientoSeleccionada != null &&
         _aceptoPoliticas &&
         !_guardandoPerfil;
 
@@ -621,6 +631,8 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Center(child: _avatar(avatarSize)),
+                      const SizedBox(height: 6),
+                      Center(child: _burbujaEstadoCrear()),
                       const SizedBox(height: 8),
                       Center(
                         child: Text(
@@ -653,7 +665,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                         ),
                       ]),
                       const SizedBox(height: 18),
-                      _label('Tu edad'),
+                      _label('Tu cumple'),
                       const SizedBox(height: 8),
                       _card([_filaEdad()]),
                       const SizedBox(height: 18),
@@ -918,6 +930,89 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     );
   }
 
+  /// Burbuja de estado bajo el avatar (mismo estilo que mi perfil), con
+  /// placeholder gris "escribe algo divertido". Al tocar, edita inline.
+  Widget _burbujaEstadoCrear() {
+    final estado = _controladorEstado.text.trim();
+    if (_editandoEstado) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 300),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          decoration: BoxDecoration(
+            color: ColoresApp.fondoSuperficie,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: CupertinoTextField(
+                  controller: _controladorEstado,
+                  focusNode: _focusEstado,
+                  placeholder: 'Escribí algo divertido',
+                  maxLength: 50,
+                  maxLines: 2,
+                  minLines: 1,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.baloo2(
+                    color: ColoresApp.textoPrincipal,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  decoration: null,
+                  padding: EdgeInsets.zero,
+                  onSubmitted: (_) => setState(() => _editandoEstado = false),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => setState(() => _editandoEstado = false),
+                child: Icon(
+                  CupertinoIcons.checkmark_circle_fill,
+                  size: 22,
+                  color: ColoresApp.principalMarca,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: () {
+        setState(() => _editandoEstado = true);
+        Future.microtask(
+          () => FocusScope.of(context).requestFocus(_focusEstado),
+        );
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: BurbujaEstado(
+              texto: estado.isEmpty ? 'escribe algo divertido' : estado,
+              colorTexto: estado.isEmpty
+                  ? ColoresApp.textoSecundario.withValues(alpha: 0.75)
+                  : null,
+              mostrarPuntosSiVacio: false,
+              fontSize: 13,
+              compacta: true,
+              ajustarAnchoAlTexto: true,
+              maxLines: 2,
+            ),
+          ),
+          const SizedBox(width: 7),
+          Icon(
+            CupertinoIcons.pencil,
+            size: 15,
+            color: ColoresApp.principalMarca,
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Avatar editable ──
   Widget _avatar(double size) {
     final marca = ColoresApp.principalMarca;
@@ -1148,9 +1243,33 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     );
   }
 
-  // ── Fila de edad (obligatoria) ──
+  int _edadDesdeFecha(DateTime fecha) {
+    final hoy = DateTime.now();
+    var edad = hoy.year - fecha.year;
+    final yaCumplio =
+        hoy.month > fecha.month ||
+        (hoy.month == fecha.month && hoy.day >= fecha.day);
+    if (!yaCumplio) edad -= 1;
+    return edad;
+  }
+
+  String _fechaIso(DateTime fecha) {
+    final y = fecha.year.toString().padLeft(4, '0');
+    final m = fecha.month.toString().padLeft(2, '0');
+    final d = fecha.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  String _fechaCumpleTexto(DateTime fecha) {
+    final d = fecha.day.toString().padLeft(2, '0');
+    final m = fecha.month.toString().padLeft(2, '0');
+    return '$d/$m/${fecha.year}';
+  }
+
+  // ── Fila de cumpleaños (obligatoria) ──
   Widget _filaEdad() {
-    final puesta = _edadSeleccionada != null;
+    final fecha = _fechaNacimientoSeleccionada;
+    final puesta = fecha != null;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _abrirSelectorEdad,
@@ -1171,7 +1290,9 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                puesta ? '$_edadSeleccionada años' : 'Elegí tu edad',
+                puesta
+                    ? '${_fechaCumpleTexto(fecha)} · ${_edadDesdeFecha(fecha)} años'
+                    : '¿Cuándo es tu cumple?',
                 style: GoogleFonts.baloo2(
                   fontSize: 15,
                   fontWeight: puesta ? FontWeight.w700 : FontWeight.w500,
@@ -1193,12 +1314,17 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
   }
 
   void _abrirSelectorEdad() {
-    int seleccion = (_edadSeleccionada ?? 18) - 16;
-    if (seleccion < 0) seleccion = 0;
+    final hoy = DateTime.now();
+    final maxDate = DateTime(hoy.year - 13, hoy.month, hoy.day);
+    final minDate = DateTime(1920, 1, 1);
+    var seleccion =
+        _fechaNacimientoSeleccionada ??
+        DateTime(hoy.year - 18, hoy.month, hoy.day);
+    if (seleccion.isAfter(maxDate)) seleccion = maxDate;
     showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => Container(
-        height: 280,
+        height: 320,
         color: ColoresApp.fondoSuperficie,
         child: Column(
           children: [
@@ -1216,7 +1342,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                 ),
                 CupertinoButton(
                   onPressed: () {
-                    setState(() => _edadSeleccionada = seleccion + 16);
+                    setState(() => _fechaNacimientoSeleccionada = seleccion);
                     Navigator.pop(ctx);
                   },
                   child: Text(
@@ -1230,24 +1356,12 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
               ],
             ),
             Expanded(
-              child: CupertinoPicker(
-                scrollController: FixedExtentScrollController(
-                  initialItem: seleccion,
-                ),
-                itemExtent: 40,
-                onSelectedItemChanged: (i) => seleccion = i,
-                children: List.generate(
-                  84,
-                  (i) => Center(
-                    child: Text(
-                      '${i + 16} años',
-                      style: GoogleFonts.baloo2(
-                        fontSize: 20,
-                        color: ColoresApp.textoPrincipal,
-                      ),
-                    ),
-                  ),
-                ),
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: seleccion,
+                minimumDate: minDate,
+                maximumDate: maxDate,
+                onDateTimeChanged: (fecha) => seleccion = fecha,
               ),
             ),
           ],

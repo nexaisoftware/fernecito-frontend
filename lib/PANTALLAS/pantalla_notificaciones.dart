@@ -141,10 +141,17 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
   }
 
   Future<void> _navegar(Notificacion n) async {
-    await _marcarLeida(n);
-    if (!mounted) return;
     try {
-      await navegarDesdeNotificacion(n, onIrATab: widget.onIrATab);
+      final abierta = await navegarDesdeNotificacion(
+        n,
+        onIrATab: widget.onIrATab,
+      );
+      if (!mounted) return;
+      if (abierta) {
+        await _marcarLeida(n);
+      } else {
+        _mostrarError('No se pudo abrir esta novedad.');
+      }
     } catch (e) {
       debugPrint('⚠️ navegar notif ${n.tipo}: $e');
       _mostrarError('No se pudo abrir esta novedad.');
@@ -155,13 +162,13 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
     if (_accionProcesandoId != null) return;
     setState(() => _accionProcesandoId = n.id);
     try {
-      await _marcarLeida(n);
       switch (n.tipo) {
         case 'solicitud_amistad':
           final ok = await aceptarAmistadDesdeNotificacion(n);
           if (!ok && mounted) {
             _mostrarError('No se pudo aceptar la solicitud.');
           } else if (mounted) {
+            await _marcarLeida(n);
             await _cargar();
           }
           break;
@@ -171,6 +178,7 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
             if (!ok && mounted) {
               _mostrarError('No se pudo aceptar la invitación al squad.');
             } else if (mounted) {
+              await _marcarLeida(n);
               await _cargar();
             }
           } else {

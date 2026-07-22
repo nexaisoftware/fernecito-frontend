@@ -6,8 +6,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
+import '../core/lanzador_externo.dart';
 import '../core/servicio_amigos.dart';
 import '../core/servicio_pools.dart';
 import '../widgets/avatar_local.dart';
@@ -33,7 +33,7 @@ Future<void> _abrirUrl(String raw) async {
   final uri = Uri.tryParse(url);
   if (uri == null) return;
   try {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await lanzarExternoConFallback(uri);
   } catch (_) {
     /* silencioso */
   }
@@ -188,7 +188,7 @@ class _PantallaPoolsState extends State<PantallaPools> {
                         decoration: BoxDecoration(
                           color: ColoresApp.fondoSuperficie,
                           borderRadius: BorderRadius.circular(50),
-                                                  ),
+                        ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -454,7 +454,7 @@ class _CeldaPersonaSoloAvatar extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: ColoresApp.principalMarca.withOpacity(0.14),
                       borderRadius: BorderRadius.circular(50),
-                                          ),
+                    ),
                     child: Text(
                       username,
                       style: GoogleFonts.baloo2(
@@ -472,9 +472,7 @@ class _CeldaPersonaSoloAvatar extends StatelessWidget {
             Container(
               width: avatarSize,
               height: avatarSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                              ),
+              decoration: BoxDecoration(shape: BoxShape.circle),
               child: _AvatarRed(url: avatar, size: avatarSize),
             ),
             const SizedBox(height: 6),
@@ -625,7 +623,7 @@ class _CeldaSquadGrid extends StatelessWidget {
                           height: avatarStackSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                                                        boxShadow: [
+                            boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.25),
                                 blurRadius: 6,
@@ -649,7 +647,7 @@ class _CeldaSquadGrid extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: ColoresApp.fondoPrincipal,
-                                                      ),
+                          ),
                           child: Center(
                             child: Text(
                               '+$overflow',
@@ -759,16 +757,13 @@ class _BottomSheetSquad extends StatelessWidget {
       s['miembros'] as List? ?? [],
     );
     final avatares = miembros.map((m) => m['avatar'] as String? ?? '').toList();
+    final avatarSquad = (s['avatar'] as String?)?.trim();
     final squadParaPerfil = {
       ...s,
       'miembros': miembros.length,
       'miembrosAvatares': avatares,
-      'descripcion': s['descripcion'] ?? 'Grupo del pool del evento',
-      'avatar':
-          s['avatar'] ??
-          (miembros.isNotEmpty
-              ? miembros.first['avatar']
-              : 'https://i.pravatar.cc/200?img=30'),
+      'descripcion': s['descripcion'],
+      'avatar': avatarSquad ?? '',
       'username':
           s['username'] ??
           '@${(s['nombre'] as String? ?? 'squad').toLowerCase().replaceAll(RegExp(r'[^\w]'), '_')}',
@@ -843,7 +838,7 @@ class _BottomSheetSquad extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Colors.transparent,
                           borderRadius: BorderRadius.circular(50),
-                                                  ),
+                        ),
                         child: Text(
                           'Ver squad',
                           style: GoogleFonts.baloo2(
@@ -888,7 +883,7 @@ class _BottomSheetSquad extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: ColoresApp.fondoPrincipal,
                             borderRadius: BorderRadius.circular(14),
-                                                      ),
+                          ),
                           child: Row(
                             children: [
                               _AvatarRed(
@@ -1008,7 +1003,7 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                       height: 100,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                                                boxShadow: [
+                        boxShadow: [
                           BoxShadow(
                             color: ColoresApp.principalMarca.withOpacity(0.3),
                             blurRadius: 16,
@@ -1063,7 +1058,7 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                         decoration: BoxDecoration(
                           color: Colors.transparent,
                           borderRadius: BorderRadius.circular(50),
-                                                  ),
+                        ),
                         child: Text(
                           'Ver perfil',
                           style: GoogleFonts.baloo2(
@@ -1092,7 +1087,7 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                       decoration: BoxDecoration(
                         color: ColoresApp.fondoPrincipal,
                         borderRadius: BorderRadius.circular(50),
-                                              ),
+                      ),
                       child: Text(
                         '${persona['edad'] ?? '—'} años',
                         style: GoogleFonts.baloo2(
@@ -1112,7 +1107,7 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                         decoration: BoxDecoration(
                           color: ColoresApp.promoMarca.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(50),
-                                                  ),
+                        ),
                         child: Text(
                           'Squad: ${persona['squad']}',
                           style: GoogleFonts.baloo2(
@@ -1148,7 +1143,7 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                               decoration: BoxDecoration(
                                 color: ColoresApp.fondoPrincipal,
                                 borderRadius: BorderRadius.circular(50),
-                                                              ),
+                              ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -1181,7 +1176,7 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                               decoration: BoxDecoration(
                                 color: ColoresApp.fondoPrincipal,
                                 borderRadius: BorderRadius.circular(50),
-                                                              ),
+                              ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -1218,10 +1213,13 @@ class _BottomSheetPersonaState extends State<_BottomSheetPersona> {
                                     ? Colors.transparent
                                     : ColoresApp.principalMarca,
                                 borderRadius: BorderRadius.circular(50),
-                                                              ),
+                              ),
                               child: _enviando
                                   ? Center(
-                                      child: FernecitoLoader.inline(size: 16, color: ColoresApp.principalMarca),
+                                      child: FernecitoLoader.inline(
+                                        size: 16,
+                                        color: ColoresApp.principalMarca,
+                                      ),
                                     )
                                   : _solicitudEnviada
                                   ? Row(

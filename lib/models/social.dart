@@ -28,16 +28,16 @@ class Amigo {
   });
 
   factory Amigo.fromMap(Map<String, dynamic> m) => Amigo(
-        idRelacion: m['id_relacion']?.toString(),
-        idUsuario: m['id_usuario'].toString(),
-        username: (m['username'] as String?) ?? '',
-        nombre: (m['nombre'] as String?) ?? '',
-        fotoPerfilUrl: m['foto_perfil_url'] as String?,
-        miEstado: m['mi_estado'] as String?,
-        instagramUrl: m['instagram_url'] as String?,
-        tiktokUrl: m['tiktok_url'] as String?,
-        perfilPublico: m['perfil_publico'] == true,
-      );
+    idRelacion: m['id_relacion']?.toString(),
+    idUsuario: m['id_usuario'].toString(),
+    username: (m['username'] as String?) ?? '',
+    nombre: (m['nombre'] as String?) ?? '',
+    fotoPerfilUrl: m['foto_perfil_url'] as String?,
+    miEstado: m['mi_estado'] as String?,
+    instagramUrl: m['instagram_url'] as String?,
+    tiktokUrl: m['tiktok_url'] as String?,
+    perfilPublico: m['perfil_publico'] == true,
+  );
 
   /// URL pública del avatar (resuelta desde el path en bucket `avatars`).
   String? get avatarUrl => ServicioSupabase().urlAvatar(fotoPerfilUrl);
@@ -57,7 +57,9 @@ class AmistadesData {
 
   factory AmistadesData.fromMap(Map<String, dynamic> m) {
     List<Amigo> parse(dynamic v) => (v is List)
-        ? v.map((e) => Amigo.fromMap(Map<String, dynamic>.from(e as Map))).toList()
+        ? v
+              .map((e) => Amigo.fromMap(Map<String, dynamic>.from(e as Map)))
+              .toList()
         : const [];
     return AmistadesData(
       amigos: parse(m['amigos']),
@@ -132,16 +134,16 @@ class UsuarioBusqueda {
   });
 
   factory UsuarioBusqueda.fromMap(Map<String, dynamic> m) => UsuarioBusqueda(
-        idUsuario: m['id_usuario'].toString(),
-        username: (m['username'] as String?) ?? '',
-        nombre: (m['nombre'] as String?) ?? '',
-        fotoPerfilUrl: m['foto_perfil_url'] as String?,
-        estado: m['mi_estado'] as String?,
-        instagramUrl: m['instagram_url'] as String?,
-        tiktokUrl: m['tiktok_url'] as String?,
-        perfilPublico: m['perfil_publico'] == true,
-        estadoAmistad: (m['estado_amistad'] as String?) ?? 'ninguno',
-      );
+    idUsuario: m['id_usuario'].toString(),
+    username: (m['username'] as String?) ?? '',
+    nombre: (m['nombre'] as String?) ?? '',
+    fotoPerfilUrl: m['foto_perfil_url'] as String?,
+    estado: m['mi_estado'] as String?,
+    instagramUrl: m['instagram_url'] as String?,
+    tiktokUrl: m['tiktok_url'] as String?,
+    perfilPublico: m['perfil_publico'] == true,
+    estadoAmistad: (m['estado_amistad'] as String?) ?? 'ninguno',
+  );
 
   String? get avatarUrl => ServicioSupabase().urlAvatar(fotoPerfilUrl);
 }
@@ -202,15 +204,14 @@ class SquadExplorarItem {
       .toList();
 
   String? get portadaUrl => ServicioSupabase().urlPortadaSquadDisplay(
-        urlPortada,
-        version: fechaActualizacion,
-        fallbackSeed: urlPortada ?? idGrupo,
-      );
+    urlPortada,
+    version: fechaActualizacion,
+    fallbackSeed: urlPortada ?? idGrupo,
+  );
 
   String? get portadaCacheKey => portadaUrl;
 
-  int get miembrosExtra =>
-      cantidadMiembros > 3 ? cantidadMiembros - 3 : 0;
+  int get miembrosExtra => cantidadMiembros > 3 ? cantidadMiembros - 3 : 0;
 }
 
 class ExplorarSquadsPagina {
@@ -252,16 +253,21 @@ class SquadBusqueda {
   });
 
   factory SquadBusqueda.fromMap(Map<String, dynamic> m) => SquadBusqueda(
-        idGrupo: m['id_grupo'].toString(),
-        nombre: (m['nombre_grupo'] as String?) ?? 'Squad',
-        descripcion: m['descripcion_grupo'] as String?,
-        urlPortada: m['url_portada'] as String?,
-        vibe: m['vibe_grupo'] as String?,
-        esPublico: m['es_publico'] == true,
-        idCreador: m['id_creador']?.toString(),
-        cantidadMiembros: (m['cantidad_miembros'] as num?)?.toInt() ?? 0,
-        miEstado: (m['mi_estado'] as String?) ?? 'ninguno',
-      );
+    idGrupo: m['id_grupo'].toString(),
+    nombre: (m['nombre_grupo'] as String?) ?? 'Squad',
+    descripcion: m['descripcion_grupo'] as String?,
+    urlPortada: m['url_portada'] as String?,
+    vibe: m['vibe_grupo'] as String?,
+    esPublico: m['es_publico'] == true,
+    idCreador: m['id_creador']?.toString(),
+    cantidadMiembros: (m['cantidad_miembros'] as num?)?.toInt() ?? 0,
+    miEstado: (m['mi_estado'] as String?) ?? 'ninguno',
+  );
+
+  String? get portadaUrl => ServicioSupabase().urlPortadaSquadDisplay(
+    urlPortada,
+    fallbackSeed: urlPortada ?? idGrupo,
+  );
 }
 
 /// Squad en listados (mis squads / invitaciones).
@@ -277,6 +283,7 @@ class SquadResumen {
   final String? idCreador;
   final String? miRol;
   final bool soyLider;
+  final String? origenPendiente;
   final int cantidadMiembros;
 
   /// Paths (bucket avatars) de hasta 3 miembros para el stack de la card.
@@ -294,6 +301,7 @@ class SquadResumen {
     this.idCreador,
     this.miRol,
     this.soyLider = false,
+    this.origenPendiente,
     this.cantidadMiembros = 0,
     this.fotosMiembros = const [],
   });
@@ -315,6 +323,7 @@ class SquadResumen {
       idCreador: m['id_creador']?.toString(),
       miRol: m['mi_rol'] as String?,
       soyLider: m['soy_lider'] == true,
+      origenPendiente: m['origen_pendiente'] as String?,
       cantidadMiembros: (m['cantidad_miembros'] as num?)?.toInt() ?? 0,
       fotosMiembros: fotos,
     );
@@ -329,13 +338,12 @@ class SquadResumen {
 
   /// Portada resuelta (soporta path o URL absoluta).
   String? get portadaUrl => ServicioSupabase().urlPortadaSquadDisplay(
-        urlPortada,
-        fallbackSeed: urlPortada ?? idGrupo,
-      );
+    urlPortada,
+    fallbackSeed: urlPortada ?? idGrupo,
+  );
 
   /// Puede invitar gente (líder o admin del squad).
-  bool get puedeInvitar =>
-      soyLider || miRol == 'admin' || miRol == 'lider';
+  bool get puedeInvitar => soyLider || miRol == 'admin' || miRol == 'lider';
 }
 
 class MiembroSquad {
@@ -368,20 +376,21 @@ class MiembroSquad {
   });
 
   factory MiembroSquad.fromMap(Map<String, dynamic> m) => MiembroSquad(
-        idUsuario: m['id_usuario'].toString(),
-        username: (m['username'] as String?) ?? '',
-        nombre: (m['nombre'] as String?) ?? '',
-        fotoPerfilUrl: m['foto_perfil_url'] as String?,
-        rol: (m['rol_miembro'] as String?) ?? 'miembro',
-        estado: m['mi_estado'] as String?,
-        instagramUrl: m['instagram_url'] as String?,
-        tiktokUrl: m['tiktok_url'] as String?,
-        perfilPublico: m['perfil_publico'] == true,
-        origenPendiente: m['origen_pendiente'] as String?,
-      );
+    idUsuario: m['id_usuario'].toString(),
+    username: (m['username'] as String?) ?? '',
+    nombre: (m['nombre'] as String?) ?? '',
+    fotoPerfilUrl: m['foto_perfil_url'] as String?,
+    rol: (m['rol_miembro'] as String?) ?? 'miembro',
+    estado: m['mi_estado'] as String?,
+    instagramUrl: m['instagram_url'] as String?,
+    tiktokUrl: m['tiktok_url'] as String?,
+    perfilPublico: m['perfil_publico'] == true,
+    origenPendiente: m['origen_pendiente'] as String?,
+  );
 
   bool get esPedidoUnion => origenPendiente == 'solicitud';
-  bool get esInvitacionEnviada => origenPendiente == 'invitacion' || origenPendiente == null;
+  bool get esInvitacionEnviada =>
+      origenPendiente == 'invitacion' || origenPendiente == null;
 
   bool get esLider => rol == 'lider';
   bool get esAdmin => rol == 'admin' || rol == 'lider';
@@ -403,6 +412,10 @@ class SquadDetalle {
   final String? idCreador;
   final bool soyLider;
 
+  /// Ubicación PROPIA del squad (independiente de los miembros).
+  final String? ciudad;
+  final String? provincia;
+
   /// Mi relación con el squad: 'aceptado' | 'pendiente' | 'rechazado' | 'ninguno'.
   final String miEstado;
   final List<MiembroSquad> miembros;
@@ -419,29 +432,36 @@ class SquadDetalle {
     this.esPublico = false,
     this.idCreador,
     this.soyLider = false,
+    this.ciudad,
+    this.provincia,
     this.miEstado = 'ninguno',
     this.miembros = const [],
   });
 
   factory SquadDetalle.fromMap(Map<String, dynamic> m) => SquadDetalle(
-        idGrupo: m['id_grupo'].toString(),
-        nombre: (m['nombre_grupo'] as String?) ?? 'Squad',
-        username: m['username'] as String?,
-        descripcion: m['descripcion_grupo'] as String?,
-        urlPortada: m['url_portada'] as String?,
-        fechaActualizacion: m['fecha_actualizacion']?.toString(),
-        estado: m['estado_grupo'] as String?,
-        vibe: m['vibe_grupo'] as String?,
-        esPublico: m['es_publico'] == true,
-        idCreador: m['id_creador']?.toString(),
-        soyLider: m['soy_lider'] == true,
-        miEstado: (m['mi_estado'] as String?) ?? 'ninguno',
-        miembros: (m['miembros'] is List)
-            ? (m['miembros'] as List)
-                .map((e) => MiembroSquad.fromMap(Map<String, dynamic>.from(e as Map)))
-                .toList()
-            : const [],
-      );
+    idGrupo: m['id_grupo'].toString(),
+    nombre: (m['nombre_grupo'] as String?) ?? 'Squad',
+    username: m['username'] as String?,
+    descripcion: m['descripcion_grupo'] as String?,
+    urlPortada: m['url_portada'] as String?,
+    fechaActualizacion: m['fecha_actualizacion']?.toString(),
+    estado: m['estado_grupo'] as String?,
+    vibe: m['vibe_grupo'] as String?,
+    esPublico: m['es_publico'] == true,
+    idCreador: m['id_creador']?.toString(),
+    soyLider: m['soy_lider'] == true,
+    ciudad: m['ciudad'] as String?,
+    provincia: m['provincia'] as String?,
+    miEstado: (m['mi_estado'] as String?) ?? 'ninguno',
+    miembros: (m['miembros'] is List)
+        ? (m['miembros'] as List)
+              .map(
+                (e) =>
+                    MiembroSquad.fromMap(Map<String, dynamic>.from(e as Map)),
+              )
+              .toList()
+        : const [],
+  );
 
   bool puedeAdministrar(String? uidUsuario) {
     if (uidUsuario == null) return soyLider;
@@ -453,10 +473,10 @@ class SquadDetalle {
 
   /// Portada resuelta con bust de caché (`?v=fecha_actualizacion`).
   String? get portadaUrl => ServicioSupabase().urlPortadaSquadDisplay(
-        urlPortada,
-        version: fechaActualizacion,
-        fallbackSeed: urlPortada ?? idGrupo,
-      );
+    urlPortada,
+    version: fechaActualizacion,
+    fallbackSeed: urlPortada ?? idGrupo,
+  );
 
   String? get portadaCacheKey => portadaUrl;
 

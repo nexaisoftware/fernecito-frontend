@@ -8,11 +8,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 import '../core/constants.dart';
+import '../core/lanzador_externo.dart';
 import '../core/servicio_actividad_usuario.dart';
 import '../core/supabase_client.dart';
 import '../widgets/avatar_local.dart';
@@ -35,10 +35,7 @@ class SnapshotTokenPromo {
   final String codigo;
   final String estadoToken;
 
-  const SnapshotTokenPromo({
-    required this.codigo,
-    required this.estadoToken,
-  });
+  const SnapshotTokenPromo({required this.codigo, required this.estadoToken});
 }
 
 String _formatearFechaPromoActividad(String? iso) {
@@ -47,8 +44,18 @@ String _formatearFechaPromoActividad(String? iso) {
     final dt = DateTime.parse(iso).toLocal();
     const dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
     const meses = [
-      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
     ];
     final dia = dias[dt.weekday - 1];
     final mes = meses[dt.month - 1];
@@ -71,7 +78,8 @@ bool _promoVigente(Map<String, dynamic> promo) {
   if (finRaw == null || finRaw.isEmpty) return true;
   try {
     final fin = DateTime.parse(finRaw).toUtc();
-    return DateTime.now().toUtc().millisecondsSinceEpoch <= fin.millisecondsSinceEpoch;
+    return DateTime.now().toUtc().millisecondsSinceEpoch <=
+        fin.millisecondsSinceEpoch;
   } catch (_) {
     return true;
   }
@@ -156,21 +164,31 @@ class _PantallaActividadState extends State<PantallaActividad> {
 
   String _estadoTextoReal(String estado) {
     switch (estado) {
-      case 'aceptada':  return 'Aceptada';
-      case 'pendiente': return 'En espera';
-      case 'canjeada':  return 'Ya ingresaste';
-      case 'rechazada': return 'Rechazada';
-      default:          return estado;
+      case 'aceptada':
+        return 'Aceptada';
+      case 'pendiente':
+        return 'En espera';
+      case 'canjeada':
+        return 'Ya ingresaste';
+      case 'rechazada':
+        return 'Rechazada';
+      default:
+        return estado;
     }
   }
 
   Color _estadoColorReal(String estado) {
     switch (estado) {
-      case 'aceptada':  return ColoresApp.principalMarca;
-      case 'pendiente': return ColoresApp.promoMarca;
-      case 'canjeada':  return ColoresApp.textoSecundario;
-      case 'rechazada': return ColoresApp.peligroMarca;
-      default:          return ColoresApp.textoSecundario;
+      case 'aceptada':
+        return ColoresApp.principalMarca;
+      case 'pendiente':
+        return ColoresApp.promoMarca;
+      case 'canjeada':
+        return ColoresApp.textoSecundario;
+      case 'rechazada':
+        return ColoresApp.peligroMarca;
+      default:
+        return ColoresApp.textoSecundario;
     }
   }
 
@@ -178,11 +196,26 @@ class _PantallaActividadState extends State<PantallaActividad> {
     if (iso == null) return '';
     try {
       final dt = DateTime.parse(iso).toLocal();
-      const dias   = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-      const meses  = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+      const dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+      const meses = [
+        'Ene',
+        'Feb',
+        'Mar',
+        'Abr',
+        'May',
+        'Jun',
+        'Jul',
+        'Ago',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dic',
+      ];
       return '${dias[dt.weekday - 1]} ${dt.day} ${meses[dt.month - 1]}, '
           '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    } catch (_) { return ''; }
+    } catch (_) {
+      return '';
+    }
   }
 
   Uri? _parseUrlMaps(String raw) {
@@ -207,12 +240,14 @@ class _PantallaActividadState extends State<PantallaActividad> {
 
   /// 1) `url_maps` del local (link de Google Maps). 2) Búsqueda por dirección + ciudad/provincia.
   /// Solo si no hay datos de ubicación, usa el nombre del local como último recurso.
-  Future<void> _abrirMaps(BuildContext context, Map<String, dynamic> token) async {
+  Future<void> _abrirMaps(
+    BuildContext context,
+    Map<String, dynamic> token,
+  ) async {
     final urlMaps = token['urlMaps']?.toString().trim() ?? '';
     if (urlMaps.isNotEmpty) {
       final u = _parseUrlMaps(urlMaps);
-      if (u != null && await canLaunchUrl(u)) {
-        await launchUrl(u, mode: LaunchMode.externalApplication);
+      if (u != null && await _lanzarExterno(u)) {
         return;
       }
     }
@@ -231,17 +266,21 @@ class _PantallaActividadState extends State<PantallaActividad> {
 
     if (query.isEmpty) {
       final uri = Uri.parse('https://www.google.com/maps');
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
+      await _lanzarExterno(uri);
       return;
     }
 
     final uri = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}',
     );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await _lanzarExterno(uri);
+  }
+
+  Future<bool> _lanzarExterno(Uri uri) async {
+    try {
+      return await lanzarExternoConFallback(uri);
+    } catch (_) {
+      return false;
     }
   }
 
@@ -266,7 +305,9 @@ class _PantallaActividadState extends State<PantallaActividad> {
         token: token,
         idEvento: idEvento,
         puedeObtenerPromos: puedeObtenerPromos,
-        promoTokensPrecarga: Map<String, SnapshotTokenPromo>.from(_tokensPromoPorId),
+        promoTokensPrecarga: Map<String, SnapshotTokenPromo>.from(
+          _tokensPromoPorId,
+        ),
         onReloadActividadDesdePromos: () =>
             _cargarActividad(forzarCompleto: true),
       ),
@@ -320,116 +361,110 @@ class _PantallaActividadState extends State<PantallaActividad> {
           const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
           if (_cargando)
-                const SliverFillRemaining(
-                  child: FernecitoLoaderCentro(size: 34),
-                )
-              else if (_tokens.isEmpty)
-                SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: ColoresApp.principalMarca.withOpacity(0.12),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            CupertinoIcons.ticket,
-                            size: 38,
-                            color: ColoresApp.principalMarca,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Sin reservas aún',
-                          style: GoogleFonts.baloo2(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: ColoresApp.textoPrincipal,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 40),
-                          child: Text(
-                            'Explorá la cartelera y reservá tu lugar en los mejores eventos',
-                            style: GoogleFonts.baloo2(
-                              fontSize: 14,
-                              color: ColoresApp.textoSecundario,
-                              height: 1.4,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ],
+            const SliverFillRemaining(child: FernecitoLoaderCentro(size: 34))
+          else if (_tokens.isEmpty)
+            SliverFillRemaining(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: ColoresApp.principalMarca.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        CupertinoIcons.ticket,
+                        size: 38,
+                        color: ColoresApp.principalMarca,
+                      ),
                     ),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final t = _tokens[index];
-                        final estado = t['estado_token'] as String? ?? 'pendiente';
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: _CardActividad(
-                            token: t,
-                            flyerUrl: t['flyer'] as String? ?? '',
-                            avatarLocal: t['avatarLocal'] as String? ?? '',
-                            localEsPionero: t['localEsPionero'] == true,
-                            estadoTexto: _estadoTextoReal(estado),
-                            estadoColor: _estadoColorReal(estado),
-                            fechaHora: _formatearFecha(t['fechaInicio'] as String?),
-                            codigoPuerta: t['codigo_puerta'] as String? ?? '',
-                            onAbrirQR: estado == 'aceptada'
-                                ? () => _mostrarQR(context, t)
-                                : null,
-                            onComoLlegar: () => _abrirMaps(context, t),
-                            onVerPromos: () => _mostrarPromos(context, t),
-                            onVerPool: () {
-                              final idEv = t['id_evento']?.toString() ?? '';
-                              if (idEv.isEmpty) return;
-                              Navigator.of(context).push(
-                                CupertinoPageRoute(
-                                  builder: (_) => PantallaPools(
-                                    idEvento: idEv,
-                                    nombreEvento:
-                                        t['titulo'] as String? ?? 'Evento',
-                                    flyerUrl: t['flyer'] as String?,
-                                    nombreLocal:
-                                        t['nombreLocal'] as String? ?? 'Local',
-                                    avatarLocal:
-                                        t['avatarLocal'] as String? ?? '',
-                                    localEsPionero: t['localEsPionero'] == true,
-                                  ),
-                                ),
-                              );
-                            },
-                            onVerPerfilLocal: () {
-                              Navigator.of(context).push(
-                                CupertinoPageRoute(
-                                  builder: (_) => PantallaLocalPerfil(
-                                    avatarUrl: t['avatarLocal'] as String? ?? '',
-                                    nombreLocal: t['nombreLocal'] as String? ?? 'Local',
-                                    idLocal: t['idLocal'] as String?,
-                                  ),
-                                ),
-                              );
-                            },
+                    const SizedBox(height: 20),
+                    Text(
+                      'Sin reservas aún',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: ColoresApp.textoPrincipal,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 40),
+                      child: Text(
+                        'Explorá la cartelera y reservá tu lugar en los mejores eventos',
+                        style: GoogleFonts.baloo2(
+                          fontSize: 14,
+                          color: ColoresApp.textoSecundario,
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final t = _tokens[index];
+                  final estado = t['estado_token'] as String? ?? 'pendiente';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _CardActividad(
+                      token: t,
+                      flyerUrl: t['flyer'] as String? ?? '',
+                      avatarLocal: t['avatarLocal'] as String? ?? '',
+                      localEsPionero: t['localEsPionero'] == true,
+                      estadoTexto: _estadoTextoReal(estado),
+                      estadoColor: _estadoColorReal(estado),
+                      fechaHora: _formatearFecha(t['fechaInicio'] as String?),
+                      codigoPuerta: t['codigo_puerta'] as String? ?? '',
+                      onAbrirQR: estado == 'aceptada'
+                          ? () => _mostrarQR(context, t)
+                          : null,
+                      onComoLlegar: () => _abrirMaps(context, t),
+                      onVerPromos: () => _mostrarPromos(context, t),
+                      onVerPool: () {
+                        final idEv = t['id_evento']?.toString() ?? '';
+                        if (idEv.isEmpty) return;
+                        Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder: (_) => PantallaPools(
+                              idEvento: idEv,
+                              nombreEvento: t['titulo'] as String? ?? 'Evento',
+                              flyerUrl: t['flyer'] as String?,
+                              nombreLocal:
+                                  t['nombreLocal'] as String? ?? 'Local',
+                              avatarLocal: t['avatarLocal'] as String? ?? '',
+                              localEsPionero: t['localEsPionero'] == true,
+                            ),
                           ),
                         );
                       },
-                      childCount: _tokens.length,
+                      onVerPerfilLocal: () {
+                        Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder: (_) => PantallaLocalPerfil(
+                              avatarUrl: t['avatarLocal'] as String? ?? '',
+                              nombreLocal:
+                                  t['nombreLocal'] as String? ?? 'Local',
+                              idLocal: t['idLocal'] as String?,
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                ),
-              SliverToBoxAdapter(child: SizedBox(height: padding.bottom + 80)),
+                  );
+                }, childCount: _tokens.length),
+              ),
+            ),
+          SliverToBoxAdapter(child: SizedBox(height: padding.bottom + 80)),
         ],
       ),
     );
@@ -439,6 +474,36 @@ class _PantallaActividadState extends State<PantallaActividad> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Card de Actividad
 // ─────────────────────────────────────────────────────────────────────────────
+
+String _textoSquadActividad(Map<String, dynamic> token) {
+  final nombre = token['nombre_squad']?.toString().trim();
+  final indice = token['indice_squad'];
+  final total = token['total_squad'];
+  final ind = indice is int ? indice : int.tryParse('$indice');
+  final tot = total is int ? total : int.tryParse('$total');
+  if (ind != null && tot != null && tot > 0) {
+    final base = 'Vas con tu squad · $ind/$tot';
+    if (nombre != null && nombre.isNotEmpty) return '$base · «$nombre»';
+    return base;
+  }
+  if (nombre != null && nombre.isNotEmpty) {
+    return 'Vas con tu squad «$nombre»';
+  }
+  return 'Vas con tu squad';
+}
+
+String _textoReservadoPorActividad(Map<String, dynamic> token) {
+  final username = token['reservado_por_username']?.toString().trim();
+  final nombre = token['reservado_por_nombre']?.toString().trim();
+  if (username != null && username.isNotEmpty) {
+    final fmt = username.startsWith('@') ? username : '@$username';
+    return 'Reservó: $fmt';
+  }
+  if (nombre != null && nombre.isNotEmpty) {
+    return 'Reservó: $nombre';
+  }
+  return 'Reserva de squad';
+}
 
 class _CardActividad extends StatelessWidget {
   final Map<String, dynamic> token;
@@ -474,9 +539,9 @@ class _CardActividad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nombreLocal = token['nombreLocal'] as String? ?? 'Local';
-    final dpr         = MediaQuery.of(context).devicePixelRatio.clamp(1.0, 2.0);
-    const flyerW      = 90.0;
-    const flyerH      = flyerW * (16 / 9);
+    final dpr = MediaQuery.of(context).devicePixelRatio.clamp(1.0, 2.0);
+    const flyerW = 90.0;
+    const flyerH = flyerW * (16 / 9);
     final flyerCacheW = (flyerW * dpr).round();
     final avatarCacheW = (24 * dpr).round();
 
@@ -527,8 +592,7 @@ class _CardActividad extends StatelessWidget {
         sombraAlpha: 0.2,
         sombraBlur: 14,
         sombraOffsetY: 5,
-      ).copyWith(
-              ),
+      ).copyWith(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -549,7 +613,8 @@ class _CardActividad extends StatelessWidget {
                           boxShadow: onAbrirQR != null
                               ? [
                                   BoxShadow(
-                                    color: ColoresApp.principalMarca.withOpacity(0.5),
+                                    color: ColoresApp.principalMarca
+                                        .withOpacity(0.5),
                                     blurRadius: 16,
                                     spreadRadius: 2,
                                   ),
@@ -588,11 +653,13 @@ class _CardActividad extends StatelessWidget {
                       // Badge estado
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: estadoColor.withOpacity(0.18),
                           borderRadius: BorderRadius.circular(20),
-                                                  ),
+                        ),
                         child: Text(
                           estadoTexto,
                           style: GoogleFonts.baloo2(
@@ -616,6 +683,31 @@ class _CardActividad extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 6),
+                      if (token['es_squad'] == true) ...[
+                        Text(
+                          _textoSquadActividad(token),
+                          style: GoogleFonts.baloo2(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: ColoresApp.principalMarca,
+                            height: 1.25,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _textoReservadoPorActividad(token),
+                          style: GoogleFonts.baloo2(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: ColoresApp.textoSecundario,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                      ],
                       // Local (toca para ver perfil)
                       GestureDetector(
                         onTap: onVerPerfilLocal,
@@ -693,7 +785,7 @@ class _CardActividad extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: ColoresApp.fondoSuperficie.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(50),
-                                              ),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -731,7 +823,7 @@ class _CardActividad extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: ColoresApp.promoMarca.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(50),
-                                              ),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -823,7 +915,7 @@ class _CardActividad extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: ColoresApp.fondoSuperficie.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(50),
-                                              ),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 11),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1045,10 +1137,7 @@ Widget _ticketQrCard({
             child: const SizedBox.expand(),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
-          child: pie,
-        ),
+        Padding(padding: const EdgeInsets.fromLTRB(20, 6, 20, 20), child: pie),
       ],
     ),
   );
@@ -1276,10 +1365,7 @@ class _PanelQrCodigoPromo extends StatelessWidget {
                     ),
                   ],
                 )
-              : _CodigoCopiable(
-                  codigo: codigo,
-                  accent: ColoresApp.promoMarca,
-                ),
+              : _CodigoCopiable(codigo: codigo, accent: ColoresApp.promoMarca),
         ),
       ],
     );
@@ -1304,11 +1390,13 @@ class BottomSheetPromos extends StatefulWidget {
   final Map<String, dynamic> token;
   final String idEvento;
   final bool puedeObtenerPromos;
+
   /// Snapshot desde Mi Actividad al abrir el sheet (evita mostrar “Obtener” si ya está en BD).
   final Map<String, SnapshotTokenPromo> promoTokensPrecarga;
   final Future<void> Function()? onReloadActividadDesdePromos;
 
-  const BottomSheetPromos({super.key, 
+  const BottomSheetPromos({
+    super.key,
     required this.token,
     required this.idEvento,
     required this.puedeObtenerPromos,
@@ -1381,9 +1469,11 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
           .eq('id_evento', widget.idEvento);
       final lista = List<Map<String, dynamic>>.from(res as List);
       final activas = lista
-          .where((p) =>
-              (p['estado_promocion']?.toString().toLowerCase() ?? 'activa') ==
-              'activa')
+          .where(
+            (p) =>
+                (p['estado_promocion']?.toString().toLowerCase() ?? 'activa') ==
+                'activa',
+          )
           .toList();
 
       _misTokens.clear();
@@ -1407,8 +1497,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
           for (final t in (misRows as List)) {
             final idP = t['id_promocion']?.toString() ?? '';
             final codigo = t['token_codigo']?.toString() ?? '';
-            final est =
-                t['estado_token']?.toString().toLowerCase() ?? 'activo';
+            final est = t['estado_token']?.toString().toLowerCase() ?? 'activo';
             if (idP.isNotEmpty && codigo.isNotEmpty) {
               _misTokens[idP] = codigo;
               _estadoTokenPromo[idP] = est;
@@ -1508,8 +1597,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
     final readable = details is String
         ? details.replaceAll('Exception: ', '')
         : _mensajeEdgePromo(details);
-    if (readable.isNotEmpty &&
-        readable != 'No se pudo obtener la promo') {
+    if (readable.isNotEmpty && readable != 'No se pudo obtener la promo') {
       return readable;
     }
     return 'No pudimos obtener la promo. Intentá de nuevo en unos momentos.';
@@ -1543,7 +1631,11 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
     final sb = ServicioSupabase().cliente;
     final userId = sb.auth.currentUser?.id;
     if (userId == null) return null;
-    const delays = [Duration(milliseconds: 180), Duration(milliseconds: 400), Duration(milliseconds: 800)];
+    const delays = [
+      Duration(milliseconds: 180),
+      Duration(milliseconds: 400),
+      Duration(milliseconds: 800),
+    ];
     for (var intento = 0; intento < delays.length; intento++) {
       try {
         final res = await sb
@@ -1555,10 +1647,14 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
             .order('fecha_creacion', ascending: false)
             .limit(1);
         final lista = List<Map<String, dynamic>>.from(res as List);
-        debugPrint('[Actividad Promos] fetch token intento ${intento + 1}: ${lista.length} rows');
+        debugPrint(
+          '[Actividad Promos] fetch token intento ${intento + 1}: ${lista.length} rows',
+        );
         if (lista.isNotEmpty) return lista.first;
       } catch (e) {
-        debugPrint('[Actividad Promos] fetch token error intento ${intento + 1}: $e');
+        debugPrint(
+          '[Actividad Promos] fetch token error intento ${intento + 1}: $e',
+        );
       }
       if (intento < delays.length - 1) await Future.delayed(delays[intento]);
     }
@@ -1590,7 +1686,9 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
         ' data=${edgeResponse.data}',
       );
     } on FunctionException catch (fe) {
-      debugPrint('[Actividad Promos] FunctionException status=${fe.status} details=${fe.details}');
+      debugPrint(
+        '[Actividad Promos] FunctionException status=${fe.status} details=${fe.details}',
+      );
       if (!mounted) return;
       // Si es "duplicate" y ya teníamos token, simplemente ocultamos el botón
       final dup = _errorPromoDuplicada(fe.details);
@@ -1643,7 +1741,9 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
         _qrExpandido.add(idPromo);
         _faseObtenerPromo.remove(idPromo);
         // Bump local de cupos_usados para reflejar inmediatamente el cambio
-        final idx = _promos.indexWhere((p) => p['id_promocion']?.toString() == idPromo);
+        final idx = _promos.indexWhere(
+          (p) => p['id_promocion']?.toString() == idPromo,
+        );
         if (idx != -1) {
           final actual = _promos[idx];
           final usados = (actual['cupos_usados'] as int?) ?? 0;
@@ -1657,7 +1757,9 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
 
     // ── Caso raro: edge OK pero no podemos leer el token (lag/RLS) ──
     // Mostramos estado "obtenida" 2s y luego forzamos reload completo.
-    setState(() => _faseObtenerPromo[idPromo] = _FaseBotonObtenerPromo.exitoCheck);
+    setState(
+      () => _faseObtenerPromo[idPromo] = _FaseBotonObtenerPromo.exitoCheck,
+    );
     _timersObtenerPromo[idPromo] = Timer(const Duration(seconds: 2), () async {
       await widget.onReloadActividadDesdePromos?.call();
       if (!mounted) return;
@@ -1758,7 +1860,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                           ? const Color(0xFF34C759).withOpacity(0.12)
                           : ColoresApp.promoMarca.withOpacity(0.14),
                       borderRadius: BorderRadius.circular(12),
-                                          ),
+                    ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1794,614 +1896,615 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                 child: _cargando
                     ? const FernecitoLoaderCentro(size: 28)
                     : _errorMsg != null
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(28),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    CupertinoIcons.exclamationmark_triangle_fill,
-                                    size: 40,
-                                    color: ColoresApp.peligroMarca,
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(28),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                CupertinoIcons.exclamationmark_triangle_fill,
+                                size: 40,
+                                color: ColoresApp.peligroMarca,
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                'No pudimos cargar las promos',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: ColoresApp.textoPrincipal,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _errorMsg!,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 13,
+                                  color: ColoresApp.textoSecundario,
+                                  height: 1.35,
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                onPressed: _cargarPromos,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 22,
+                                    vertical: 12,
                                   ),
-                                  const SizedBox(height: 14),
-                                  Text(
-                                    'No pudimos cargar las promos',
-                                    textAlign: TextAlign.center,
+                                  decoration: BoxDecoration(
+                                    color: ColoresApp.promoMarca,
+                                    borderRadius: BorderRadius.circular(22),
+                                  ),
+                                  child: Text(
+                                    'Reintentar',
                                     style: GoogleFonts.baloo2(
-                                      fontSize: 17,
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w800,
-                                      color: ColoresApp.textoPrincipal,
+                                      color: Colors.white,
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    _errorMsg!,
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.baloo2(
-                                      fontSize: 13,
-                                      color: ColoresApp.textoSecundario,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 18),
-                                  CupertinoButton(
-                                    padding: EdgeInsets.zero,
-                                    onPressed: _cargarPromos,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 22, vertical: 12),
-                                      decoration: BoxDecoration(
-                                        color: ColoresApp.promoMarca,
-                                        borderRadius: BorderRadius.circular(22),
-                                      ),
-                                      child: Text(
-                                        'Reintentar',
-                                        style: GoogleFonts.baloo2(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : _promos.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              CupertinoIcons.tag,
+                              size: 48,
+                              color: ColoresApp.textoSecundario.withOpacity(
+                                0.5,
                               ),
                             ),
-                          )
-                    : _promos.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  CupertinoIcons.tag,
-                                  size: 48,
-                                  color: ColoresApp.textoSecundario.withOpacity(0.5),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Sin promos activas',
-                                  style: GoogleFonts.baloo2(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: ColoresApp.textoSecundario,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Este evento no tiene promos disponibles por ahora',
-                                  style: GoogleFonts.baloo2(
-                                    fontSize: 13,
-                                    color: ColoresApp.textoSecundario.withOpacity(0.7),
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
+                            const SizedBox(height: 16),
+                            Text(
+                              'Sin promos activas',
+                              style: GoogleFonts.baloo2(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: ColoresApp.textoSecundario,
+                              ),
                             ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                            itemCount: _promos.length,
-                            itemBuilder: (context, index) {
-                              final p = _promos[index];
-                              final idPromo =
-                                  p['id_promocion']?.toString() ?? '';
-                              final codigo = _misTokens[idPromo] ?? '';
-                              final yaGuardada = codigo.isNotEmpty;
-                              final qrVisible =
-                                  _qrExpandido.contains(idPromo);
-                              final faseBtn = _faseObtenerPromo[idPromo];
-                              final tituloPromo =
-                                  p['titulo_promocion']?.toString() ?? 'Promo';
-                              final descripcion = _descripcionPromoRow(p);
-                              final estadoTp =
-                                  _estadoTokenPromo[idPromo] ?? 'activo';
-                              final esCanjeada = estadoTp == 'canjeado';
-                              final fechaIni = _formatearFechaPromoActividad(
-                                p['fecha_inicio']?.toString(),
-                              );
-                              final fechaFin = _formatearFechaPromoActividad(
-                                p['fecha_fin']?.toString(),
-                              );
-                              final cuposRaw = p['cupos_totales'];
-                              final cupoTotal = cuposRaw is int
-                                  ? cuposRaw
-                                  : int.tryParse(cuposRaw?.toString() ?? '');
-                              final cuRaw = p['cupos_usados'];
-                              final cupoUsados = cuRaw is int
-                                  ? cuRaw
-                                  : int.tryParse(cuRaw?.toString() ?? '') ?? 0;
-                              final cuposLibres = cupoTotal != null
-                                  ? cupoTotal - cupoUsados
-                                  : null;
-                              final promoVigente = _promoVigente(p);
+                            const SizedBox(height: 6),
+                            Text(
+                              'Este evento no tiene promos disponibles por ahora',
+                              style: GoogleFonts.baloo2(
+                                fontSize: 13,
+                                color: ColoresApp.textoSecundario.withOpacity(
+                                  0.7,
+                                ),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                        itemCount: _promos.length,
+                        itemBuilder: (context, index) {
+                          final p = _promos[index];
+                          final idPromo = p['id_promocion']?.toString() ?? '';
+                          final codigo = _misTokens[idPromo] ?? '';
+                          final yaGuardada = codigo.isNotEmpty;
+                          final qrVisible = _qrExpandido.contains(idPromo);
+                          final faseBtn = _faseObtenerPromo[idPromo];
+                          final tituloPromo =
+                              p['titulo_promocion']?.toString() ?? 'Promo';
+                          final descripcion = _descripcionPromoRow(p);
+                          final estadoTp =
+                              _estadoTokenPromo[idPromo] ?? 'activo';
+                          final esCanjeada = estadoTp == 'canjeado';
+                          final fechaIni = _formatearFechaPromoActividad(
+                            p['fecha_inicio']?.toString(),
+                          );
+                          final fechaFin = _formatearFechaPromoActividad(
+                            p['fecha_fin']?.toString(),
+                          );
+                          final cuposRaw = p['cupos_totales'];
+                          final cupoTotal = cuposRaw is int
+                              ? cuposRaw
+                              : int.tryParse(cuposRaw?.toString() ?? '');
+                          final cuRaw = p['cupos_usados'];
+                          final cupoUsados = cuRaw is int
+                              ? cuRaw
+                              : int.tryParse(cuRaw?.toString() ?? '') ?? 0;
+                          final cuposLibres = cupoTotal != null
+                              ? cupoTotal - cupoUsados
+                              : null;
+                          final promoVigente = _promoVigente(p);
 
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 14),
-                                child: Container(
-                                  decoration: SuperficiesApp.card(
-                                    radius: 18,
-                                    temaTint: 0.18,
-                                    sombraAlpha: 0.12,
-                                    sombraBlur: 8,
-                                    sombraOffsetY: 3,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Column(
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: Container(
+                              decoration: SuperficiesApp.card(
+                                radius: 18,
+                                temaTint: 0.18,
+                                sombraAlpha: 0.12,
+                                sombraBlur: 8,
+                                sombraOffsetY: 3,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.all(7),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(0xFFFF8C42)
-                                                        .withOpacity(0.18),
-                                                    borderRadius:
-                                                        BorderRadius.circular(10),
+                                            Container(
+                                              padding: const EdgeInsets.all(7),
+                                              decoration: BoxDecoration(
+                                                color: const Color(
+                                                  0xFFFF8C42,
+                                                ).withOpacity(0.18),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              child: const Icon(
+                                                CupertinoIcons.gift_fill,
+                                                size: 16,
+                                                color: Color(0xFFFF8C42),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    tituloPromo,
+                                                    style: GoogleFonts.baloo2(
+                                                      fontSize: 16.5,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color: ColoresApp
+                                                          .textoPrincipal,
+                                                      height: 1.2,
+                                                    ),
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
-                                                  child: const Icon(
-                                                    CupertinoIcons.gift_fill,
-                                                    size: 16,
-                                                    color: Color(0xFFFF8C42),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text(
-                                                        tituloPromo,
-                                                        style: GoogleFonts.baloo2(
-                                                          fontSize: 16.5,
-                                                          fontWeight:
-                                                              FontWeight.w800,
-                                                          color: ColoresApp
-                                                              .textoPrincipal,
-                                                          height: 1.2,
-                                                        ),
-                                                        maxLines: 2,
-                                                        overflow:
-                                                            TextOverflow.ellipsis,
-                                                      ),
-                                                      if (yaGuardada) ...[
-                                                        const SizedBox(height: 6),
-                                                        Container(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
+                                                  if (yaGuardada) ...[
+                                                    const SizedBox(height: 6),
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
                                                             horizontal: 8,
                                                             vertical: 3,
                                                           ),
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color: esCanjeada
-                                                                ? ColoresApp
-                                                                    .textoSecundario
-                                                                    .withOpacity(
-                                                                        0.18)
-                                                                : ColoresApp
-                                                                    .promoMarca
-                                                                    .withOpacity(
-                                                                        0.2),
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        10),
-                                                          ),
-                                                          child: Text(
-                                                            esCanjeada
-                                                                ? 'Canjeada'
-                                                                : 'Obtenida',
-                                                            style: GoogleFonts
-                                                                .baloo2(
-                                                              fontSize: 10,
-                                                              fontWeight:
-                                                                  FontWeight.w800,
-                                                              color: esCanjeada
-                                                                  ? ColoresApp
-                                                                      .textoSecundario
-                                                                  : ColoresApp
-                                                                      .promoMarca,
+                                                      decoration: BoxDecoration(
+                                                        color: esCanjeada
+                                                            ? ColoresApp
+                                                                  .textoSecundario
+                                                                  .withOpacity(
+                                                                    0.18,
+                                                                  )
+                                                            : ColoresApp
+                                                                  .promoMarca
+                                                                  .withOpacity(
+                                                                    0.2,
+                                                                  ),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              10,
                                                             ),
-                                                          ),
+                                                      ),
+                                                      child: Text(
+                                                        esCanjeada
+                                                            ? 'Canjeada'
+                                                            : 'Obtenida',
+                                                        style: GoogleFonts.baloo2(
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                          color: esCanjeada
+                                                              ? ColoresApp
+                                                                    .textoSecundario
+                                                              : ColoresApp
+                                                                    .promoMarca,
                                                         ),
-                                                      ],
-                                                    ],
-                                                  ),
-                                                ),
-                                                if (cuposLibres != null &&
-                                                    cuposLibres > 0 &&
-                                                    cuposLibres <= 15) ...[
-                                                  const SizedBox(width: 6),
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                            if (cuposLibres != null &&
+                                                cuposLibres > 0 &&
+                                                cuposLibres <= 15) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
                                                       horizontal: 8,
                                                       vertical: 3,
                                                     ),
-                                                    decoration: BoxDecoration(
-                                                      color: ColoresApp
-                                                          .peligroMarca
-                                                          .withOpacity(0.85),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              10),
+                                                decoration: BoxDecoration(
+                                                  color: ColoresApp.peligroMarca
+                                                      .withOpacity(0.85),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(
+                                                      CupertinoIcons.flame_fill,
+                                                      size: 11,
+                                                      color: Colors.white,
                                                     ),
-                                                    child: Row(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        const Icon(
-                                                          CupertinoIcons
-                                                              .flame_fill,
-                                                          size: 11,
-                                                          color: Colors.white,
-                                                        ),
-                                                        const SizedBox(width: 3),
-                                                        Text(
-                                                          '$cuposLibres',
-                                                          style: GoogleFonts
-                                                              .baloo2(
-                                                            fontSize: 11,
-                                                            fontWeight:
-                                                                FontWeight.w800,
-                                                            color: Colors.white,
-                                                          ),
-                                                        ),
-                                                      ],
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      '$cuposLibres',
+                                                      style: GoogleFonts.baloo2(
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                        color: Colors.white,
+                                                      ),
                                                     ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                            if (fechaIni.isNotEmpty ||
-                                                fechaFin.isNotEmpty) ...[
-                                              const SizedBox(height: 10),
-                                              Row(
-                                                children: [
-                                                  Icon(
-                                                    CupertinoIcons.calendar,
-                                                    size: 13,
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        if (fechaIni.isNotEmpty ||
+                                            fechaFin.isNotEmpty) ...[
+                                          const SizedBox(height: 10),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                CupertinoIcons.calendar,
+                                                size: 13,
+                                                color:
+                                                    ColoresApp.textoSecundario,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  fechaIni.isNotEmpty &&
+                                                          fechaFin.isNotEmpty
+                                                      ? '$fechaIni — $fechaFin'
+                                                      : (fechaIni.isNotEmpty
+                                                            ? fechaIni
+                                                            : fechaFin),
+                                                  style: GoogleFonts.baloo2(
+                                                    fontSize: 12,
                                                     color: ColoresApp
                                                         .textoSecundario,
                                                   ),
-                                                  const SizedBox(width: 6),
-                                                  Expanded(
-                                                    child: Text(
-                                                      fechaIni.isNotEmpty &&
-                                                              fechaFin.isNotEmpty
-                                                          ? '$fechaIni — $fechaFin'
-                                                          : (fechaIni.isNotEmpty
-                                                              ? fechaIni
-                                                              : fechaFin),
-                                                      style: GoogleFonts.baloo2(
-                                                        fontSize: 12,
-                                                        color: ColoresApp
-                                                            .textoSecundario,
-                                                      ),
-                                                      maxLines: 2,
+                                                  maxLines: 2,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                        if (descripcion.trim().isNotEmpty) ...[
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            descripcion,
+                                            style: GoogleFonts.baloo2(
+                                              fontSize: 13,
+                                              color: ColoresApp.textoSecundario,
+                                              height: 1.35,
+                                            ),
+                                          ),
+                                        ],
+                                        const SizedBox(height: 14),
+                                        if (!widget.puedeObtenerPromos)
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 12,
+                                              horizontal: 14,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: ColoresApp.fondoSuperficie
+                                                  .withOpacity(0.95),
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  CupertinoIcons.lock_fill,
+                                                  size: 16,
+                                                  color: ColoresApp
+                                                      .textoSecundario,
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Disponible cuando acepten tu lista en el local.',
+                                                    style: GoogleFonts.baloo2(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: ColoresApp
+                                                          .textoSecundario,
+                                                      height: 1.35,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        else if (!promoVigente && !yaGuardada)
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 12,
+                                              horizontal: 14,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: ColoresApp.fondoSuperficie
+                                                  .withOpacity(0.95),
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  CupertinoIcons
+                                                      .exclamationmark_circle_fill,
+                                                  size: 16,
+                                                  color:
+                                                      ColoresApp.peligroMarca,
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Esta promo ya finalizó y no se puede obtener.',
+                                                    style: GoogleFonts.baloo2(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: ColoresApp
+                                                          .textoSecundario,
+                                                      height: 1.35,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        else if (yaGuardada)
+                                          GestureDetector(
+                                            onTap: () {
+                                              setState(() {
+                                                if (qrVisible) {
+                                                  _qrExpandido.remove(idPromo);
+                                                } else {
+                                                  _qrExpandido.add(idPromo);
+                                                }
+                                              });
+                                            },
+                                            child: Container(
+                                              width: double.infinity,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 14,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: ColoresApp.promoMarca
+                                                    .withOpacity(0.14),
+                                                borderRadius:
+                                                    BorderRadius.circular(50),
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(
+                                                    qrVisible
+                                                        ? CupertinoIcons
+                                                              .chevron_up_circle_fill
+                                                        : CupertinoIcons
+                                                              .qrcode_viewfinder,
+                                                    size: 18,
+                                                    color:
+                                                        ColoresApp.promoMarca,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    qrVisible
+                                                        ? 'Ocultar QR'
+                                                        : 'Mostrar QR',
+                                                    style: GoogleFonts.baloo2(
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color:
+                                                          ColoresApp.promoMarca,
                                                     ),
                                                   ),
                                                 ],
                                               ),
-                                            ],
-                                            if (descripcion.trim().isNotEmpty) ...[
-                                              const SizedBox(height: 10),
-                                              Text(
-                                                descripcion,
-                                                style: GoogleFonts.baloo2(
-                                                  fontSize: 13,
-                                                  color: ColoresApp
-                                                      .textoSecundario,
-                                                  height: 1.35,
+                                            ),
+                                          )
+                                        else if (faseBtn ==
+                                            _FaseBotonObtenerPromo.cargando)
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 14,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: ColoresApp.promoMarca
+                                                  .withOpacity(0.38),
+                                              borderRadius:
+                                                  BorderRadius.circular(50),
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                const FernecitoLoader.inline(
+                                                  size: 22,
+                                                  color: Colors.white,
                                                 ),
-                                              ),
-                                            ],
-                                            const SizedBox(height: 14),
-                                            if (!widget.puedeObtenerPromos)
-                                              Container(
-                                                width: double.infinity,
-                                                padding: const EdgeInsets.symmetric(
-                                                    vertical: 12, horizontal: 14),
-                                                decoration: BoxDecoration(
-                                                  color: ColoresApp.fondoSuperficie
-                                                      .withOpacity(0.95),
-                                                  borderRadius:
-                                                      BorderRadius.circular(14),
-                                                                                                  ),
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      CupertinoIcons.lock_fill,
-                                                      size: 16,
-                                                      color: ColoresApp
-                                                          .textoSecundario,
-                                                    ),
-                                                    const SizedBox(width: 10),
-                                                    Expanded(
-                                                      child: Text(
-                                                        'Disponible cuando acepten tu lista en el local.',
-                                                        style: GoogleFonts.baloo2(
-                                                          fontSize: 13,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: ColoresApp
-                                                              .textoSecundario,
-                                                          height: 1.35,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              )
-                                            else if (!promoVigente && !yaGuardada)
-                                              Container(
-                                                width: double.infinity,
-                                                padding: const EdgeInsets.symmetric(
-                                                    vertical: 12, horizontal: 14),
-                                                decoration: BoxDecoration(
-                                                  color: ColoresApp.fondoSuperficie
-                                                      .withOpacity(0.95),
-                                                  borderRadius:
-                                                      BorderRadius.circular(14),
-                                                                                                  ),
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      CupertinoIcons
-                                                          .exclamationmark_circle_fill,
-                                                      size: 16,
-                                                      color: ColoresApp.peligroMarca,
-                                                    ),
-                                                    const SizedBox(width: 10),
-                                                    Expanded(
-                                                      child: Text(
-                                                        'Esta promo ya finalizó y no se puede obtener.',
-                                                        style: GoogleFonts.baloo2(
-                                                          fontSize: 13,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: ColoresApp
-                                                              .textoSecundario,
-                                                          height: 1.35,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              )
-                                            else if (yaGuardada)
-                                              GestureDetector(
-                                                onTap: () {
-                                                  setState(() {
-                                                    if (qrVisible) {
-                                                      _qrExpandido
-                                                          .remove(idPromo);
-                                                    } else {
-                                                      _qrExpandido
-                                                          .add(idPromo);
-                                                    }
-                                                  });
-                                                },
-                                                child: Container(
-                                                  width: double.infinity,
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                          vertical: 14),
-                                                  decoration: BoxDecoration(
-                                                    color: ColoresApp.promoMarca
-                                                        .withOpacity(0.14),
-                                                    borderRadius:
-                                                        BorderRadius.circular(50),
-                                                                                                      ),
-                                                  child: Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment.center,
-                                                    children: [
-                                                      Icon(
-                                                        qrVisible
-                                                            ? CupertinoIcons
-                                                                .chevron_up_circle_fill
-                                                            : CupertinoIcons
-                                                                .qrcode_viewfinder,
-                                                        size: 18,
-                                                        color: ColoresApp
-                                                            .promoMarca,
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      Text(
-                                                        qrVisible
-                                                            ? 'Ocultar QR'
-                                                            : 'Mostrar QR',
-                                                        style: GoogleFonts.baloo2(
-                                                          fontSize: 15,
-                                                          fontWeight:
-                                                              FontWeight.w800,
-                                                          color: ColoresApp
-                                                              .promoMarca,
-                                                        ),
-                                                      ),
-                                                    ],
+                                                const SizedBox(width: 10),
+                                                Text(
+                                                  'Obteniendo…',
+                                                  style: GoogleFonts.baloo2(
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Colors.white,
                                                   ),
                                                 ),
-                                              )
-                                            else if (faseBtn ==
-                                                _FaseBotonObtenerPromo.cargando)
-                                              Container(
-                                                width: double.infinity,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        vertical: 14),
-                                                decoration: BoxDecoration(
-                                                  color: ColoresApp.promoMarca
-                                                      .withOpacity(0.38),
-                                                  borderRadius:
-                                                      BorderRadius.circular(50),
+                                              ],
+                                            ),
+                                          )
+                                        else if (faseBtn ==
+                                            _FaseBotonObtenerPromo.exitoCheck)
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 14,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF34C759),
+                                              borderRadius:
+                                                  BorderRadius.circular(50),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: const Color(
+                                                    0xFF34C759,
+                                                  ).withOpacity(0.35),
+                                                  blurRadius: 12,
+                                                  offset: const Offset(0, 4),
                                                 ),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    const FernecitoLoader.inline(size: 22, color: Colors.white),
-                                                    const SizedBox(width: 10),
-                                                    Text(
-                                                      'Obteniendo…',
-                                                      style:
-                                                          GoogleFonts.baloo2(
-                                                        fontSize: 15,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        color: Colors.white,
-                                                      ),
-                                                    ),
+                                              ],
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(
+                                                  CupertinoIcons
+                                                      .checkmark_circle_fill,
+                                                  size: 22,
+                                                  color: Colors.white,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  '¡Listo!',
+                                                  style: GoogleFonts.baloo2(
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        else
+                                          GestureDetector(
+                                            onTap: () => _obtenerPromo(p),
+                                            child: Container(
+                                              width: double.infinity,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 14,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: [
+                                                    ColoresApp.promoMarca,
+                                                    ColoresApp.promoMarca
+                                                        .withOpacity(0.85),
                                                   ],
                                                 ),
-                                              )
-                                            else if (faseBtn ==
-                                                _FaseBotonObtenerPromo
-                                                    .exitoCheck)
-                                              Container(
-                                                width: double.infinity,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        vertical: 14),
-                                                decoration: BoxDecoration(
-                                                  color:
-                                                      const Color(0xFF34C759),
-                                                  borderRadius:
-                                                      BorderRadius.circular(50),
-                                                  boxShadow: [
-                                                    BoxShadow(
-                                                      color: const Color(
-                                                              0xFF34C759)
-                                                          .withOpacity(0.35),
-                                                      blurRadius: 12,
-                                                      offset: const Offset(0, 4),
-                                                    ),
-                                                  ],
-                                                ),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    const Icon(
-                                                      CupertinoIcons
-                                                          .checkmark_circle_fill,
-                                                      size: 22,
+                                                borderRadius:
+                                                    BorderRadius.circular(50),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: ColoresApp.promoMarca
+                                                        .withOpacity(0.4),
+                                                    blurRadius: 12,
+                                                    offset: const Offset(0, 4),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Icon(
+                                                    CupertinoIcons.gift_fill,
+                                                    size: 18,
+                                                    color: Colors.white,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    'Obtener promo',
+                                                    style: GoogleFonts.baloo2(
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.w800,
                                                       color: Colors.white,
                                                     ),
-                                                    const SizedBox(width: 8),
-                                                    Text(
-                                                      '¡Listo!',
-                                                      style:
-                                                          GoogleFonts.baloo2(
-                                                        fontSize: 15,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        color: Colors.white,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              )
-                                            else
-                                              GestureDetector(
-                                                onTap: () => _obtenerPromo(p),
-                                                child: Container(
-                                                  width: double.infinity,
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                          vertical: 14),
-                                                  decoration: BoxDecoration(
-                                                    gradient: LinearGradient(
-                                                      colors: [
-                                                        ColoresApp.promoMarca,
-                                                        ColoresApp.promoMarca
-                                                            .withOpacity(0.85),
-                                                      ],
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(50),
-                                                    boxShadow: [
-                                                      BoxShadow(
-                                                        color: ColoresApp
-                                                            .promoMarca
-                                                            .withOpacity(0.4),
-                                                        blurRadius: 12,
-                                                        offset:
-                                                            const Offset(0, 4),
-                                                      ),
-                                                    ],
                                                   ),
-                                                  child: Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment.center,
-                                                    children: [
-                                                      const Icon(
-                                                        CupertinoIcons
-                                                            .gift_fill,
-                                                        size: 18,
-                                                        color: Colors.white,
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      Text(
-                                                        'Obtener promo',
-                                                        style: GoogleFonts
-                                                            .baloo2(
-                                                          fontSize: 15,
-                                                          fontWeight:
-                                                              FontWeight.w800,
-                                                          color: Colors.white,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
+                                                ],
                                               ),
-                                          ],
-                                        ),
-                                      ),
-                                      if (widget.puedeObtenerPromos &&
-                                          yaGuardada &&
-                                          qrVisible)
-                                        Padding(
-                                          padding: const EdgeInsets.fromLTRB(
-                                              16, 0, 16, 16),
-                                          child: Container(
-                                            padding: const EdgeInsets.all(18),
-                                            decoration: BoxDecoration(
-                                              color: ColoresApp.fondoSuperficie
-                                                  .withOpacity(0.65),
-                                              borderRadius:
-                                                  BorderRadius.circular(18),
-                                                                                          ),
-                                            child: _PanelQrCodigoPromo(
-                                              codigo: codigo,
-                                              tituloPromo: tituloPromo,
-                                              canjeada: esCanjeada,
                                             ),
                                           ),
-                                        ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
+                                  if (widget.puedeObtenerPromos &&
+                                      yaGuardada &&
+                                      qrVisible)
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        0,
+                                        16,
+                                        16,
+                                      ),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(18),
+                                        decoration: BoxDecoration(
+                                          color: ColoresApp.fondoSuperficie
+                                              .withOpacity(0.65),
+                                          borderRadius: BorderRadius.circular(
+                                            18,
+                                          ),
+                                        ),
+                                        child: _PanelQrCodigoPromo(
+                                          codigo: codigo,
+                                          tituloPromo: tituloPromo,
+                                          canjeada: esCanjeada,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
             ],
           ),

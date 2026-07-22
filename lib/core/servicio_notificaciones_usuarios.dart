@@ -106,26 +106,31 @@ class ServicioNotificacionesUsuarios {
       final idsNoLeidas = resultados[1] as Set<String>;
       final ahora = DateTime.now().toUtc();
 
-      final porId = <String, Notificacion>{
-        for (final n in _cache) n.id: n,
-      };
+      final porId = <String, Notificacion>{for (final n in _cache) n.id: n};
       for (final n in nuevas) {
         porId[n.id] = n;
       }
 
-      final fusionadas = porId.values.map((n) {
-        final noLeidaEnServer = idsNoLeidas.contains(n.id);
-        if (n.leida == !noLeidaEnServer) return n;
-        if (noLeidaEnServer) {
-          return n.copyWith(leida: false);
-        }
-        return n.copyWith(leida: true, fechaLectura: n.fechaLectura ?? ahora);
-      }).where((n) {
-        final exp = n.fechaExpiracion;
-        if (exp == null) return true;
-        return !exp.isBefore(ahora);
-      }).toList()
-        ..sort((a, b) => b.fechaCreacion.compareTo(a.fechaCreacion));
+      final fusionadas =
+          porId.values
+              .map((n) {
+                final noLeidaEnServer = idsNoLeidas.contains(n.id);
+                if (n.leida == !noLeidaEnServer) return n;
+                if (noLeidaEnServer) {
+                  return n.copyWith(leida: false);
+                }
+                return n.copyWith(
+                  leida: true,
+                  fechaLectura: n.fechaLectura ?? ahora,
+                );
+              })
+              .where((n) {
+                final exp = n.fechaExpiracion;
+                if (exp == null) return true;
+                return !exp.isBefore(ahora);
+              })
+              .toList()
+            ..sort((a, b) => b.fechaCreacion.compareTo(a.fechaCreacion));
 
       if (fusionadas.length > _limitFeed) {
         _cache = fusionadas.sublist(0, _limitFeed);
@@ -249,6 +254,40 @@ class ServicioNotificacionesUsuarios {
     }
   }
 
+  /// Busca una notificación puntual. Se usa al abrir una push del sistema:
+  /// si existe la in-app, reutilizamos su payload completo para navegar.
+  Future<Notificacion?> obtenerPorId(String idNotif) async {
+    final uid = _uid;
+    final id = idNotif.trim();
+    if (uid == null || id.isEmpty) return null;
+
+    final cacheHit = _cache.where((n) => n.id == id).toList();
+    if (cacheHit.isNotEmpty) return cacheHit.first;
+
+    try {
+      final row = await ServicioSupabase().cliente
+          .from('notificaciones_usuarios')
+          .select()
+          .eq('id', id)
+          .eq('id_usuario', uid)
+          .maybeSingle();
+      if (row == null) return null;
+      final notif = Notificacion.fromMap(Map<String, dynamic>.from(row as Map));
+      final porId = <String, Notificacion>{
+        for (final n in _cache) n.id: n,
+        notif.id: notif,
+      };
+      _cache = porId.values.toList()
+        ..sort((a, b) => b.fechaCreacion.compareTo(a.fechaCreacion));
+      _cacheUid = uid;
+      sincronizarDesdeLista(_cache);
+      return notif;
+    } catch (e) {
+      debugPrint('⚠️ obtener notif usuario: $e');
+      return null;
+    }
+  }
+
   void _aplicarLeidaEnCache(String idNotif) {
     final idx = _cache.indexWhere((n) => n.id == idNotif);
     if (idx < 0) {
@@ -270,9 +309,11 @@ class ServicioNotificacionesUsuarios {
     final uid = _uid;
     if (uid == null) return false;
     _cache = _cache
-        .map((n) => n.leida
-            ? n
-            : n.copyWith(leida: true, fechaLectura: DateTime.now().toUtc()))
+        .map(
+          (n) => n.leida
+              ? n
+              : n.copyWith(leida: true, fechaLectura: DateTime.now().toUtc()),
+        )
         .toList();
     contadorNoLeidas.value = 0;
     try {

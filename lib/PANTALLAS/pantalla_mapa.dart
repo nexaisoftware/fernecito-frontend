@@ -8,11 +8,14 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:flutter/foundation.dart';
+
 import '../core/constants.dart';
 import '../core/coordenadas_ciudades.dart';
+import '../core/preferencias_cartelera.dart';
 import '../core/servicio_mapa_explorar.dart';
+import '../core/servicio_ubicacion_global.dart';
 import '../core/servicio_ubicacion_dispositivo.dart';
-import '../core/supabase_client.dart';
 import '../core/ubicaciones_data.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
 import '../widgets/mapa_ui.dart';
@@ -32,10 +35,14 @@ class PantallaMapa extends StatefulWidget {
     super.key,
     this.provinciaInicial,
     this.ciudadesIniciales,
+    this.carteleraInteligenteInicial,
   });
 
   final String? provinciaInicial;
   final Set<String>? ciudadesIniciales;
+
+  /// Mismo flag que la cartelera (GPS / «cerca tuyo»).
+  final bool? carteleraInteligenteInicial;
 
   @override
   State<PantallaMapa> createState() => _PantallaMapaState();
@@ -51,6 +58,7 @@ class _PantallaMapaState extends State<PantallaMapa>
 
   String _provinciaActiva = UbicacionesData.provinciaPorDefecto;
   Set<String> _ciudadesActivas = {UbicacionesData.ciudadPorDefecto};
+  bool _filtroInteligente = false;
 
   List<MapaLocalItem> _locales = const [];
   List<MapaEventoItem> _eventos = const [];
@@ -73,7 +81,21 @@ class _PantallaMapaState extends State<PantallaMapa>
         widget.ciudadesIniciales!.isNotEmpty) {
       _ciudadesActivas = Set<String>.from(widget.ciudadesIniciales!);
     }
+    _filtroInteligente =
+        widget.carteleraInteligenteInicial ??
+        PreferenciasCartelera.instancia.inteligenteActiva;
     _iniciar();
+  }
+
+  ResultadoFiltroUbicacion get _filtroActual => ResultadoFiltroUbicacion(
+    provincia: _provinciaActiva,
+    ciudades: _ciudadesActivas,
+    ciudadPrincipal: PreferenciasCartelera.instancia.ciudadPrincipal,
+    carteleraInteligente: _filtroInteligente,
+  );
+
+  void _volver() {
+    Navigator.of(context).pop(_filtroActual);
   }
 
   @override
@@ -154,10 +176,12 @@ class _PantallaMapaState extends State<PantallaMapa>
   }
 
   Future<void> _cargarDatos() async {
-    final localesFuture =
-        ServicioMapaExplorar.instancia.cargarLocales(ciudades: _ciudadesActivas);
-    final eventosFuture =
-        ServicioMapaExplorar.instancia.cargarEventos(ciudades: _ciudadesActivas);
+    final localesFuture = ServicioMapaExplorar.instancia.cargarLocales(
+      ciudades: _ciudadesActivas,
+    );
+    final eventosFuture = ServicioMapaExplorar.instancia.cargarEventos(
+      ciudades: _ciudadesActivas,
+    );
     final res = await Future.wait([localesFuture, eventosFuture]);
     if (!mounted) return;
     setState(() {
@@ -188,11 +212,11 @@ class _PantallaMapaState extends State<PantallaMapa>
           child: Text(
             alEntrar
                 ? 'Esto te permitirá ver qué locales y eventos están cerca de ti '
-                    'y las distancias en el mapa.\n\n'
-                    'En el próximo paso, el sistema o el navegador te pedirán permiso.'
+                      'y las distancias en el mapa.\n\n'
+                      'En el próximo paso, el sistema o el navegador te pedirán permiso.'
                 : 'Fernecito necesita acceder a tu ubicación para mostrarte en el mapa '
-                    'y centrarlo cerca tuyo.\n\n'
-                    'En el próximo paso, el sistema o el navegador te pedirán permiso.',
+                      'y centrarlo cerca tuyo.\n\n'
+                      'En el próximo paso, el sistema o el navegador te pedirán permiso.',
           ),
         ),
         actions: [
@@ -218,28 +242,30 @@ class _PantallaMapaState extends State<PantallaMapa>
     if (_obteniendoUbicacion) return;
     setState(() => _obteniendoUbicacion = true);
 
-    final futuro =
-        ServicioUbicacionDispositivo.instancia.iniciarDesdeGestoUsuario();
+    final futuro = ServicioUbicacionDispositivo.instancia
+        .iniciarDesdeGestoUsuario();
 
-    futuro.then((res) {
-      if (!mounted) return;
-      if (res.exito && res.latitud != null && res.longitud != null) {
-        setState(() {
-          _posicionUsuario = LatLng(res.latitud!, res.longitud!);
-          _ubicacionActiva = true;
+    futuro
+        .then((res) {
+          if (!mounted) return;
+          if (res.exito && res.latitud != null && res.longitud != null) {
+            setState(() {
+              _posicionUsuario = LatLng(res.latitud!, res.longitud!);
+              _ubicacionActiva = true;
+            });
+            _centrarEnUsuario();
+            return;
+          }
+          if (res.mensajeUsuario != null) {
+            _mostrarAvisoUbicacion(
+              res.mensajeUsuario!,
+              ofrecerAjustes: res.ofrecerAjustes,
+            );
+          }
+        })
+        .whenComplete(() {
+          if (mounted) setState(() => _obteniendoUbicacion = false);
         });
-        _centrarEnUsuario();
-        return;
-      }
-      if (res.mensajeUsuario != null) {
-        _mostrarAvisoUbicacion(
-          res.mensajeUsuario!,
-          ofrecerAjustes: res.ofrecerAjustes,
-        );
-      }
-    }).whenComplete(() {
-      if (mounted) setState(() => _obteniendoUbicacion = false);
-    });
   }
 
   Future<void> _mostrarAvisoUbicacion(
@@ -291,27 +317,32 @@ class _PantallaMapaState extends State<PantallaMapa>
       context,
       provinciaActual: _provinciaActiva,
       ciudadesActuales: _ciudadesActivas,
+      carteleraInteligente: _filtroInteligente,
     );
+    // Igual que cartelera: cerrar sin aplicar = no cambia nada.
     if (res == null || res.ciudades.isEmpty || !mounted) return;
 
     setState(() {
       _provinciaActiva = res.provincia;
       _ciudadesActivas = Set<String>.from(res.ciudades);
+      _filtroInteligente = res.carteleraInteligente;
       _cargando = true;
       _localSeleccionado = null;
       _eventoSeleccionado = null;
     });
 
-    final uid = ServicioSupabase().usuarioActual?.id;
-    if (uid != null) {
-      try {
-        await ServicioSupabase().cliente.from('perfiles_usuarios').update({
-          'provincia': res.provincia,
-          'ciudad': res.ciudades.first,
-        }).eq('id', uid);
-      } catch (e) {
-        debugPrint('[PantallaMapa] persistir ubicación: $e');
-      }
+    if (res.carteleraInteligente) {
+      await ServicioUbicacionGlobal.aplicarInteligente(
+        ciudades: res.ciudades,
+        provincia: res.provincia,
+        principal: res.ciudadPrincipal,
+      );
+    } else {
+      await ServicioUbicacionGlobal.aplicarManual(
+        provincia: res.provincia,
+        ciudades: res.ciudades,
+        principal: res.ciudadPrincipal,
+      );
     }
 
     await _cargarDatos();
@@ -376,6 +407,7 @@ class _PantallaMapaState extends State<PantallaMapa>
   }
 
   String get _etiquetaCiudad {
+    if (_filtroInteligente) return 'cerca tuyo';
     if (_ciudadesActivas.isEmpty) return 'Elegir ciudad';
     if (_ciudadesActivas.length == 1) return _ciudadesActivas.first;
     return '${_ciudadesActivas.length} ciudades';
@@ -388,154 +420,162 @@ class _PantallaMapaState extends State<PantallaMapa>
     final switchBottom =
         _homeTabBarBottomInset(context) + _kHomeTabBarHeight + 14;
 
-    return CupertinoPageScaffold(
-      backgroundColor: ColoresApp.fondoPrincipal,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter:
-                  CoordenadasCiudades.centroDeCiudades(_ciudadesActivas),
-              initialZoom:
-                  CoordenadasCiudades.zoomParaCiudades(_ciudadesActivas),
-              minZoom: 8,
-              maxZoom: 18,
-              backgroundColor: const Color(0xFF0D0D0F),
-              onTap: (_, __) {
-                setState(() {
-                  _localSeleccionado = null;
-                  _eventoSeleccionado = null;
-                });
-              },
-            ),
-            children: [
-              const CapaTilesMapaConTema(),
-              if (_ubicacionActiva && _posicionUsuario != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _posicionUsuario!,
-                      width: 30,
-                      height: 30,
-                      alignment: Alignment.center,
-                      child: PinUbicacionUsuario(),
-                    ),
-                  ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _volver();
+      },
+      child: CupertinoPageScaffold(
+        backgroundColor: ColoresApp.fondoPrincipal,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: CoordenadasCiudades.centroDeCiudades(
+                  _ciudadesActivas,
                 ),
-              MarkerLayer(markers: _buildMarkers()),
-            ],
-          ),
-
-          // Header: back + filtro ciudad
-          Positioned(
-            top: padding.top + 8,
-            left: 12,
-            right: 12,
-            child: Row(
+                initialZoom: CoordenadasCiudades.zoomParaCiudades(
+                  _ciudadesActivas,
+                ),
+                minZoom: 8,
+                maxZoom: 18,
+                backgroundColor: const Color(0xFF0D0D0F),
+                onTap: (_, __) {
+                  setState(() {
+                    _localSeleccionado = null;
+                    _eventoSeleccionado = null;
+                  });
+                },
+              ),
               children: [
-                _BotonGlass(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: const Icon(
-                    CupertinoIcons.back,
-                    color: ColoresApp.textoPrincipal,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _abrirFiltroUbicacion,
-                    child: _BotonGlass(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
+                const CapaTilesMapaConTema(),
+                if (_ubicacionActiva && _posicionUsuario != null)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: _posicionUsuario!,
+                        width: 30,
+                        height: 30,
+                        alignment: Alignment.center,
+                        child: PinUbicacionUsuario(),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            CupertinoIcons.location_solid,
-                            size: 16,
-                            color: ColoresApp.principalMarca,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _etiquetaCiudad,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.baloo2(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: ColoresApp.textoPrincipal,
-                              ),
-                            ),
-                          ),
-                          Icon(
-                            CupertinoIcons.chevron_down,
-                            size: 14,
-                            color: ColoresApp.textoSecundario,
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
-                ),
+                MarkerLayer(markers: _buildMarkers()),
               ],
             ),
-          ),
 
-          // Card info flotante
-          Positioned(
-            top: cardTop,
-            left: 16,
-            right: 16,
-            child: MapaCardInfoFlotante(
-              visible:
-                  _localSeleccionado != null || _eventoSeleccionado != null,
-              local: _localSeleccionado,
-              evento: _eventoSeleccionado,
-              posicionUsuario:
-                  _ubicacionActiva ? _posicionUsuario : null,
-              onVerDetalle: _verDetalleSeleccionado,
-            ),
-          ),
-
-          // Switch Locales / Eventos
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: switchBottom,
-            child: Center(
-              child: MapaSwitchModo(
-                indice: _modoIndice,
-                onChanged: (i) => setState(() {
-                  _modoIndice = i;
-                  _localSeleccionado = null;
-                  _eventoSeleccionado = null;
-                }),
+            // Header: back + filtro ciudad
+            Positioned(
+              top: padding.top + 8,
+              left: 12,
+              right: 12,
+              child: Row(
+                children: [
+                  _BotonGlass(
+                    onTap: _volver,
+                    child: const Icon(
+                      CupertinoIcons.back,
+                      color: ColoresApp.textoPrincipal,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _abrirFiltroUbicacion,
+                      child: _BotonGlass(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              CupertinoIcons.location_solid,
+                              size: 16,
+                              color: ColoresApp.principalMarca,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _etiquetaCiudad,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: ColoresApp.textoPrincipal,
+                                ),
+                              ),
+                            ),
+                            Icon(
+                              CupertinoIcons.chevron_down,
+                              size: 14,
+                              color: ColoresApp.textoSecundario,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
 
-          // Botón ubicación — arriba del switch, esquina inferior derecha
-          Positioned(
-            right: 16,
-            bottom: switchBottom + 58,
-            child: BotonUbicacionMapa(
-              activo: _ubicacionActiva,
-              cargando: _obteniendoUbicacion,
-              onTap: _obteniendoUbicacion ? null : _tapBotonUbicacion,
+            // Card info flotante
+            Positioned(
+              top: cardTop,
+              left: 16,
+              right: 16,
+              child: MapaCardInfoFlotante(
+                visible:
+                    _localSeleccionado != null || _eventoSeleccionado != null,
+                local: _localSeleccionado,
+                evento: _eventoSeleccionado,
+                posicionUsuario: _ubicacionActiva ? _posicionUsuario : null,
+                onVerDetalle: _verDetalleSeleccionado,
+              ),
             ),
-          ),
 
-          if (_cargando)
-            ColoredBox(
-              color: const Color(0x88000000),
-              child: Center(child: LoaderMapaIconosAnimado(size: 40)),
+            // Switch Locales / Eventos
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: switchBottom,
+              child: Center(
+                child: MapaSwitchModo(
+                  indice: _modoIndice,
+                  onChanged: (i) => setState(() {
+                    _modoIndice = i;
+                    _localSeleccionado = null;
+                    _eventoSeleccionado = null;
+                  }),
+                ),
+              ),
             ),
-        ],
+
+            // Botón ubicación — arriba del switch, esquina inferior derecha
+            Positioned(
+              right: 16,
+              bottom: switchBottom + 58,
+              child: BotonUbicacionMapa(
+                activo: _ubicacionActiva,
+                cargando: _obteniendoUbicacion,
+                onTap: _obteniendoUbicacion ? null : _tapBotonUbicacion,
+              ),
+            ),
+
+            if (_cargando)
+              ColoredBox(
+                color: const Color(0x88000000),
+                child: Center(child: LoaderMapaIconosAnimado(size: 40)),
+              ),
+          ],
+        ),
       ),
     );
   }

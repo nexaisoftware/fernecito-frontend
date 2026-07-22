@@ -49,6 +49,63 @@ class CoordenadasCiudades {
     return _coords[c];
   }
 
+  /// Distancia en km (Haversine).
+  static double distanciaKm(LatLng a, LatLng b) {
+    const r = 6371.0;
+    final dLat = _rad(b.latitude - a.latitude);
+    final dLng = _rad(b.longitude - a.longitude);
+    final lat1 = _rad(a.latitude);
+    final lat2 = _rad(b.latitude);
+    final h = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(lat1) * math.cos(lat2) * math.sin(dLng / 2) * math.sin(dLng / 2);
+    return 2 * r * math.asin(math.sqrt(h));
+  }
+
+  static double _rad(double deg) => deg * (math.pi / 180.0);
+
+  /// Ciudades hardcodeadas ([UbicacionesData]) dentro de [radioKm] del punto GPS.
+  /// Ordenadas por cercanía. Si ninguna entra en el radio, devuelve solo la más cercana.
+  static List<String> ciudadesCercanas({
+    required double latitud,
+    required double longitud,
+    double radioKm = 20,
+    String? provincia,
+  }) {
+    final origen = LatLng(latitud, longitud);
+    final candidatos = <({String ciudad, String provincia, double km})>[];
+
+    for (final entry in UbicacionesData.ciudadesPorProvincia.entries) {
+      if (provincia != null &&
+          provincia.isNotEmpty &&
+          entry.key != provincia) {
+        continue;
+      }
+      for (final ciudad in entry.value) {
+        final coord = _coords[ciudad];
+        if (coord == null) continue;
+        final km = distanciaKm(origen, coord);
+        candidatos.add((ciudad: ciudad, provincia: entry.key, km: km));
+      }
+    }
+
+    if (candidatos.isEmpty) return const [];
+
+    candidatos.sort((a, b) => a.km.compareTo(b.km));
+    final dentro = candidatos.where((c) => c.km <= radioKm).toList();
+    if (dentro.isNotEmpty) {
+      return dentro.map((c) => c.ciudad).toList(growable: false);
+    }
+    return <String>[candidatos.first.ciudad];
+  }
+
+  /// Provincia canónica de una ciudad hardcodeada (o null).
+  static String? provinciaDeCiudad(String ciudad) {
+    for (final entry in UbicacionesData.ciudadesPorProvincia.entries) {
+      if (entry.value.contains(ciudad)) return entry.key;
+    }
+    return null;
+  }
+
   static LatLng centroDeCiudades(Set<String> ciudades) {
     if (ciudades.isEmpty) {
       return deCiudad(UbicacionesData.ciudadPorDefecto) ??

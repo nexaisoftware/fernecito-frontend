@@ -48,9 +48,10 @@ class ServicioAmigos {
   /// ('pendiente' | 'aceptada' | ...) o null si falló.
   Future<String?> solicitar(String idDestino) async {
     try {
-      final res = await ServicioSupabase()
-          .cliente
-          .rpc('amistad_solicitar', params: {'p_destino': idDestino});
+      final res = await ServicioSupabase().cliente.rpc(
+        'amistad_solicitar',
+        params: {'p_destino': idDestino},
+      );
       invalidarCache();
       if (res is Map) return res['estado']?.toString();
       return 'pendiente';
@@ -66,10 +67,10 @@ class ServicioAmigos {
   /// Acepta o rechaza una solicitud recibida (por id_relacion).
   Future<bool> responder(String idRelacion, {required bool aceptar}) async {
     try {
-      await ServicioSupabase().cliente.rpc('amistad_responder', params: {
-        'p_relacion': idRelacion,
-        'p_aceptar': aceptar,
-      });
+      await ServicioSupabase().cliente.rpc(
+        'amistad_responder',
+        params: {'p_relacion': idRelacion, 'p_aceptar': aceptar},
+      );
       invalidarCache();
       return true;
     } catch (e) {
@@ -81,9 +82,10 @@ class ServicioAmigos {
   /// Elimina amistad o cancela solicitud (cualquier dirección) con [idOtro].
   Future<bool> eliminar(String idOtro) async {
     try {
-      await ServicioSupabase()
-          .cliente
-          .rpc('amistad_eliminar', params: {'p_otro': idOtro});
+      await ServicioSupabase().cliente.rpc(
+        'amistad_eliminar',
+        params: {'p_otro': idOtro},
+      );
       invalidarCache();
       return true;
     } catch (e) {
@@ -97,13 +99,16 @@ class ServicioAmigos {
   Future<List<UsuarioBusqueda>> buscar(String query) async {
     if (_uid == null) return const [];
     try {
-      final res = await ServicioSupabase()
-          .cliente
-          .rpc('buscar_usuarios', params: {'p_query': query});
+      final res = await ServicioSupabase().cliente.rpc(
+        'buscar_usuarios',
+        params: {'p_query': query},
+      );
       if (res is List) {
         return res
-            .map((e) =>
-                UsuarioBusqueda.fromMap(Map<String, dynamic>.from(e as Map)))
+            .map(
+              (e) =>
+                  UsuarioBusqueda.fromMap(Map<String, dynamic>.from(e as Map)),
+            )
             .toList();
       }
       return const [];
@@ -114,20 +119,25 @@ class ServicioAmigos {
   }
 
   /// Personas públicas en una ciudad (paginado).
-  Future<ExplorarUsuariosPagina> explorarCiudad({
-    required String ciudad,
+  Future<ExplorarUsuariosPagina> explorarCiudades({
+    required Set<String> ciudades,
     String? provincia,
     int offset = 0,
     int limit = 40,
   }) async {
-    if (_uid == null || ciudad.trim().isEmpty) {
+    final ciudadesLista = ciudades
+        .map((c) => c.trim())
+        .where((c) => c.isNotEmpty)
+        .toList();
+    if (_uid == null || ciudadesLista.isEmpty) {
       return const ExplorarUsuariosPagina();
     }
     try {
       final res = await ServicioSupabase().cliente.rpc(
         'explorar_usuarios_ciudad',
         params: {
-          'p_ciudad': ciudad.trim(),
+          'p_ciudad': ciudadesLista.first,
+          'p_ciudades': ciudadesLista,
           'p_provincia': (provincia == null || provincia.trim().isEmpty)
               ? null
               : provincia.trim(),
@@ -138,21 +148,22 @@ class ServicioAmigos {
       if (res is! Map) return const ExplorarUsuariosPagina();
       final map = Map<String, dynamic>.from(res);
       final itemsRaw = map['items'];
-      final lista = itemsRaw is List
+      final usuarios = itemsRaw is List
           ? itemsRaw
-              .map((e) =>
-                  UsuarioBusqueda.fromMap(Map<String, dynamic>.from(e as Map)))
-              .toList()
+                .map(
+                  (e) => UsuarioBusqueda.fromMap(
+                    Map<String, dynamic>.from(e as Map),
+                  ),
+                )
+                .toList()
           : <UsuarioBusqueda>[];
       return ExplorarUsuariosPagina(
-        items: lista,
+        items: usuarios,
         hayMas: map['hay_mas'] == true,
       );
     } catch (e) {
       debugPrint('⚠️ explorar_usuarios_ciudad: $e');
-      return ExplorarUsuariosPagina(
-        error: 'No se pudo cargar personas ($e)',
-      );
+      return ExplorarUsuariosPagina(error: 'No se pudo cargar personas ($e)');
     }
   }
 }

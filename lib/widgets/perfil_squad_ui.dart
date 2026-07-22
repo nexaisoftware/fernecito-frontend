@@ -44,6 +44,7 @@ class SquadHeroZona extends StatelessWidget {
 
   final double height;
   final String? imageUrl;
+
   /// Fuerza recarga si la URL pública no cambia (upsert en storage).
   final String? imageCacheKey;
   final Widget topBar;
@@ -68,8 +69,9 @@ class SquadHeroZona extends StatelessWidget {
       height: height,
       child: GestureDetector(
         onTap: onBannerTap,
-        behavior:
-            onBannerTap != null ? HitTestBehavior.opaque : HitTestBehavior.deferToChild,
+        behavior: onBannerTap != null
+            ? HitTestBehavior.opaque
+            : HitTestBehavior.deferToChild,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -84,7 +86,6 @@ class SquadHeroZona extends StatelessWidget {
               )
             else
               _placeholder(),
-            Container(color: Colors.black.withValues(alpha: 0.40)),
             Positioned(
               top: 0,
               left: 0,
@@ -138,12 +139,8 @@ class SquadHeroZona extends StatelessWidget {
                     const SizedBox(height: 6),
                     Center(child: usernameBadge!),
                   ],
-                  const SizedBox(height: 6),
+                  Expanded(child: _zonaMiembros(context)),
                   title,
-                  const SizedBox(height: 6),
-                  Expanded(
-                    child: _zonaMiembros(context),
-                  ),
                   if (miembrosExpandidos) const SizedBox(height: 6),
                 ],
               ),
@@ -233,15 +230,7 @@ class SquadHeroZona extends StatelessWidget {
   }
 
   Widget _placeholder() {
-    return Container(
-      color: ColoresApp.fondoSuperficie,
-      alignment: Alignment.center,
-      child: Icon(
-        CupertinoIcons.person_3_fill,
-        size: 72,
-        color: ColoresApp.principalMarca.withValues(alpha: 0.35),
-      ),
-    );
+    return Container(color: ColoresApp.fondoPrincipal);
   }
 }
 
@@ -267,7 +256,11 @@ class SquadBotonVolver extends StatelessWidget {
                 color: Colors.black.withValues(alpha: 0.38),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(CupertinoIcons.back, color: Colors.white, size: 20),
+              child: const Icon(
+                CupertinoIcons.back,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ),
           if (trailing != null) ...[const Spacer(), trailing!],
@@ -329,7 +322,7 @@ class SquadTituloHero extends StatelessWidget {
       );
     }
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
       child: Text(
         texto,
         textAlign: TextAlign.center,
@@ -343,11 +336,7 @@ class SquadTituloHero extends StatelessWidget {
 
 /// Avatar de miembro en hero squad: borde blanco fijo (stack y grilla expandida).
 class SquadAvatarHero extends StatelessWidget {
-  const SquadAvatarHero({
-    super.key,
-    required this.url,
-    required this.size,
-  });
+  const SquadAvatarHero({super.key, required this.url, required this.size});
 
   final String url;
   final double size;
@@ -466,9 +455,7 @@ class SquadGridMiembrosAlternado extends StatelessWidget {
               final trailing = trailingBuilder?.call(m);
               final extraH = trailing != null ? (expandido ? 26.0 : 22.0) : 0.0;
               return Padding(
-                padding: EdgeInsets.only(
-                  right: idx != indices.last ? _gap : 0,
-                ),
+                padding: EdgeInsets.only(right: idx != indices.last ? _gap : 0),
                 child: SizedBox(
                   width: cellW,
                   height: rowH + extraH,
@@ -495,7 +482,10 @@ class SquadGridMiembrosAlternado extends StatelessWidget {
         child: grid,
       );
     }
-    return Padding(padding: const EdgeInsets.symmetric(horizontal: _hp), child: grid);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: _hp),
+      child: grid,
+    );
   }
 }
 
@@ -540,11 +530,14 @@ class _CeldaMiembroCompacta extends StatelessWidget {
                   top: -2,
                   right: -6,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFD4AF37),
                       borderRadius: BorderRadius.circular(7),
-                                          ),
+                    ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -580,10 +573,7 @@ class _CeldaMiembroCompacta extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.92),
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(height: 4),
-            trailing!,
-          ],
+          if (trailing != null) ...[const SizedBox(height: 4), trailing!],
         ],
       ),
     );
@@ -605,7 +595,7 @@ class SquadCardDescripcion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CardSuperficieSocial(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -615,7 +605,7 @@ class SquadCardDescripcion extends StatelessWidget {
                 child: Text(
                   'Descripción',
                   style: GoogleFonts.baloo2(
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: ColoresApp.textoPrincipal,
                   ),
@@ -639,10 +629,10 @@ class SquadCardDescripcion extends StatelessWidget {
               Text(
                 texto,
                 style: GoogleFonts.baloo2(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: ColoresApp.textoSecundario,
-                  height: 1.4,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: ColoresApp.textoPrincipal,
+                  height: 1.32,
                 ),
               ),
         ],
@@ -652,30 +642,37 @@ class SquadCardDescripcion extends StatelessWidget {
 }
 
 class SquadBadgeUbicacion extends StatelessWidget {
-  const SquadBadgeUbicacion({super.key, required this.ubicacion});
+  const SquadBadgeUbicacion({
+    super.key,
+    required this.ubicacion,
+    this.onTap,
+    this.editable = false,
+  });
 
   final String ubicacion;
+  final VoidCallback? onTap;
+  final bool editable;
 
   @override
   Widget build(BuildContext context) {
     if (ubicacion.trim().isEmpty) return const SizedBox.shrink();
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: ColoresApp.fondoSuperficie.withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(50),
-                  ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              CupertinoIcons.location_solid,
-              size: 12,
-              color: ColoresApp.textoSecundario.withValues(alpha: 0.9),
-            ),
-            const SizedBox(width: 5),
-            Text(
+    final badge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: ColoresApp.fondoSuperficie.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(50),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            CupertinoIcons.location_solid,
+            size: 12,
+            color: ColoresApp.textoSecundario.withValues(alpha: 0.9),
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
               ubicacion,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -685,8 +682,26 @@ class SquadBadgeUbicacion extends StatelessWidget {
                 color: ColoresApp.textoSecundario,
               ),
             ),
+          ),
+          if (editable) ...[
+            const SizedBox(width: 6),
+            Icon(
+              CupertinoIcons.pencil,
+              size: 11,
+              color: ColoresApp.principalMarca.withValues(alpha: 0.92),
+            ),
           ],
-        ),
+        ],
+      ),
+    );
+
+    return Center(
+      child: GestureDetector(
+        onTap: editable ? onTap : null,
+        behavior: editable
+            ? HitTestBehavior.opaque
+            : HitTestBehavior.deferToChild,
+        child: badge,
       ),
     );
   }

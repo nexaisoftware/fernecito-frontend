@@ -22,6 +22,8 @@ class BurbujaEstado extends StatelessWidget {
   final bool mostrarPuntosSiVacio;
   final bool compacta;
   final bool centrar;
+  /// Override del color del texto (ej. gris claro para placeholder).
+  final Color? colorTexto;
 
   const BurbujaEstado({
     super.key,
@@ -37,6 +39,7 @@ class BurbujaEstado extends StatelessWidget {
     this.mostrarPuntosSiVacio = true,
     this.compacta = false,
     this.centrar = true,
+    this.colorTexto,
   });
 
   static const _defaultMaxW = 320.0;
@@ -67,6 +70,7 @@ class BurbujaEstado extends StatelessWidget {
       mostrarPuntosSiVacio: mostrarPuntosSiVacio,
       ajustarAnchoAlTexto: ajustarAnchoAlTexto,
       medidas: medidas,
+      colorTexto: colorTexto,
     );
     return centrar ? Center(child: contenido) : contenido;
   }
@@ -123,6 +127,7 @@ class _BurbujaContenido extends StatelessWidget {
     required this.mostrarPuntosSiVacio,
     required this.ajustarAnchoAlTexto,
     required this.medidas,
+    this.colorTexto,
   });
 
   final String texto;
@@ -136,11 +141,12 @@ class _BurbujaContenido extends StatelessWidget {
   final bool mostrarPuntosSiVacio;
   final bool ajustarAnchoAlTexto;
   final _MedidasBurbuja medidas;
+  final Color? colorTexto;
 
   TextStyle get _style => GoogleFonts.baloo2(
     fontSize: fontSize,
     fontWeight: FontWeight.w700,
-    color: ColoresApp.textoPrincipal,
+    color: colorTexto ?? ColoresApp.textoPrincipal,
     height: 1.12,
     letterSpacing: -0.15,
   );

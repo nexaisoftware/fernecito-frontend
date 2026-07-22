@@ -12,7 +12,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config_push_web.dart';
+import '../models/notificacion.dart';
+import 'navegacion_notificaciones.dart';
 import 'push_web_helper.dart';
+import 'servicio_notificaciones_usuarios.dart';
 
 class ServicioPush {
   ServicioPush._();
@@ -52,6 +55,113 @@ class ServicioPush {
         );
       }
     });
+
+    FirebaseMessaging.onMessageOpenedApp.listen(_procesarPushAbierta);
+    unawaited(_procesarPushInicial());
+  }
+
+  Future<void> _procesarPushInicial() async {
+    try {
+      final msg = await FirebaseMessaging.instance.getInitialMessage();
+      if (msg != null) {
+        // El navigator/auth pueden terminar de montarse unos frames después
+        // del tap del sistema, especialmente viniendo de app terminada.
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        await _procesarPushAbierta(msg);
+      }
+    } catch (e) {
+      debugPrint('⚠️ push inicial: $e');
+    }
+  }
+
+  Future<void> _procesarPushAbierta(RemoteMessage msg) async {
+    try {
+      final n = await _resolverNotificacionDesdePush(msg);
+      if (n == null) return;
+
+      var abierta = false;
+      for (var i = 0; i < 8 && !abierta; i++) {
+        abierta = await navegarDesdeNotificacion(n);
+        if (!abierta) {
+          await Future<void>.delayed(Duration(milliseconds: 250 + i * 150));
+        }
+      }
+      if (abierta && n.id.isNotEmpty && !n.id.startsWith('push_')) {
+        unawaited(ServicioNotificacionesUsuarios().marcarLeida(n.id));
+      }
+    } catch (e) {
+      debugPrint('⚠️ abrir push: $e');
+    }
+  }
+
+  Future<Notificacion?> _resolverNotificacionDesdePush(
+    RemoteMessage msg,
+  ) async {
+    final data = msg.data;
+    final idNotif = _leerData(data, ['id_notificacion', 'idNotif', 'notif_id']);
+    if (idNotif != null && idNotif.isNotEmpty) {
+      final real = await ServicioNotificacionesUsuarios().obtenerPorId(idNotif);
+      if (real != null) return real;
+    }
+
+    final tipo = _leerData(data, ['tipo', 'type']) ?? '';
+    final ruta = _leerData(data, ['cta_ruta', 'ruta', 'route']);
+    final ref = _leerData(data, ['cta_id_ref', 'ref', 'id_ref']);
+    final titulo =
+        msg.notification?.title ??
+        _leerData(data, ['titulo', 'title']) ??
+        'Fernecito';
+    final cuerpo =
+        msg.notification?.body ??
+        _leerData(data, ['descripcion', 'cuerpo', 'body']) ??
+        '';
+    final sinDestino =
+        (ruta == null || ruta.isEmpty) && (ref == null || ref.isEmpty);
+    if ((tipo.isEmpty && sinDestino) || _esPushSoloAbrirApp(tipo, sinDestino)) {
+      return null; // Broadcast/owner: abrir la app alcanza.
+    }
+
+    final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
+    return Notificacion(
+      id: idNotif == null || idNotif.isEmpty
+          ? 'push_${msg.messageId ?? DateTime.now().microsecondsSinceEpoch}'
+          : idNotif,
+      idUsuario: uid,
+      tipo: tipo.isEmpty ? 'notificacion' : tipo,
+      prioridad: _leerData(data, ['prioridad']) ?? 'media',
+      titulo: titulo,
+      descripcion: cuerpo,
+      ctaRuta: ruta,
+      ctaIdRef: ref,
+      payload: data.isEmpty ? null : Map<String, dynamic>.from(data),
+      leida: false,
+      fechaCreacion: DateTime.now().toUtc(),
+    );
+  }
+
+  String? _leerData(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final raw = data[key];
+      final value = raw?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
+  bool _esPushSoloAbrirApp(String tipo, bool sinDestino) {
+    if (!sinDestino) return false;
+    switch (tipo.trim().toLowerCase()) {
+      case 'promo':
+      case 'broadcast':
+      case 'novedad':
+      case 'novedad_owner':
+      case 'campania':
+      case 'campana':
+      case 'notificacion':
+        return true;
+      default:
+        return false;
+    }
   }
 
   /// Pide permiso (Android 13+/iOS) y registra el token del usuario actual.

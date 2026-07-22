@@ -22,8 +22,7 @@ class ServicioSquads {
 
   String? get _uid => ServicioSupabase().usuarioActual?.id;
 
-  bool get tieneCacheListas =>
-      _cacheMios.tiene(_uid) && _cacheInvs.tiene(_uid);
+  bool get tieneCacheListas => _cacheMios.tiene(_uid) && _cacheInvs.tiene(_uid);
 
   List<SquadResumen>? get misSquadsCache =>
       _cacheMios.tiene(_uid) ? _cacheMios.data : null;
@@ -52,9 +51,11 @@ class ServicioSquads {
       final res = await ServicioSupabase().cliente.rpc('squad_listar_mios');
       final list = res is List
           ? res
-              .map((e) =>
-                  SquadResumen.fromMap(Map<String, dynamic>.from(e as Map)))
-              .toList()
+                .map(
+                  (e) =>
+                      SquadResumen.fromMap(Map<String, dynamic>.from(e as Map)),
+                )
+                .toList()
           : const <SquadResumen>[];
       _cacheMios.set(uid, list);
       return list;
@@ -64,7 +65,7 @@ class ServicioSquads {
     }
   }
 
-  /// Invitaciones a squads pendientes para mí.
+  /// Invitaciones recibidas + solicitudes enviadas pendientes para mí.
   Future<List<SquadResumen>> invitaciones({bool forzarCompleto = false}) async {
     final uid = _uid;
     if (uid == null) {
@@ -75,13 +76,16 @@ class ServicioSquads {
       return _cacheInvs.data!;
     }
     try {
-      final res =
-          await ServicioSupabase().cliente.rpc('squad_listar_invitaciones');
+      final res = await ServicioSupabase().cliente.rpc(
+        'squad_listar_pendientes_mios',
+      );
       final list = res is List
           ? res
-              .map((e) =>
-                  SquadResumen.fromMap(Map<String, dynamic>.from(e as Map)))
-              .toList()
+                .map(
+                  (e) =>
+                      SquadResumen.fromMap(Map<String, dynamic>.from(e as Map)),
+                )
+                .toList()
           : const <SquadResumen>[];
       _cacheInvs.set(uid, list);
       return list;
@@ -96,14 +100,14 @@ class ServicioSquads {
     String idGrupo, {
     bool forzarCompleto = false,
   }) async {
-    if (!forzarCompleto &&
-        _cacheDetalle.fresco(idGrupo, _ttlSuave)) {
+    if (!forzarCompleto && _cacheDetalle.fresco(idGrupo, _ttlSuave)) {
       return _cacheDetalle.get(idGrupo);
     }
     try {
-      final res = await ServicioSupabase()
-          .cliente
-          .rpc('squad_detalle', params: {'p_grupo': idGrupo});
+      final res = await ServicioSupabase().cliente.rpc(
+        'squad_detalle',
+        params: {'p_grupo': idGrupo},
+      );
       if (res is Map) {
         final d = SquadDetalle.fromMap(Map<String, dynamic>.from(res));
         _cacheDetalle.set(idGrupo, d);
@@ -141,7 +145,10 @@ class ServicioSquads {
       debugPrint('⚠️ squad_username_disponible: $e');
       final msg = e.toString();
       if (msg.contains('rate_limit_exceeded')) {
-        return const UsernameSquadCheck(disponible: false, motivo: 'rate_limit');
+        return const UsernameSquadCheck(
+          disponible: false,
+          motivo: 'rate_limit',
+        );
       }
       return const UsernameSquadCheck(disponible: false, motivo: 'error');
     }
@@ -157,14 +164,17 @@ class ServicioSquads {
     String? vibe,
   }) async {
     try {
-      final res = await ServicioSupabase().cliente.rpc('squad_crear', params: {
-        'p_nombre': nombre,
-        'p_username': username,
-        'p_descripcion': descripcion,
-        'p_url_portada': urlPortada,
-        'p_es_publico': esPublico,
-        'p_vibe': vibe,
-      });
+      final res = await ServicioSupabase().cliente.rpc(
+        'squad_crear',
+        params: {
+          'p_nombre': nombre,
+          'p_username': username,
+          'p_descripcion': descripcion,
+          'p_url_portada': urlPortada,
+          'p_es_publico': esPublico,
+          'p_vibe': vibe,
+        },
+      );
       invalidarListas();
       return res?.toString();
     } catch (e) {
@@ -183,15 +193,18 @@ class ServicioSquads {
     String? vibe,
   }) async {
     try {
-      await ServicioSupabase().cliente.rpc('squad_editar', params: {
-        'p_grupo': idGrupo,
-        'p_nombre': nombre,
-        'p_descripcion': descripcion,
-        'p_url_portada': urlPortada,
-        'p_es_publico': esPublico,
-        'p_estado': estado,
-        'p_vibe': vibe,
-      });
+      await ServicioSupabase().cliente.rpc(
+        'squad_editar',
+        params: {
+          'p_grupo': idGrupo,
+          'p_nombre': nombre,
+          'p_descripcion': descripcion,
+          'p_url_portada': urlPortada,
+          'p_es_publico': esPublico,
+          'p_estado': estado,
+          'p_vibe': vibe,
+        },
+      );
       invalidarListas();
       invalidarDetalle(idGrupo);
       return true;
@@ -201,11 +214,36 @@ class ServicioSquads {
     }
   }
 
+  /// Ubicación propia del squad (cualquier miembro puede editarla).
+  Future<bool> setUbicacion(
+    String idGrupo, {
+    required String ciudad,
+    String? provincia,
+  }) async {
+    try {
+      await ServicioSupabase().cliente.rpc(
+        'squad_set_ubicacion',
+        params: {
+          'p_grupo': idGrupo,
+          'p_ciudad': ciudad,
+          'p_provincia': provincia,
+        },
+      );
+      invalidarDetalle(idGrupo);
+      invalidarListas();
+      return true;
+    } catch (e) {
+      debugPrint('⚠️ squad_set_ubicacion: $e');
+      return false;
+    }
+  }
+
   Future<bool> eliminar(String idGrupo) async {
     try {
-      await ServicioSupabase()
-          .cliente
-          .rpc('squad_eliminar', params: {'p_grupo': idGrupo});
+      await ServicioSupabase().cliente.rpc(
+        'squad_eliminar',
+        params: {'p_grupo': idGrupo},
+      );
       invalidarListas();
       invalidarDetalle(idGrupo);
       return true;
@@ -217,10 +255,11 @@ class ServicioSquads {
 
   Future<bool> invitar(String idGrupo, String idUsuario) async {
     try {
-      await ServicioSupabase().cliente.rpc('squad_invitar', params: {
-        'p_grupo': idGrupo,
-        'p_usuario': idUsuario,
-      });
+      await ServicioSupabase().cliente.rpc(
+        'squad_invitar',
+        params: {'p_grupo': idGrupo, 'p_usuario': idUsuario},
+      );
+      invalidarListas();
       invalidarDetalle(idGrupo);
       return true;
     } catch (e) {
@@ -229,12 +268,15 @@ class ServicioSquads {
     }
   }
 
-  Future<bool> responderInvitacion(String idGrupo, {required bool aceptar}) async {
+  Future<bool> responderInvitacion(
+    String idGrupo, {
+    required bool aceptar,
+  }) async {
     try {
-      await ServicioSupabase().cliente.rpc('squad_responder_invitacion', params: {
-        'p_grupo': idGrupo,
-        'p_aceptar': aceptar,
-      });
+      await ServicioSupabase().cliente.rpc(
+        'squad_responder_invitacion',
+        params: {'p_grupo': idGrupo, 'p_aceptar': aceptar},
+      );
       invalidarListas();
       invalidarDetalle(idGrupo);
       return true;
@@ -246,9 +288,10 @@ class ServicioSquads {
 
   Future<bool> salir(String idGrupo) async {
     try {
-      await ServicioSupabase()
-          .cliente
-          .rpc('squad_salir', params: {'p_grupo': idGrupo});
+      await ServicioSupabase().cliente.rpc(
+        'squad_salir',
+        params: {'p_grupo': idGrupo},
+      );
       invalidarListas();
       invalidarDetalle(idGrupo);
       return true;
@@ -260,10 +303,11 @@ class ServicioSquads {
 
   Future<bool> expulsar(String idGrupo, String idUsuario) async {
     try {
-      await ServicioSupabase().cliente.rpc('squad_expulsar', params: {
-        'p_grupo': idGrupo,
-        'p_usuario': idUsuario,
-      });
+      await ServicioSupabase().cliente.rpc(
+        'squad_expulsar',
+        params: {'p_grupo': idGrupo, 'p_usuario': idUsuario},
+      );
+      invalidarListas();
       invalidarDetalle(idGrupo);
       return true;
     } catch (e) {
@@ -276,13 +320,15 @@ class ServicioSquads {
   Future<List<SquadBusqueda>> buscar(String query) async {
     if (_uid == null) return const [];
     try {
-      final res = await ServicioSupabase()
-          .cliente
-          .rpc('buscar_squads', params: {'p_query': query});
+      final res = await ServicioSupabase().cliente.rpc(
+        'buscar_squads',
+        params: {'p_query': query},
+      );
       if (res is List) {
         return res
-            .map((e) =>
-                SquadBusqueda.fromMap(Map<String, dynamic>.from(e as Map)))
+            .map(
+              (e) => SquadBusqueda.fromMap(Map<String, dynamic>.from(e as Map)),
+            )
             .toList();
       }
       return const [];
@@ -292,21 +338,26 @@ class ServicioSquads {
     }
   }
 
-  /// Squads públicos con al menos un miembro en la ciudad indicada.
-  Future<ExplorarSquadsPagina> explorarCiudad({
-    required String ciudad,
+  /// Squads públicos de las ciudades indicadas (usa la ciudad propia del squad).
+  Future<ExplorarSquadsPagina> explorarCiudades({
+    required Set<String> ciudades,
     String? provincia,
     int offset = 0,
     int limit = 40,
   }) async {
-    if (_uid == null || ciudad.trim().isEmpty) {
+    final ciudadesLista = ciudades
+        .map((c) => c.trim())
+        .where((c) => c.isNotEmpty)
+        .toList();
+    if (_uid == null || ciudadesLista.isEmpty) {
       return const ExplorarSquadsPagina();
     }
     try {
       final res = await ServicioSupabase().cliente.rpc(
         'explorar_squads_ciudad',
         params: {
-          'p_ciudad': ciudad.trim(),
+          'p_ciudad': ciudadesLista.first,
+          'p_ciudades': ciudadesLista,
           'p_provincia': (provincia == null || provincia.trim().isEmpty)
               ? null
               : provincia.trim(),
@@ -317,21 +368,22 @@ class ServicioSquads {
       if (res is! Map) return const ExplorarSquadsPagina();
       final map = Map<String, dynamic>.from(res);
       final itemsRaw = map['items'];
-      final lista = itemsRaw is List
+      final squads = itemsRaw is List
           ? itemsRaw
-              .map((e) =>
-                  SquadExplorarItem.fromMap(Map<String, dynamic>.from(e as Map)))
-              .toList()
+                .map(
+                  (e) => SquadExplorarItem.fromMap(
+                    Map<String, dynamic>.from(e as Map),
+                  ),
+                )
+                .toList()
           : <SquadExplorarItem>[];
       return ExplorarSquadsPagina(
-        items: lista,
+        items: squads,
         hayMas: map['hay_mas'] == true,
       );
     } catch (e) {
       debugPrint('⚠️ explorar_squads_ciudad: $e');
-      return ExplorarSquadsPagina(
-        error: 'No se pudo cargar squads ($e)',
-      );
+      return ExplorarSquadsPagina(error: 'No se pudo cargar squads ($e)');
     }
   }
 
@@ -339,9 +391,12 @@ class ServicioSquads {
   /// ('pendiente' | 'aceptado') o null si falló.
   Future<String?> solicitarUnirse(String idGrupo) async {
     try {
-      final res = await ServicioSupabase()
-          .cliente
-          .rpc('squad_solicitar_unirse', params: {'p_grupo': idGrupo});
+      final res = await ServicioSupabase().cliente.rpc(
+        'squad_solicitar_unirse',
+        params: {'p_grupo': idGrupo},
+      );
+      invalidarListas();
+      invalidarDetalle(idGrupo);
       if (res is Map) return res['estado']?.toString();
       return 'pendiente';
     } catch (e) {
@@ -354,12 +409,15 @@ class ServicioSquads {
   /// Cada ítem trae [MiembroSquad.origenPendiente]: 'invitacion' | 'solicitud'.
   Future<List<MiembroSquad>> listarPendientes(String idGrupo) async {
     try {
-      final res = await ServicioSupabase()
-          .cliente
-          .rpc('squad_listar_pendientes', params: {'p_grupo': idGrupo});
+      final res = await ServicioSupabase().cliente.rpc(
+        'squad_listar_pendientes',
+        params: {'p_grupo': idGrupo},
+      );
       if (res is List) {
         return res
-            .map((e) => MiembroSquad.fromMap(Map<String, dynamic>.from(e as Map)))
+            .map(
+              (e) => MiembroSquad.fromMap(Map<String, dynamic>.from(e as Map)),
+            )
             .toList();
       }
       return const [];
@@ -371,14 +429,21 @@ class ServicioSquads {
 
   /// Líder/admin aprueba o rechaza un pedido de unión (origen 'solicitud').
   /// No aplica a invitaciones enviadas: esas las responde el invitado.
-  Future<bool> aprobarMiembro(String idGrupo, String idUsuario,
-      {required bool aceptar}) async {
+  Future<bool> aprobarMiembro(
+    String idGrupo,
+    String idUsuario, {
+    required bool aceptar,
+  }) async {
     try {
-      await ServicioSupabase().cliente.rpc('squad_aprobar_miembro', params: {
-        'p_grupo': idGrupo,
-        'p_usuario': idUsuario,
-        'p_aceptar': aceptar,
-      });
+      await ServicioSupabase().cliente.rpc(
+        'squad_aprobar_miembro',
+        params: {
+          'p_grupo': idGrupo,
+          'p_usuario': idUsuario,
+          'p_aceptar': aceptar,
+        },
+      );
+      invalidarListas();
       invalidarDetalle(idGrupo);
       return true;
     } catch (e) {
@@ -388,19 +453,26 @@ class ServicioSquads {
   }
 
   /// Sube la portada al bucket. Devuelve el **path** en storage (para guardar en DB).
-  Future<String?> subirPortada(String idGrupo, Uint8List bytes,
-      {String ext = 'jpg'}) async {
+  Future<String?> subirPortada(
+    String idGrupo,
+    Uint8List bytes, {
+    String ext = 'jpg',
+  }) async {
     final uid = _uid;
     if (uid == null) return null;
     try {
       // Path fijo .jpg para que upsert y la URL pública no cambien de extensión.
       final path = '$uid/$idGrupo.jpg';
-      await ServicioSupabase().cliente.storage.from(_bucketPortadas).uploadBinary(
+      await ServicioSupabase().cliente.storage
+          .from(_bucketPortadas)
+          .uploadBinary(
             path,
             bytes,
             fileOptions: FileOptions(
               upsert: true,
-              contentType: contentTypeDesdeExtension(ext == 'webp' ? 'jpg' : ext),
+              contentType: contentTypeDesdeExtension(
+                ext == 'webp' ? 'jpg' : ext,
+              ),
             ),
           );
       return path;

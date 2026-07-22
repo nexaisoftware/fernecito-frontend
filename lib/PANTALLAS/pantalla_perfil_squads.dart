@@ -13,11 +13,13 @@ import '../core/servicio_squads.dart';
 import '../core/supabase_client.dart';
 import '../models/rompehielo.dart';
 import '../models/social.dart';
+import '../widgets/filtro_ubicaciones_sheet.dart';
 import '../widgets/boton_rompehielo.dart';
 import '../widgets/burbuja_estado.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/perfil_squad_ui.dart';
 import 'pantalla_perfil_usuarios.dart';
+import 'pantalla_mis_squads.dart';
 import 'pantalla_rompehielo.dart' show TipoContraparte;
 import '../widgets/fernecito_loader.dart';
 
@@ -67,10 +69,28 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
   void initState() {
     super.initState();
     _estado = widget.estadoRelacion;
-    _idGrupo = (widget.squad['id_grupo'] ?? widget.squad['id_squad'])
-            ?.toString() ??
+    _idGrupo =
+        (widget.squad['id_grupo'] ?? widget.squad['id_squad'])?.toString() ??
         '';
     _cargar();
+  }
+
+  Future<void> _editarUbicacionSquad() async {
+    final det = _detalle;
+    if (det == null) return;
+    final res = await mostrarSelectorUbicacionPerfil(
+      context,
+      provinciaActual: det.provincia ?? '',
+      ciudadActual: det.ciudad ?? '',
+    );
+    if (res == null || !mounted) return;
+    final ok = await _srv.setUbicacion(
+      _idGrupo,
+      ciudad: res.ciudad,
+      provincia: res.provincia,
+    );
+    if (!mounted) return;
+    if (ok) await _cargar();
   }
 
   Future<void> _cargar() async {
@@ -84,9 +104,47 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
     final amistades = await amistadesFuture;
     if (!mounted) return;
 
+    if (det != null && det.miEstado == 'aceptado') {
+      Navigator.of(context).pushReplacement(
+        CupertinoPageRoute(
+          builder: (_) => PantallaMisSquads(
+            squad: {
+              ...widget.squad,
+              'id_grupo': det.idGrupo,
+              'id_squad': det.idGrupo,
+              'nombre': det.nombre,
+              'nombre_squad': det.nombre,
+              'username': det.username,
+              'descripcion': det.descripcion ?? '',
+              'vibe': det.vibe ?? '',
+              'url_portada': det.urlPortada,
+              'avatar': det.portadaUrl ?? '',
+              'banner_url': det.portadaUrl,
+              'mi_estado': det.miEstado,
+              'miembros': det.miembros.length,
+              'miembrosAvatares': det.avataresMiembros,
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
     var ubicacion = '';
-    if (det != null && det.miembros.isNotEmpty) {
-      final lider = det.miembros.where((m) => m.esLider).firstOrNull ??
+    // Ubicación PROPIA del squad (la que se usa en explorar).
+    if (det != null) {
+      final cSquad = (det.ciudad ?? '').trim();
+      final pSquad = (det.provincia ?? '').trim();
+      if (cSquad.isNotEmpty && pSquad.isNotEmpty) {
+        ubicacion = '$cSquad, $pSquad';
+      } else if (cSquad.isNotEmpty) {
+        ubicacion = cSquad;
+      }
+    }
+    // Fallback: ciudad del líder si el squad todavía no fijó su ubicación.
+    if (ubicacion.isEmpty && det != null && det.miembros.isNotEmpty) {
+      final lider =
+          det.miembros.where((m) => m.esLider).firstOrNull ??
           det.miembros.first;
       final perf = await _srvPerfil.detalle(lider.idUsuario);
       if (perf != null) {
@@ -140,22 +198,27 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
         final estado = await _srv.solicitarUnirse(_idGrupo);
         ok = estado != null;
         if (ok && mounted) {
-          setState(() => _estado = estado == 'aceptado'
-              ? EstadoRelacionSquad.miembro
-              : EstadoRelacionSquad.solicitudEnviada);
+          setState(
+            () => _estado = estado == 'aceptado'
+                ? EstadoRelacionSquad.miembro
+                : EstadoRelacionSquad.solicitudEnviada,
+          );
         }
         break;
       case EstadoRelacionSquad.solicitudEnviada:
         ok = await _srv.salir(_idGrupo);
-        if (ok && mounted) setState(() => _estado = EstadoRelacionSquad.ninguno);
+        if (ok && mounted)
+          setState(() => _estado = EstadoRelacionSquad.ninguno);
         break;
       case EstadoRelacionSquad.solicitudPendiente:
         ok = await _srv.responderInvitacion(_idGrupo, aceptar: true);
-        if (ok && mounted) setState(() => _estado = EstadoRelacionSquad.miembro);
+        if (ok && mounted)
+          setState(() => _estado = EstadoRelacionSquad.miembro);
         break;
       case EstadoRelacionSquad.miembro:
         ok = await _srv.salir(_idGrupo);
-        if (ok && mounted) setState(() => _estado = EstadoRelacionSquad.ninguno);
+        if (ok && mounted)
+          setState(() => _estado = EstadoRelacionSquad.ninguno);
         break;
     }
     if (mounted) {
@@ -237,17 +300,16 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
     final descripcion = (_detalle?.descripcion?.trim().isNotEmpty ?? false)
         ? _detalle!.descripcion!.trim()
         : (squad['descripcion'] as String?)?.trim().isNotEmpty == true
-            ? (squad['descripcion'] as String).trim()
-            : 'Este squad todavía no tiene descripción.';
-    final banner = _detalle?.portadaUrl ??
-        ServicioSupabase().urlPortadaSquad(squad['avatar'] as String?) ??
-        (squad['avatar'] as String? ?? '');
+        ? (squad['descripcion'] as String).trim()
+        : '';
+    final banner = _detalle?.portadaUrl ?? '';
     final bannerCacheKey = _detalle?.portadaCacheKey;
     final vibe = (_detalle?.vibe?.trim().isNotEmpty ?? false)
         ? _detalle!.vibe!.trim()
         : ((squad['vibe'] as String?)?.trim() ?? '');
 
     final username = _detalle?.username?.trim() ?? '';
+    final colorTema = ColoresApp.principalMarca;
 
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
@@ -290,16 +352,49 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  SquadCardDescripcion(texto: descripcion),
-                  const SizedBox(height: 10),
-                  SquadBadgeUbicacion(ubicacion: _ubicacion),
+                  if (descripcion.isNotEmpty) ...[
+                    SquadCardDescripcion(texto: descripcion),
+                    const SizedBox(height: 10),
+                  ],
+                  SquadBadgeUbicacion(
+                    ubicacion: _ubicacion,
+                    editable: _estado == EstadoRelacionSquad.miembro,
+                    onTap: _editarUbicacionSquad,
+                  ),
+                  if (_estado == EstadoRelacionSquad.miembro)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: CupertinoButton(
+                        padding: const EdgeInsets.only(top: 6),
+                        minimumSize: Size.zero,
+                        onPressed: _editarUbicacionSquad,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              CupertinoIcons.pencil,
+                              size: 13,
+                              color: colorTema,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Editar ubicación del squad',
+                              style: GoogleFonts.baloo2(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: colorTema,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   if (_estado != EstadoRelacionSquad.miembro) ...[
                     const SizedBox(height: 18),
                     BotonRompehielo(
                       nombre: nombre,
                       esEmisor: _rompehieloEstado?.debeResponder == true,
-                      esSecundario:
-                          _rompehieloEstado?.jerarquiaAlta == false,
+                      esSecundario: _rompehieloEstado?.jerarquiaAlta == false,
                       onTap: () async {
                         final squadMap = Map<String, dynamic>.from(squad)
                           ..['nombre'] = nombre
@@ -315,13 +410,14 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
                         if (mounted) {
                           final activos =
                               await listarInvolucramientosRompehielo(
-                            otroTipo: 'squad',
-                            otroId: _idGrupo,
-                          );
+                                otroTipo: 'squad',
+                                otroId: _idGrupo,
+                              );
                           if (mounted) {
                             setState(() {
-                              _rompehieloEstado =
-                                  mejorInvolucramiento(activos)?.estado;
+                              _rompehieloEstado = mejorInvolucramiento(
+                                activos,
+                              )?.estado;
                             });
                           }
                         }
@@ -375,7 +471,9 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
 
     return CupertinoButton(
       padding: const EdgeInsets.symmetric(vertical: 14),
-      color: esSolido ? bordeColor : ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
+      color: esSolido
+          ? bordeColor
+          : ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
       borderRadius: BorderRadius.circular(18),
       onPressed: _procesando ? null : _onAccionPrincipal,
       child: _procesando

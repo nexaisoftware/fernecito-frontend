@@ -7,9 +7,9 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../core/constants.dart';
+import '../core/lanzador_externo.dart';
 import '../core/privacidad_perfil.dart';
 import '../core/servicio_amigos.dart';
 import '../core/rompehielo_navegacion.dart';
@@ -116,13 +116,13 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     return '';
   }
 
-  Future<void> _cargarDetalle() async {
+  Future<void> _cargarDetalle({bool forzarCompleto = false}) async {
     final id = _idUsuario;
     if (id == null || id.isEmpty) {
       if (mounted) setState(() => _cargandoDetalle = false);
       return;
     }
-    final det = await _srvPerfil.detalle(id);
+    final det = await _srvPerfil.detalle(id, forzarCompleto: forzarCompleto);
     if (!mounted) return;
     setState(() {
       _detalle = det;
@@ -194,9 +194,41 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
   }
 
   Future<void> _recargarTrasAmistad() async {
+    final id = _idUsuario;
+    if (id != null && id.isNotEmpty) {
+      _srvPerfil.invalidarUsuario(id);
+    }
     if (!mounted) return;
     setState(() => _cargandoDetalle = true);
-    await _cargarDetalle();
+    await _cargarDetalle(forzarCompleto: true);
+  }
+
+  void _marcarAmistadAceptadaLocal() {
+    _estado = EstadoRelacionUsuario.amigo;
+    if (_detalle != null) {
+      _detalle = {
+        ..._detalle!,
+        'estado_amistad': 'amigo',
+        'es_amigo': true,
+        'puede_ver': true,
+      };
+    }
+  }
+
+  void _marcarSolicitudEnviadaLocal() {
+    _estado = EstadoRelacionUsuario.solicitudEnviada;
+    if (_detalle != null) {
+      _detalle = {..._detalle!, 'estado_amistad': 'enviada', 'es_amigo': false};
+    }
+  }
+
+  void _marcarSinAmistadLocal() {
+    _estado = EstadoRelacionUsuario.ninguno;
+    _idRelacion = null;
+    _squadsDondeEsMiembro = const [];
+    if (_detalle != null) {
+      _detalle = {..._detalle!, 'estado_amistad': 'ninguno', 'es_amigo': false};
+    }
   }
 
   /// Menú "3 puntitos" del perfil. Por ahora solo Reportar (oculto a la vista).
@@ -267,11 +299,13 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
         final estado = await _srv.solicitar(idUsuario);
         ok = estado != null;
         if (ok && mounted) {
+          _srvPerfil.invalidarUsuario(idUsuario);
           final esAmigo = estado == 'aceptada' || estado == 'aceptado';
           if (esAmigo) {
+            setState(_marcarAmistadAceptadaLocal);
             recargarPerfil = true;
           } else {
-            setState(() => _estado = EstadoRelacionUsuario.solicitudEnviada);
+            setState(_marcarSolicitudEnviadaLocal);
           }
         }
         break;
@@ -283,13 +317,17 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
           final estado = await _srv.solicitar(idUsuario);
           ok = estado == 'aceptada' || estado == 'aceptado';
         }
-        if (ok && mounted) recargarPerfil = true;
+        if (ok && mounted) {
+          setState(_marcarAmistadAceptadaLocal);
+          recargarPerfil = true;
+        }
         break;
       case EstadoRelacionUsuario.solicitudEnviada:
       case EstadoRelacionUsuario.amigo:
         ok = await _srv.eliminar(idUsuario);
         if (ok && mounted) {
-          setState(() => _estado = EstadoRelacionUsuario.ninguno);
+          _srvPerfil.invalidarUsuario(idUsuario);
+          setState(_marcarSinAmistadLocal);
         }
         break;
     }
@@ -315,7 +353,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       _mostrarError('El enlace no es válido.');
       return;
     }
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final ok = await lanzarExternoConFallback(uri);
     if (!ok && mounted) _mostrarError('No se pudo abrir el enlace.');
   }
 
@@ -499,11 +537,8 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                       ),
                     const SizedBox(height: 12),
                     GestureDetector(
-                      onTap: () => _abrirAgregarASquad(
-                        context,
-                        nombreVisible,
-                        username,
-                      ),
+                      onTap: () =>
+                          _abrirAgregarASquad(context, nombreVisible, username),
                       child: Container(
                         width: double.infinity,
                         height: 44,
@@ -580,10 +615,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
           padding: EdgeInsets.zero,
           onPressed: () => Navigator.of(context).pop(),
           minimumSize: Size.zero,
-          child: Icon(
-            CupertinoIcons.back,
-            color: ColoresApp.principalMarca,
-          ),
+          child: Icon(CupertinoIcons.back, color: ColoresApp.principalMarca),
         ),
         const SizedBox(width: 6),
         Expanded(
@@ -627,9 +659,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final screenHeight = MediaQuery.sizeOf(context).height;
     final isNarrow = screenWidth < 400;
-    final avatarSize = isNarrow
-        ? 68.0
-        : (screenHeight < 700 ? 76.0 : 84.0);
+    final avatarSize = isNarrow ? 82.0 : (screenHeight < 700 ? 91.0 : 101.0);
 
     return BannerPerfilUsuario(
       imagenFondo: _imagenFondoBanner,
@@ -696,15 +726,15 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       debajoNombre: esAmigo
           ? const BadgeAmigosPerfil()
           : sinActividad
-              ? Text(
-                  'Nuevo en Fernecito',
-                  style: GoogleFonts.baloo2(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: ColoresApp.textoSecundario,
-                  ),
-                )
-              : null,
+          ? Text(
+              'Nuevo en Fernecito',
+              style: GoogleFonts.baloo2(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: ColoresApp.textoSecundario,
+              ),
+            )
+          : null,
       estado: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: screenWidth * 0.88),
         child: BurbujaEstado(
@@ -718,8 +748,9 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       redesSociales: RedesSocialesBannerPerfil(
         instagramUrl: instagramUrl,
         tiktokUrl: tiktokUrl,
-        onInstagram:
-            instagramUrl.isNotEmpty ? () => _abrirUrl(instagramUrl) : null,
+        onInstagram: instagramUrl.isNotEmpty
+            ? () => _abrirUrl(instagramUrl)
+            : null,
         onTikTok: tiktokUrl.isNotEmpty ? () => _abrirUrl(tiktokUrl) : null,
       ),
     );
@@ -793,7 +824,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: ColoresApp.fondoSuperficie,
-                          ),
+            ),
             child: Icon(
               CupertinoIcons.person_fill,
               size: 54,
@@ -816,7 +847,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
             decoration: BoxDecoration(
               color: ColoresApp.fondoSuperficie.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(18),
-                          ),
+            ),
             child: Column(
               children: [
                 Icon(
@@ -971,7 +1002,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
           decoration: BoxDecoration(
             color: ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(18),
-                      ),
+          ),
           child: Row(
             children: [
               Expanded(
@@ -979,12 +1010,15 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                   '$cantidadAmigos',
                   'Amigos',
                   compacto: true,
-                  onTap: perfilPublico && cantidadAmigos > 0 && idUsuario.isNotEmpty
+                  onTap:
+                      perfilPublico &&
+                          cantidadAmigos > 0 &&
+                          idUsuario.isNotEmpty
                       ? () => _abrirSheetActividad(
-                            tipo: PerfilActividadTipo.amigos,
-                            titulo: 'Amigos de $nombre',
-                            idUsuario: idUsuario,
-                          )
+                          tipo: PerfilActividadTipo.amigos,
+                          titulo: 'Amigos de $nombre',
+                          idUsuario: idUsuario,
+                        )
                       : null,
                 ),
               ),
@@ -996,10 +1030,10 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                   compacto: true,
                   onTap: cantidadSquads > 0 && idUsuario.isNotEmpty
                       ? () => _abrirSheetActividad(
-                            tipo: PerfilActividadTipo.squads,
-                            titulo: 'Squads de $nombre',
-                            idUsuario: idUsuario,
-                          )
+                          tipo: PerfilActividadTipo.squads,
+                          titulo: 'Squads de $nombre',
+                          idUsuario: idUsuario,
+                        )
                       : null,
                 ),
               ),
@@ -1011,10 +1045,10 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                   compacto: true,
                   onTap: eventos > 0 && idUsuario.isNotEmpty
                       ? () => _abrirSheetActividad(
-                            tipo: PerfilActividadTipo.eventos,
-                            titulo: 'Eventos de $nombre',
-                            idUsuario: idUsuario,
-                          )
+                          tipo: PerfilActividadTipo.eventos,
+                          titulo: 'Eventos de $nombre',
+                          idUsuario: idUsuario,
+                        )
                       : null,
                 ),
               ),
@@ -1026,10 +1060,10 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                   compacto: true,
                   onTap: locales > 0 && idUsuario.isNotEmpty
                       ? () => _abrirSheetActividad(
-                            tipo: PerfilActividadTipo.locales,
-                            titulo: 'Locales visitados de $nombre',
-                            idUsuario: idUsuario,
-                          )
+                          tipo: PerfilActividadTipo.locales,
+                          titulo: 'Locales visitados de $nombre',
+                          idUsuario: idUsuario,
+                        )
                       : null,
                 ),
               ),
@@ -1062,7 +1096,12 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     );
   }
 
-  Widget _statInline(String valor, String etiqueta, {VoidCallback? onTap, bool compacto = false}) {
+  Widget _statInline(
+    String valor,
+    String etiqueta, {
+    VoidCallback? onTap,
+    bool compacto = false,
+  }) {
     final contenido = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1110,7 +1149,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(50),
-              ),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1244,9 +1283,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       barrierColor: Colors.black.withValues(alpha: 0.45),
       builder: (ctx) {
         return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(ctx).bottom,
-          ),
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
           child: Align(
             alignment: Alignment.bottomCenter,
             child: SizedBox(
@@ -1278,7 +1315,6 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     late final String texto;
     late final IconData icono;
     late final bool esSolido;
-    Color bordeColor = ColoresApp.principalMarca;
     Color textColor = Colors.white;
     Color? fillColor = ColoresApp.principalMarca;
 
@@ -1312,9 +1348,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       minimumSize: Size(0, 0),
       child: Container(
         width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(50),
-                  ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(50)),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
         child: _procesando
             ? Center(child: FernecitoLoader.inline(size: 22, color: textColor))

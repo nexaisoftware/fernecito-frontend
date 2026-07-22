@@ -9,10 +9,11 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
-import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
 import '../core/flujo_bloqueo.dart';
 import '../core/flujo_reporte.dart';
+import '../core/horarios_local.dart';
+import '../core/lanzador_externo.dart';
 import '../core/servicio_impresiones.dart';
 import '../core/servicio_locales_megusta.dart';
 import '../core/supabase_client.dart';
@@ -43,7 +44,14 @@ class PantallaLocalPerfil extends StatefulWidget {
 }
 
 class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
+  static const int _maxFotosLocales = 10;
+  static final String _selectFotosLocales = List.generate(
+    _maxFotosLocales,
+    (i) => 'foto_local_${i + 1}',
+  ).join(', ');
+
   bool _infoExpandida = true; // info del lugar desplegada por defecto
+  bool _descripcionExpandida = false;
 
   // Loading state
   bool _cargando = true;
@@ -54,11 +62,14 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   String? _instagramUrl;
   String? _tiktokUrl;
   String? _sitioWebUrl;
+  String? _telefonoWhatsapp;
+  String? _whatsappLabel;
   String? _ciudad;
   String? _provincia;
   String? _direccion;
   String? _urlMaps;
   List<String> _rubros = [];
+  HorariosLocal _horarios = {};
   bool _verificado = false;
   bool _esPionero = false;
   bool _mostrarCalificaciones = true;
@@ -109,12 +120,12 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
           .from('perfiles_locales')
           .select(
             'id, nombre_local, descripcion_local, '
-            'url_instagram, url_tiktok, url_website, '
+            'url_instagram, url_tiktok, url_website, telefono_whatsapp, whatsapp_label, '
             'ciudad, provincia, direccion, url_maps, rubro, '
             'local_verificado, es_pionero, calificacion_promedio, calificacion_cantidad, '
             'mostrar_calificaciones, '
             'foto_perfil_url, url_foto_banner, estado_cuenta, '
-            'foto_local_1, foto_local_2, foto_local_3, foto_local_4, foto_local_5',
+            '$_selectFotosLocales, horarios_json',
           )
           .eq('id', widget.idLocal!)
           .maybeSingle();
@@ -144,9 +155,9 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
         debugPrint('[LocalPerfil] eventos: $e');
       }
 
-      // 3) Resolver fotos locales (foto_local_1..5 → URLs públicas en bucket fotos_locales)
+      // 3) Resolver fotos locales (foto_local_1..10 → URLs públicas en bucket fotos_locales)
       final fotos = <String>[];
-      for (var i = 1; i <= 5; i++) {
+      for (var i = 1; i <= _maxFotosLocales; i++) {
         final path = local['foto_local_$i']?.toString();
         final url = _resolverPathStorage(sb, path, 'fotos_locales');
         if (url.isNotEmpty) fotos.add(url);
@@ -286,9 +297,12 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
       if (!mounted) return;
       setState(() {
         _descripcion = local['descripcion_local']?.toString();
+        _horarios = parseHorariosLocal(local['horarios_json']);
         _instagramUrl = local['url_instagram']?.toString();
         _tiktokUrl = local['url_tiktok']?.toString();
         _sitioWebUrl = local['url_website']?.toString();
+        _telefonoWhatsapp = local['telefono_whatsapp']?.toString();
+        _whatsappLabel = local['whatsapp_label']?.toString();
         _ciudad = local['ciudad']?.toString();
         _provincia = local['provincia']?.toString();
         _direccion = local['direccion']?.toString();
@@ -398,8 +412,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
     // Si el local cargó url_maps, lo usamos directo (Google Maps / Maps app).
     if (_urlMaps != null && _urlMaps!.isNotEmpty) {
       final u = Uri.tryParse(_urlMaps!);
-      if (u != null && await canLaunchUrl(u)) {
-        await launchUrl(u, mode: LaunchMode.externalApplication);
+      if (u != null && await _lanzarExterno(u)) {
         return;
       }
     }
@@ -412,16 +425,61 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
     final url = Uri.parse(
       'https://maps.google.com/?q=${Uri.encodeComponent(query)}',
     );
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    }
+    await _lanzarExterno(url);
   }
 
   Future<void> _abrirUrl(String urlString) async {
-    final url = Uri.parse(urlString);
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+    var normalizada = urlString.trim();
+    if (normalizada.isEmpty) return;
+    if (!normalizada.startsWith('http://') &&
+        !normalizada.startsWith('https://')) {
+      normalizada = 'https://$normalizada';
     }
+    final url = Uri.tryParse(normalizada);
+    if (url == null) {
+      _mostrarAvisoLink('El enlace no es válido.');
+      return;
+    }
+    final ok = await _lanzarExterno(url);
+    if (!ok && mounted) _mostrarAvisoLink('No pudimos abrir el enlace.');
+  }
+
+  Future<void> _abrirWhatsappLocal() async {
+    final telefono = (_telefonoWhatsapp ?? '').replaceAll(RegExp(r'\D'), '');
+    if (telefono.length < 10) return;
+    final mensaje =
+        'Hola! Vengo desde Fernecito App y quería consultar por ${widget.nombreLocal}.';
+    final url = Uri.parse(
+      'https://wa.me/$telefono?text=${Uri.encodeComponent(mensaje)}',
+    );
+    final ok = await _lanzarExterno(url);
+    if (!ok && mounted) _mostrarAvisoLink('No pudimos abrir WhatsApp.');
+  }
+
+  Future<bool> _lanzarExterno(Uri url) async {
+    return lanzarExternoConFallback(url);
+  }
+
+  void _mostrarAvisoLink(String mensaje) {
+    if (!mounted) return;
+    showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('No se pudo abrir'),
+        content: Text(mensaje),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _labelWhatsappPublico() {
+    final label = _whatsappLabel?.trim() ?? '';
+    return label.isEmpty ? 'Consultar por WhatsApp' : label;
   }
 
   /// Menú "3 puntitos" del local. Por ahora solo Reportar (oculto a la vista).
@@ -536,7 +594,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                               alpha: 0.6,
                             ),
                             borderRadius: BorderRadius.circular(18),
-                                                      ),
+                          ),
                           child: Column(
                             children: [
                               Icon(
@@ -571,33 +629,9 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
     );
   }
 
-  /// Fondo del banner mientras carga o si falla: negro + blur del avatar en caché.
-  Widget _fondoBannerReserva() {
-    final urlBlur = _avatarEffective.trim();
-    if (urlBlur.isNotEmpty && !_avatarUrlEsAsset(urlBlur)) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          const ColoredBox(color: ColoresApp.fondoPrincipal),
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36),
-            child: Opacity(
-              opacity: 0.5,
-              child: CachedNetworkImage(
-                imageUrl: urlBlur,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                placeholder: (_, __) => const SizedBox.expand(),
-                errorWidget: (_, __, ___) => const SizedBox.shrink(),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-    return const ColoredBox(color: ColoresApp.fondoPrincipal);
-  }
+  /// Fondo sólido del banner mientras carga o si falla.
+  Widget _fondoBannerReserva() =>
+      const ColoredBox(color: ColoresApp.fondoPrincipal);
 
   @override
   Widget build(BuildContext context) {
@@ -633,7 +667,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
     final padding = MediaQuery.of(context).padding;
     // Responsive: pantallas estrechas reducen tamaños para evitar overflow
     final isNarrow = screenWidth < 400;
-    final avatarSize = isNarrow ? 72.0 : 100.0;
+    final avatarSize = (isNarrow ? 72.0 : 100.0) * 1.15;
     final horizontalPadding = isNarrow ? 16.0 : 24.0;
     final photoCardWidth = (screenWidth - horizontalPadding * 2 - 14).clamp(
       160.0,
@@ -654,7 +688,6 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // Banner: imagen + overlay enmascarados juntos para fundirse con el degradado de fondo (sin borde duro)
                     Positioned.fill(
                       child: ShaderMask(
                         shaderCallback: (bounds) => LinearGradient(
@@ -663,8 +696,8 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                           stops: const [0.0, 0.55, 0.85, 1.0],
                           colors: [
                             Colors.white,
-                            Colors.white.withOpacity(0.65),
-                            Colors.white.withOpacity(0.15),
+                            Colors.white.withValues(alpha: 0.65),
+                            Colors.white.withValues(alpha: 0.15),
                             Colors.transparent,
                           ],
                         ).createShader(bounds),
@@ -672,7 +705,6 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            // Banner image: use avatar as banner if available, otherwise show placeholder
                             _avatarUrlEsAsset(bannerSource)
                                 ? Image.asset(
                                     bannerSource,
@@ -684,14 +716,13 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                     imageUrl: bannerSource,
                                     fit: BoxFit.cover,
                                     fadeInDuration: const Duration(
-                                      milliseconds: 280,
+                                      milliseconds: 220,
                                     ),
                                     placeholder: (_, __) =>
                                         _fondoBannerReserva(),
                                     errorWidget: (_, __, ___) =>
                                         _fondoBannerReserva(),
                                   ),
-                            // Overlay oscuro polarizado (también enmascarado)
                             Container(
                               color: Colors.black.withValues(alpha: 0.58),
                             ),
@@ -986,14 +1017,12 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                             ],
                             if (_descripcion != null &&
                                 _descripcion!.trim().isNotEmpty)
-                              Text(
-                                _descripcion!,
-                                style: GoogleFonts.baloo2(
-                                  fontSize: 14,
-                                  height: 1.4,
-                                  color: ColoresApp.textoPrincipal.withOpacity(
-                                    0.95,
-                                  ),
+                              _DescripcionLocalConFade(
+                                texto: _descripcion!,
+                                expandida: _descripcionExpandida,
+                                onToggle: () => setState(
+                                  () => _descripcionExpandida =
+                                      !_descripcionExpandida,
                                 ),
                               )
                             else
@@ -1005,6 +1034,19 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                   color: ColoresApp.textoSecundario,
                                 ),
                               ),
+                            if ((_telefonoWhatsapp ?? '')
+                                .trim()
+                                .isNotEmpty) ...[
+                              const SizedBox(height: 9),
+                              _BotonWhatsappPublicoLocal(
+                                label: _labelWhatsappPublico(),
+                                onTap: _abrirWhatsappLocal,
+                              ),
+                            ],
+                            _BadgeEstadoHorarioPublico(
+                              estado: estadoHorarioLocal(_horarios),
+                              horarios: _horarios,
+                            ),
                             if (_ubicacionTextoComputed.isNotEmpty ||
                                 (_direccion ?? '').isNotEmpty) ...[
                               const SizedBox(height: 12),
@@ -1050,7 +1092,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                         color: ColoresApp.principalMarca
                                             .withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(8),
-                                                                              ),
+                                      ),
                                       child: Text(
                                         r,
                                         style: GoogleFonts.baloo2(
@@ -1220,8 +1262,9 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                             placeholder: (_, __) => Container(
                                               color: ColoresApp.fondoSuperficie,
                                               child: const Center(
-                                                child:
-                                                    FernecitoLoader.inline(size: 16),
+                                                child: FernecitoLoader.inline(
+                                                  size: 16,
+                                                ),
                                               ),
                                             ),
                                             errorWidget: (_, __, ___) =>
@@ -1495,11 +1538,7 @@ class _CardLugarPopular extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          AvatarLocal(
-            imageUrl: avatar,
-            size: 48,
-            esPionero: esPionero,
-          ),
+          AvatarLocal(imageUrl: avatar, size: 48, esPionero: esPionero),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1685,7 +1724,7 @@ class _BadgeBestChoicePerfil extends StatelessWidget {
       decoration: BoxDecoration(
         color: _dorado.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
-              ),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1701,6 +1740,362 @@ class _BadgeBestChoicePerfil extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BotonWhatsappPublicoLocal extends StatelessWidget {
+  const _BotonWhatsappPublicoLocal({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFF25D366);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(FontAwesomeIcons.whatsapp, size: 13, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.baloo2(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: color,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BadgeEstadoHorarioPublico extends StatelessWidget {
+  const _BadgeEstadoHorarioPublico({
+    required this.estado,
+    required this.horarios,
+  });
+
+  final EstadoHorarioLocal estado;
+  final HorariosLocal horarios;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!estado.tieneHorarios) return const SizedBox.shrink();
+    final color = estado.abierto
+        ? const Color(0xFF27D66D)
+        : ColoresApp.textoSecundario;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Center(
+        child: GestureDetector(
+          onTap: () => _mostrarHorariosPublicos(context, horarios),
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width - 72,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1B1B1E),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(CupertinoIcons.clock_fill, size: 14, color: color),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        estado.titulo,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.baloo2(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w900,
+                          color: estado.abierto
+                              ? color
+                              : ColoresApp.textoPrincipal,
+                          height: 1.05,
+                        ),
+                      ),
+                      Text(
+                        estado.detalle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.baloo2(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: ColoresApp.textoSecundario,
+                          height: 1.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Icon(
+                  CupertinoIcons.chevron_up_chevron_down,
+                  size: 12,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static void _mostrarHorariosPublicos(
+    BuildContext context,
+    HorariosLocal horarios,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      builder: (ctx) {
+        final estado = estadoHorarioLocal(horarios);
+        final media = MediaQuery.of(ctx);
+        final maxHeight = media.size.height * 0.82;
+
+        return SafeArea(
+          top: false,
+          minimum: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF161618),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.only(
+                  bottom: media.viewPadding.bottom > 0 ? 8 : 0,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color:
+                                (estado.abierto
+                                        ? const Color(0xFF27D66D)
+                                        : ColoresApp.textoSecundario)
+                                    .withValues(alpha: 0.13),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            CupertinoIcons.clock_fill,
+                            size: 17,
+                            color: estado.abierto
+                                ? const Color(0xFF27D66D)
+                                : ColoresApp.textoSecundario,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                estado.titulo,
+                                style: GoogleFonts.baloo2(
+                                  color: ColoresApp.textoPrincipal,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1.05,
+                                ),
+                              ),
+                              Text(
+                                estado.detalle,
+                                style: GoogleFonts.baloo2(
+                                  color: ColoresApp.textoSecundario,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: const Icon(CupertinoIcons.xmark),
+                          color: ColoresApp.textoSecundario,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    for (var dia = 0; dia < 7; dia++) ...[
+                      _FilaHorarioPublica(
+                        dia: nombresDiasHorarios[dia],
+                        texto: resumenHorariosDia(horarios[dia] ?? const []),
+                        destacado: dia == DateTime.now().weekday - 1,
+                      ),
+                      if (dia != 6) const SizedBox(height: 7),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FilaHorarioPublica extends StatelessWidget {
+  const _FilaHorarioPublica({
+    required this.dia,
+    required this.texto,
+    required this.destacado,
+  });
+
+  final String dia;
+  final String texto;
+  final bool destacado;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: destacado
+            ? ColoresApp.principalMarca.withValues(alpha: 0.13)
+            : const Color(0xFF202024),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 42,
+            child: Text(
+              dia,
+              style: GoogleFonts.baloo2(
+                color: destacado
+                    ? ColoresApp.principalMarca
+                    : ColoresApp.textoSecundario,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              texto,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.baloo2(
+                color: ColoresApp.textoPrincipal,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DescripcionLocalConFade extends StatelessWidget {
+  const _DescripcionLocalConFade({
+    required this.texto,
+    required this.expandida,
+    required this.onToggle,
+  });
+
+  final String texto;
+  final bool expandida;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    const maxLines = 6;
+    final style = GoogleFonts.baloo2(
+      fontSize: 14,
+      height: 1.4,
+      color: ColoresApp.textoPrincipal.withValues(alpha: 0.95),
+    );
+    final necesitaVerMas = texto.trim().length > 210;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          children: [
+            Text(
+              texto,
+              maxLines: expandida ? null : maxLines,
+              overflow: expandida ? TextOverflow.visible : TextOverflow.clip,
+              style: style,
+            ),
+            if (!expandida && necesitaVerMas)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    height: 34,
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x00101010), Color(0xFF101010)],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        if (necesitaVerMas) ...[
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: onToggle,
+            child: Text(
+              expandida ? 'Ver menos' : 'Ver más',
+              style: GoogleFonts.baloo2(
+                color: ColoresApp.principalMarca,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

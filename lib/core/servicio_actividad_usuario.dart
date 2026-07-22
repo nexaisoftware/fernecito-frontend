@@ -73,6 +73,7 @@ class ServicioActividadUsuario {
         .from('tokens_asistencia')
         .select(
           'id_token, codigo_puerta, estado_token, fecha_expiracion, '
+          'snapshot_squad, id_reserva_grupal, '
           'eventos!tokens_asistencia_id_evento_fkey('
           'id_evento, titulo_evento, descripcion_evento, url_flyer, '
           'fecha_inicio, fecha_fin, id_local'
@@ -116,14 +117,87 @@ class ServicioActividadUsuario {
       } catch (_) {}
     }
 
+    final reservadoresIds = <String>{};
+    for (final r in (rows as List)) {
+      final snap = r['snapshot_squad'];
+      if (snap is Map) {
+        final rp = snap['reservado_por']?.toString().trim() ?? '';
+        if (rp.isNotEmpty) reservadoresIds.add(rp);
+      }
+    }
+    final reservadoresPorId = <String, Map<String, dynamic>>{};
+    if (reservadoresIds.isNotEmpty) {
+      try {
+        final resRows = await sb
+            .from('perfiles_usuarios')
+            .select('id, nombre, username')
+            .inFilter('id', reservadoresIds.toList());
+        for (final p in (resRows as List)) {
+          final id = p['id']?.toString().toLowerCase() ?? '';
+          if (id.isNotEmpty) {
+            reservadoresPorId[id] = Map<String, dynamic>.from(p as Map);
+          }
+        }
+      } catch (_) {}
+    }
+
     final tokens = rows.map<Map<String, dynamic>>((r) {
       final ev = r['eventos'] as Map<String, dynamic>? ?? {};
       final idLocal = ev['id_local']?.toString().trim() ?? '';
       final perfil = perfilesPorId[idLocal.toLowerCase()];
+      final snapRaw = r['snapshot_squad'];
+      Map<String, dynamic>? snap;
+      if (snapRaw is Map) snap = Map<String, dynamic>.from(snapRaw);
+
+      String? nombreSquad;
+      int? indiceSquad;
+      int? totalSquad;
+      String? reservadoPorId;
+      String? reservadoPorNombre;
+      String? reservadoPorUsername;
+      var esSquad = false;
+
+      if (snap != null) {
+        nombreSquad = snap['nombre_grupo']?.toString().trim();
+        if (nombreSquad != null && nombreSquad.isEmpty) nombreSquad = null;
+        final indRaw = snap['indice'];
+        indiceSquad = indRaw is int
+            ? indRaw
+            : (indRaw is num ? indRaw.toInt() : int.tryParse('$indRaw'));
+        final totalRaw = snap['cantidad_total'] ?? snap['cantidad'];
+        totalSquad = totalRaw is int
+            ? totalRaw
+            : (totalRaw is num
+                ? totalRaw.toInt()
+                : int.tryParse('$totalRaw'));
+        reservadoPorId = snap['reservado_por']?.toString().trim();
+        if (reservadoPorId != null && reservadoPorId.isEmpty) {
+          reservadoPorId = null;
+        }
+        esSquad = indiceSquad != null ||
+            (totalSquad != null && totalSquad > 1) ||
+            snap['id_grupo'] != null;
+        if (reservadoPorId != null) {
+          final rp = reservadoresPorId[reservadoPorId.toLowerCase()];
+          if (rp != null) {
+            reservadoPorNombre = rp['nombre']?.toString().trim();
+            reservadoPorUsername = rp['username']?.toString().trim();
+          }
+        }
+      }
+
       return {
         'id_token': r['id_token'],
         'codigo_puerta': r['codigo_puerta'] ?? '',
         'estado_token': r['estado_token'] ?? 'pendiente',
+        'id_reserva_grupal': r['id_reserva_grupal'],
+        'es_squad': esSquad,
+        'nombre_squad': nombreSquad,
+        'indice_squad': indiceSquad,
+        'total_squad': totalSquad,
+        'reservado_por_id': reservadoPorId,
+        'reservado_por_nombre': reservadoPorNombre,
+        'reservado_por_username': reservadoPorUsername,
         'titulo': ev['titulo_evento'] ?? 'Evento',
         'descripcion': ev['descripcion_evento'] ?? '',
         'flyer': ev['url_flyer'] ?? '',

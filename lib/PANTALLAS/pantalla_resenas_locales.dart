@@ -35,8 +35,7 @@ class PantallaResenasLocales extends StatefulWidget {
   });
 
   @override
-  State<PantallaResenasLocales> createState() =>
-      _PantallaResenasLocalesState();
+  State<PantallaResenasLocales> createState() => _PantallaResenasLocalesState();
 }
 
 class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
@@ -79,21 +78,21 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
     }
     final sb = ServicioSupabase().cliente;
     try {
-      // 1. Reseñas + perfil del autor (JOIN embebido)
-      final res = await sb
-          .from('reviews_locales')
-          .select(
-              'id_review, id_usuario, estrellas, comentario, fecha_creacion, '
-              'perfiles_usuarios:id_usuario(username, nombre, foto_perfil_url)')
-          .eq('id_local', widget.idLocal!)
-          .order('fecha_creacion', ascending: false);
+      final res = await sb.rpc(
+        'resenas_local_listar',
+        params: {'p_id_local': widget.idLocal!},
+      );
       final lista = List<Map<String, dynamic>>.from(res as List);
 
       final mis = _userId == null
           ? <Map<String, dynamic>>[]
           : lista
-              .where((r) => r['id_usuario']?.toString() == _userId)
-              .toList();
+                .where(
+                  (r) =>
+                      r['es_mia'] == true ||
+                      r['id_usuario']?.toString() == _userId,
+                )
+                .toList();
 
       if (!mounted) return;
       setState(() {
@@ -121,11 +120,14 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
     _focusComentario.unfocus();
     final sb = ServicioSupabase().cliente;
     try {
-      final resp = await sb.rpc('publicar_resena', params: {
-        'p_id_local': widget.idLocal,
-        'p_estrellas': _misEstrellas,
-        'p_comentario': _textoController.text.trim(),
-      });
+      final resp = await sb.rpc(
+        'publicar_resena',
+        params: {
+          'p_id_local': widget.idLocal,
+          'p_estrellas': _misEstrellas,
+          'p_comentario': _textoController.text.trim(),
+        },
+      );
       debugPrint('✅ publicar_resena resp: $resp');
       HapticFeedback.mediumImpact();
       if (!mounted) return;
@@ -138,7 +140,9 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
       await _cargar();
       if (mounted) _mostrarDialogoExito();
     } on PostgrestException catch (e) {
-      debugPrint('⚠️ publicar_resena PostgrestException: ${e.code} ${e.message}');
+      debugPrint(
+        '⚠️ publicar_resena PostgrestException: ${e.code} ${e.message}',
+      );
       if (!mounted) return;
       setState(() => _enviando = false);
       _mostrarError(_mensajeError(e.message));
@@ -160,12 +164,16 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
       return 'Ya publicaste varias reseñas hoy. Volvé a intentar en unas horas (máximo 5 por día).';
     }
     if (s.contains('invalid_stars')) return 'Elegí una calificación de 1 a 5.';
-    if (s.contains('comment_too_long')) return 'El comentario es muy largo (máx 500 caracteres).';
-    if (s.contains('local_not_found')) return 'Este local ya no está disponible.';
+    if (s.contains('comment_too_long'))
+      return 'El comentario es muy largo (máx 500 caracteres).';
+    if (s.contains('local_not_found'))
+      return 'Este local ya no está disponible.';
     if (s.contains('duplicate_review')) {
       return 'No pudimos publicar: parece un duplicado. Probá de nuevo en unos segundos.';
     }
-    if (s.contains('network') || s.contains('socket') || s.contains('timeout')) {
+    if (s.contains('network') ||
+        s.contains('socket') ||
+        s.contains('timeout')) {
       return 'Sin conexión. Revisá tu internet e intentá de nuevo.';
     }
     return 'No pudimos publicar tu reseña. Intentá de nuevo en unos momentos.';
@@ -176,7 +184,10 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
     showCupertinoDialog<void>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        content: Padding(padding: const EdgeInsets.only(top: 8), child: Text(msg)),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(msg),
+        ),
         actions: [
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -213,13 +224,16 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Color.lerp(ColoresApp.fondoSuperficie,
-                          ColoresApp.principalMarca, 0.12)!,
+                      Color.lerp(
+                        ColoresApp.fondoSuperficie,
+                        ColoresApp.principalMarca,
+                        0.12,
+                      )!,
                       ColoresApp.fondoSuperficie,
                     ],
                   ),
                   borderRadius: BorderRadius.circular(24),
-                                    boxShadow: [
+                  boxShadow: [
                     BoxShadow(
                       color: ColoresApp.principalMarca.withOpacity(0.35),
                       blurRadius: 36,
@@ -251,15 +265,20 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: ColoresApp.principalMarca.withOpacity(0.55),
+                              color: ColoresApp.principalMarca.withOpacity(
+                                0.55,
+                              ),
                               blurRadius: 14,
                               spreadRadius: 1,
                             ),
                           ],
                         ),
                         alignment: Alignment.center,
-                        child: const Icon(CupertinoIcons.star_fill,
-                            size: 30, color: Colors.black),
+                        child: const Icon(
+                          CupertinoIcons.star_fill,
+                          size: 30,
+                          color: Colors.black,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -318,8 +337,11 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(CupertinoIcons.exclamationmark_triangle_fill,
-                color: ColoresApp.peligroMarca, size: 18),
+            Icon(
+              CupertinoIcons.exclamationmark_triangle_fill,
+              color: ColoresApp.peligroMarca,
+              size: 18,
+            ),
             const SizedBox(width: 6),
             const Text('No se pudo publicar'),
           ],
@@ -405,16 +427,13 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
                             SliverPadding(
                               padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
                               sliver: SliverList(
-                                delegate: SliverChildBuilderDelegate(
-                                  (ctx, i) {
-                                    final r = _resenasDeOtros[i];
-                                    return Padding(
-                                      padding: const EdgeInsets.only(bottom: 12),
-                                      child: _CardResena(resena: r),
-                                    );
-                                  },
-                                  childCount: _resenasDeOtros.length,
-                                ),
+                                delegate: SliverChildBuilderDelegate((ctx, i) {
+                                  final r = _resenasDeOtros[i];
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _CardResena(resena: r),
+                                  );
+                                }, childCount: _resenasDeOtros.length),
                               ),
                             ),
                         ],
@@ -439,7 +458,7 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
           decoration: BoxDecoration(
             color: ColoresApp.principalMarca.withOpacity(0.14),
             borderRadius: BorderRadius.circular(14),
-                      ),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -474,12 +493,15 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
           end: Alignment.bottomRight,
           colors: [
             ColoresApp.fondoSuperficie,
-            Color.lerp(ColoresApp.fondoSuperficie,
-                ColoresApp.principalMarca, 0.12)!,
+            Color.lerp(
+              ColoresApp.fondoSuperficie,
+              ColoresApp.principalMarca,
+              0.12,
+            )!,
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-                boxShadow: [
+        boxShadow: [
           BoxShadow(
             color: ColoresApp.principalMarca.withOpacity(0.12),
             blurRadius: 18,
@@ -492,8 +514,11 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
         children: [
           Row(
             children: [
-              Icon(CupertinoIcons.star_fill,
-                  size: 18, color: ColoresApp.principalMarca),
+              Icon(
+                CupertinoIcons.star_fill,
+                size: 18,
+                color: ColoresApp.principalMarca,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -545,7 +570,7 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
             decoration: BoxDecoration(
               color: ColoresApp.fondoPrincipal.withOpacity(0.6),
               borderRadius: BorderRadius.circular(12),
-                          ),
+            ),
             child: CupertinoTextField(
               controller: _textoController,
               focusNode: _focusComentario,
@@ -581,7 +606,10 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: FernecitoLoader.inline(size: 16, color: Colors.black),
+                      child: FernecitoLoader.inline(
+                        size: 16,
+                        color: Colors.black,
+                      ),
                     )
                   : Text(
                       _misEstrellas > 0 ? 'Publicar reseña' : 'Elegí estrellas',
@@ -606,8 +634,11 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
         children: [
           Row(
             children: [
-              Icon(CupertinoIcons.checkmark_seal_fill,
-                  size: 16, color: ColoresApp.principalMarca),
+              Icon(
+                CupertinoIcons.checkmark_seal_fill,
+                size: 16,
+                color: ColoresApp.principalMarca,
+              ),
               const SizedBox(width: 6),
               Text(
                 _misResenas.length == 1
@@ -631,13 +662,16 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Color.lerp(ColoresApp.fondoSuperficie,
-                          ColoresApp.principalMarca, 0.15)!,
+                      Color.lerp(
+                        ColoresApp.fondoSuperficie,
+                        ColoresApp.principalMarca,
+                        0.15,
+                      )!,
                       ColoresApp.fondoSuperficie,
                     ],
                   ),
                   borderRadius: BorderRadius.circular(18),
-                                  ),
+                ),
                 child: _CardResenaInner(resena: r, sinBorde: true),
               ),
             );
@@ -678,13 +712,18 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
 
   Widget _buildEmptyOtros() {
     final soloMias =
-        _resenas.isNotEmpty && _resenasDeOtros.isEmpty && _misResenas.isNotEmpty;
+        _resenas.isNotEmpty &&
+        _resenasDeOtros.isEmpty &&
+        _misResenas.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
       child: Column(
         children: [
-          Icon(CupertinoIcons.bubble_left,
-              size: 48, color: ColoresApp.textoSecundario.withOpacity(0.4)),
+          Icon(
+            CupertinoIcons.bubble_left,
+            size: 48,
+            color: ColoresApp.textoSecundario.withOpacity(0.4),
+          ),
           const SizedBox(height: 12),
           Text(
             soloMias
@@ -748,8 +787,11 @@ class _AppBarLocal extends StatelessWidget {
             padding: const EdgeInsets.all(8),
             minimumSize: const Size(36, 36),
             onPressed: () => Navigator.of(context).maybePop(),
-            child: Icon(CupertinoIcons.chevron_back,
-                size: 22, color: ColoresApp.textoPrincipal),
+            child: Icon(
+              CupertinoIcons.chevron_back,
+              size: 22,
+              color: ColoresApp.textoPrincipal,
+            ),
           ),
           Expanded(
             child: Column(
@@ -805,9 +847,7 @@ class _SelectorEstrellas extends StatelessWidget {
               duration: const Duration(milliseconds: 140),
               scale: llena ? 1.0 : 0.92,
               child: Icon(
-                llena
-                    ? CupertinoIcons.star_fill
-                    : CupertinoIcons.star,
+                llena ? CupertinoIcons.star_fill : CupertinoIcons.star,
                 size: 36,
                 color: llena
                     ? const Color(0xFFFFC107)
@@ -840,7 +880,7 @@ class _CardResena extends StatelessWidget {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withOpacity(0.78),
         borderRadius: BorderRadius.circular(16),
-              ),
+      ),
       child: _CardResenaInner(resena: resena),
     );
   }
@@ -861,14 +901,14 @@ class _CardResenaInner extends StatelessWidget {
     final fotoUrl = (fotoPath == null || fotoPath.isEmpty)
         ? ''
         : (fotoPath.startsWith('http')
-            ? fotoPath
-            : ServicioSupabase()
-                .cliente
-                .storage
-                .from('avatars')
-                .getPublicUrl(fotoPath));
+              ? fotoPath
+              : ServicioSupabase().cliente.storage
+                    .from('avatars')
+                    .getPublicUrl(fotoPath));
     final estrellas =
-        (resena['estrellas'] as int?) ?? int.tryParse(resena['estrellas']?.toString() ?? '') ?? 0;
+        (resena['estrellas'] as int?) ??
+        int.tryParse(resena['estrellas']?.toString() ?? '') ??
+        0;
     final comentario = resena['comentario']?.toString() ?? '';
     final fecha = _formatearFecha(resena['fecha_creacion']?.toString());
 
@@ -877,10 +917,7 @@ class _CardResenaInner extends StatelessWidget {
       children: [
         Row(
           children: [
-            AvatarUsuario(
-              size: 38,
-              avatar: fotoUrl,
-            ),
+            AvatarUsuario(size: 38, avatar: fotoUrl),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -951,8 +988,18 @@ class _CardResenaInner extends StatelessWidget {
       final diff = ahora.difference(dt);
       if (diff.inDays >= 30) {
         const meses = [
-          'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-          'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
+          'Ene',
+          'Feb',
+          'Mar',
+          'Abr',
+          'May',
+          'Jun',
+          'Jul',
+          'Ago',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dic',
         ];
         return '${dt.day} ${meses[dt.month - 1]} ${dt.year}';
       }

@@ -1,8 +1,6 @@
 /// Banner hero para perfiles de usuario (más bajo que el de locales).
 library;
 
-import 'dart:ui';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors;
@@ -145,16 +143,8 @@ class _IconoRedBannerState extends State<_IconoRedBanner> {
           child: Opacity(
             opacity: 0.25,
             child: widget.useFontAwesome
-                ? FaIcon(
-                    widget.icon,
-                    size: widget.size,
-                    color: Colors.white,
-                  )
-                : Icon(
-                    widget.icon,
-                    size: widget.size,
-                    color: Colors.white,
-                  ),
+                ? FaIcon(widget.icon, size: widget.size, color: Colors.white)
+                : Icon(widget.icon, size: widget.size, color: Colors.white),
           ),
         ),
       );
@@ -192,16 +182,8 @@ class _IconoRedBannerState extends State<_IconoRedBanner> {
                 ],
               ),
               child: widget.useFontAwesome
-                  ? FaIcon(
-                      widget.icon,
-                      size: widget.size,
-                      color: Colors.white,
-                    )
-                  : Icon(
-                      widget.icon,
-                      size: widget.size,
-                      color: Colors.white,
-                    ),
+                  ? FaIcon(widget.icon, size: widget.size, color: Colors.white)
+                  : Icon(widget.icon, size: widget.size, color: Colors.white),
             ),
           ),
         ),
@@ -239,31 +221,8 @@ class BannerPerfilUsuario extends StatelessWidget {
 
   static bool _esAsset(String url) => url.startsWith('assets/');
 
-  Widget _fondoReserva(String urlBlur) {
-    if (urlBlur.isNotEmpty && !_esAsset(urlBlur)) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          const ColoredBox(color: ColoresApp.fondoPrincipal),
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36),
-            child: Opacity(
-              opacity: 0.5,
-              child: CachedNetworkImage(
-                imageUrl: urlBlur,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                placeholder: (_, __) => const SizedBox.expand(),
-                errorWidget: (_, __, ___) => const SizedBox.shrink(),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-    return const ColoredBox(color: ColoresApp.fondoPrincipal);
-  }
+  Widget _fondoReserva(String _) =>
+      const ColoredBox(color: ColoresApp.fondoPrincipal);
 
   @override
   Widget build(BuildContext context) {
@@ -306,23 +265,19 @@ class BannerPerfilUsuario extends StatelessWidget {
                   fondo.isEmpty
                       ? _fondoReserva('')
                       : _esAsset(fondo)
-                          ? Image.asset(
-                              fondo,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => _fondoReserva(''),
-                            )
-                          : CachedNetworkImage(
-                              imageUrl: fondo,
-                              fit: BoxFit.cover,
-                              fadeInDuration: const Duration(
-                                milliseconds: 280,
-                              ),
-                              placeholder: (_, __) => _fondoReserva(fondo),
-                              errorWidget: (_, __, ___) => _fondoReserva(fondo),
-                            ),
-                  Container(
-                    color: Colors.black.withValues(alpha: 0.58),
-                  ),
+                      ? Image.asset(
+                          fondo,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _fondoReserva(''),
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: fondo,
+                          fit: BoxFit.cover,
+                          fadeInDuration: const Duration(milliseconds: 220),
+                          placeholder: (_, __) => _fondoReserva(fondo),
+                          errorWidget: (_, __, ___) => _fondoReserva(fondo),
+                        ),
+                  Container(color: Colors.black.withValues(alpha: 0.58)),
                 ],
               ),
             ),

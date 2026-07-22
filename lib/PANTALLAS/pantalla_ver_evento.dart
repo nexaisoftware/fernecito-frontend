@@ -9,9 +9,9 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../core/constants.dart';
 import '../core/flujo_reporte.dart';
+import '../core/lanzador_externo.dart';
 import '../core/servicio_actividad_usuario.dart';
 import '../core/servicio_impresiones.dart';
 import '../core/servicio_squads.dart';
@@ -26,8 +26,6 @@ import 'pantalla_pools.dart';
 /// Fallback propio de marca cuando un local o evento no tiene imagen cargada.
 const String _assetMarcaDefault = 'assets/imagenes/logoiconapp.png';
 const String _logoLocalDefault = _assetMarcaDefault;
-
-bool _avatarUrlEsAsset(String url) => url.startsWith('assets/');
 
 class PantallaVerEvento extends StatefulWidget {
   final Map<String, dynamic> evento;
@@ -96,7 +94,9 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _registrarClickImpresion());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _registrarClickImpresion(),
+    );
     _cargarDatos();
     _authSub = ServicioSupabase().cliente.auth.onAuthStateChange.listen((data) {
       if (!mounted) return;
@@ -565,7 +565,9 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                                       placeholder: (_, __) => Container(
                                         color: ColoresApp.fondoSuperficie,
                                         child: const Center(
-                                          child: FernecitoLoader.inline(size: 16),
+                                          child: FernecitoLoader.inline(
+                                            size: 16,
+                                          ),
                                         ),
                                       ),
                                       errorWidget: (_, __, ___) => Image.asset(
@@ -1084,7 +1086,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                     ],
                   ),
                   borderRadius: BorderRadius.circular(26),
-                                    boxShadow: [
+                  boxShadow: [
                     BoxShadow(
                       color: ColoresApp.principalMarca.withOpacity(0.35),
                       blurRadius: 40,
@@ -1269,7 +1271,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                 decoration: BoxDecoration(
                   color: ColoresApp.fondoSuperficie,
                   borderRadius: BorderRadius.circular(24),
-                                    boxShadow: [
+                  boxShadow: [
                     BoxShadow(
                       color: color.withOpacity(0.35),
                       blurRadius: 32,
@@ -1387,7 +1389,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                 decoration: BoxDecoration(
                   color: ColoresApp.fondoSuperficie.withValues(alpha: 0.62),
                   borderRadius: BorderRadius.circular(20),
-                                  ),
+                ),
                 child: Column(
                   children: [
                     Icon(
@@ -1460,7 +1462,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
       return;
     }
     try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final ok = await lanzarExternoConFallback(uri);
       if (!ok) throw Exception('No se pudo abrir');
     } catch (_) {
       if (mounted) {
@@ -1623,7 +1625,7 @@ class _TarjetaInfoEvento extends StatelessWidget {
               decoration: BoxDecoration(
                 color: ColoresApp.flashPromo.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(12),
-                              ),
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1676,7 +1678,7 @@ class _ChipInfo extends StatelessWidget {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie.withOpacity(0.7),
         borderRadius: BorderRadius.circular(50),
-              ),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1731,24 +1733,34 @@ class _TarjetaReservaYPromos extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.all(20),
         decoration: SuperficiesApp.card(radius: 20, temaTint: 0.2),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              CupertinoIcons.info_circle_fill,
-              size: 22,
-              color: ColoresApp.textoSecundario,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'El local no fijó reservas para este evento.',
-                style: GoogleFonts.baloo2(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+            Row(
+              children: [
+                Icon(
+                  CupertinoIcons.info_circle_fill,
+                  size: 22,
                   color: ColoresApp.textoSecundario,
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'El local no fijó reservas para este evento.',
+                    style: GoogleFonts.baloo2(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: ColoresApp.textoSecundario,
+                    ),
+                  ),
+                ),
+              ],
             ),
+            if (onComprarEntradas != null) ...[
+              const SizedBox(height: 14),
+              _botonComprarEntradas(),
+            ],
           ],
         ),
       );
@@ -1867,7 +1879,10 @@ class _TarjetaReservaYPromos extends StatelessWidget {
           if (puedeReservarDeNuevo && esPaseLibre && !esModoInvitacion) ...[
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: ColoresApp.principalMarca.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
@@ -1924,7 +1939,10 @@ class _TarjetaReservaYPromos extends StatelessWidget {
                       const SizedBox(
                         width: 18,
                         height: 18,
-                        child: FernecitoLoader.inline(size: 16, color: Colors.white),
+                        child: FernecitoLoader.inline(
+                          size: 16,
+                          color: Colors.white,
+                        ),
                       )
                     else
                       const Icon(
@@ -2006,46 +2024,50 @@ class _TarjetaReservaYPromos extends StatelessWidget {
           ],
           if (onComprarEntradas != null) ...[
             const SizedBox(height: 12),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: onComprarEntradas,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: ColoresApp.fondoPrincipal.withOpacity(0.55),
-                  borderRadius: BorderRadius.circular(50),
-                                  ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      CupertinoIcons.cart_fill,
-                      size: 17,
-                      color: ColoresApp.principalMarca,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Comprar entrada',
-                      style: GoogleFonts.baloo2(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                        color: ColoresApp.textoPrincipal,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Icon(
-                      CupertinoIcons.arrow_up_right_square,
-                      size: 14,
-                      color: ColoresApp.textoSecundario,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            _botonComprarEntradas(),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _botonComprarEntradas() {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: onComprarEntradas,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: ColoresApp.fondoPrincipal.withOpacity(0.55),
+          borderRadius: BorderRadius.circular(50),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              CupertinoIcons.cart_fill,
+              size: 17,
+              color: ColoresApp.principalMarca,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Comprar entrada',
+              style: GoogleFonts.baloo2(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w800,
+                color: ColoresApp.textoPrincipal,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              CupertinoIcons.arrow_up_right_square,
+              size: 14,
+              color: ColoresApp.textoSecundario,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2127,7 +2149,7 @@ class _BotonPoolsEvento extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: ColoresApp.principalMarca.withValues(alpha: 0.15),
-                              ),
+              ),
               child: Icon(
                 CupertinoIcons.person_2_fill,
                 size: 22,
@@ -2307,7 +2329,7 @@ class _BottomSheetReservaListaState extends State<_BottomSheetReservaLista> {
                     decoration: BoxDecoration(
                       color: ColoresApp.fondoPrincipal,
                       borderRadius: BorderRadius.circular(20),
-                                          ),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       mainAxisSize: MainAxisSize.min,
@@ -2359,7 +2381,7 @@ class _BottomSheetReservaListaState extends State<_BottomSheetReservaLista> {
                     decoration: BoxDecoration(
                       color: ColoresApp.flashPromo.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(12),
-                                          ),
+                    ),
                     child: Row(
                       children: [
                         Icon(
@@ -2757,12 +2779,9 @@ class _CardLocalDetalle extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              tema.withValues(alpha: 0.20),
-              ColoresApp.fondoSuperficie,
-            ],
+            colors: [tema.withValues(alpha: 0.20), ColoresApp.fondoSuperficie],
           ),
-                    boxShadow: [
+          boxShadow: [
             BoxShadow(
               color: tema.withValues(alpha: 0.14),
               blurRadius: 18,
@@ -2921,7 +2940,7 @@ class _ChipEstadoLocal extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(50),
-              ),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -3049,7 +3068,7 @@ class _OverlayCargando extends StatelessWidget {
       decoration: BoxDecoration(
         color: ColoresApp.fondoSuperficie,
         borderRadius: BorderRadius.circular(18),
-                boxShadow: [
+        boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.4),
             blurRadius: 24,
@@ -3060,11 +3079,7 @@ class _OverlayCargando extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const FernecitoLoader(
-            size: 28,
-            compact: true,
-            circular: true,
-          ),
+          const FernecitoLoader(size: 28, compact: true, circular: true),
           const SizedBox(height: 14),
           Text(
             mensaje,
@@ -3262,7 +3277,7 @@ class _BannerInvitacionRrpp extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-              ),
+      ),
       child: Row(
         children: [
           Container(

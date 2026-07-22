@@ -219,49 +219,55 @@ class _IconoMapaCarteleraAnimadoState extends State<IconoMapaCarteleraAnimado>
 
   Widget build(BuildContext context) {
 
+    final icono = ValueListenableBuilder<Color>(
+
+      valueListenable: TemaFernecito.instancia.colorActual,
+
+      builder: (context, accent, _) {
+
+        return ScaleTransition(
+
+          scale: _scale,
+
+          child: Icon(
+
+            CupertinoIcons.map,
+
+            size: widget.size,
+
+            color: accent,
+
+            shadows: [
+
+              Shadow(
+
+                color: accent.withValues(alpha: 0.35),
+
+                blurRadius: 10,
+
+              ),
+
+            ],
+
+          ),
+
+        );
+
+      },
+
+    );
+
+    final onTap = widget.onTap;
+
+    if (onTap == null) return icono;
+
     return GestureDetector(
 
-      onTap: widget.onTap,
+      onTap: onTap,
 
       behavior: HitTestBehavior.opaque,
 
-      child: ValueListenableBuilder<Color>(
-
-        valueListenable: TemaFernecito.instancia.colorActual,
-
-        builder: (context, accent, _) {
-
-          return ScaleTransition(
-
-            scale: _scale,
-
-            child: Icon(
-
-              CupertinoIcons.map,
-
-              size: widget.size,
-
-              color: accent,
-
-              shadows: [
-
-                Shadow(
-
-                  color: accent.withValues(alpha: 0.35),
-
-                  blurRadius: 10,
-
-                ),
-
-              ],
-
-            ),
-
-          );
-
-        },
-
-      ),
+      child: icono,
 
     );
 

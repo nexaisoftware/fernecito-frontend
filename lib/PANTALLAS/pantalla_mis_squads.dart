@@ -15,6 +15,7 @@ import '../core/supabase_client.dart';
 import '../models/social.dart';
 import '../widgets/burbuja_estado.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
+import '../widgets/filtro_ubicaciones_sheet.dart';
 import '../widgets/perfil_squad_ui.dart';
 import '../widgets/sheet_invitar_miembros_squad.dart';
 import '../widgets/social_ui.dart';
@@ -24,10 +25,7 @@ import '../widgets/fernecito_loader.dart';
 class PantallaMisSquads extends StatefulWidget {
   final Map<String, dynamic> squad;
 
-  const PantallaMisSquads({
-    super.key,
-    required this.squad,
-  });
+  const PantallaMisSquads({super.key, required this.squad});
 
   @override
   State<PantallaMisSquads> createState() => _PantallaMisSquadsState();
@@ -52,6 +50,7 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
   String _ubicacion = '';
   bool _puedeAdministrar = false;
   bool _soyMiembroAceptado = false;
+  bool _soyLider = false;
   List<MiembroSquad> _pendientes = const [];
   bool _cargando = true;
   bool _subiendoBanner = false;
@@ -63,19 +62,22 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
   @override
   void initState() {
     super.initState();
-    _idGrupo = (widget.squad['id_grupo'] ?? widget.squad['id_squad'])
-            ?.toString() ??
+    _idGrupo =
+        (widget.squad['id_grupo'] ?? widget.squad['id_squad'])?.toString() ??
         '';
     _username = _conArroba(widget.squad['username'] as String? ?? '');
 
     _nombreCtrl = TextEditingController(
-        text: (widget.squad['nombre'] ?? widget.squad['nombre_squad'])
-                as String? ??
-            '');
-    _descripcionCtrl =
-        TextEditingController(text: widget.squad['descripcion'] as String? ?? '');
-    _vibeCtrl =
-        TextEditingController(text: widget.squad['vibe'] as String? ?? '');
+      text:
+          (widget.squad['nombre'] ?? widget.squad['nombre_squad']) as String? ??
+          '',
+    );
+    _descripcionCtrl = TextEditingController(
+      text: widget.squad['descripcion'] as String? ?? '',
+    );
+    _vibeCtrl = TextEditingController(
+      text: widget.squad['vibe'] as String? ?? '',
+    );
 
     _cargarDatos();
   }
@@ -105,14 +107,23 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
       _mostrarError('No se pudo cargar el squad.');
       return;
     }
-    final pendientes = detalle.puedeAdministrar(ServicioSupabase().usuarioActual?.id)
+    final pendientes =
+        detalle.puedeAdministrar(ServicioSupabase().usuarioActual?.id)
         ? await _srv.listarPendientes(_idGrupo)
         : const <MiembroSquad>[];
     if (!mounted) return;
 
     var ubicacion = '';
-    if (detalle.miembros.isNotEmpty) {
-      final lider = detalle.miembros.where((m) => m.esLider).firstOrNull ??
+    final cSquad = (detalle.ciudad ?? '').trim();
+    final pSquad = (detalle.provincia ?? '').trim();
+    if (cSquad.isNotEmpty && pSquad.isNotEmpty) {
+      ubicacion = '$cSquad, $pSquad';
+    } else if (cSquad.isNotEmpty) {
+      ubicacion = cSquad;
+    }
+    if (ubicacion.isEmpty && detalle.miembros.isNotEmpty) {
+      final lider =
+          detalle.miembros.where((m) => m.esLider).firstOrNull ??
           detalle.miembros.first;
       final perf = await _srvPerfil.detalle(lider.idUsuario);
       if (perf != null) {
@@ -131,9 +142,11 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
     setState(() {
       _miembros = detalle.miembros;
       _idsAmigos = amistades.amigos.map((a) => a.idUsuario).toSet();
-      _puedeAdministrar =
-          detalle.puedeAdministrar(ServicioSupabase().usuarioActual?.id);
+      _puedeAdministrar = detalle.puedeAdministrar(
+        ServicioSupabase().usuarioActual?.id,
+      );
       _soyMiembroAceptado = detalle.soyMiembroAceptado;
+      _soyLider = detalle.soyLider;
       _pendientes = pendientes;
       _bannerUrl = detalle.portadaUrl;
       _bannerCacheKey = detalle.portadaCacheKey;
@@ -161,6 +174,29 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
   }
 
   // ─────────────────────────── WRITE OPERATIONS ────────────────────────────
+
+  Future<void> _editarUbicacionSquad() async {
+    if (!_soyMiembroAceptado) return;
+    final detalle = await _srv.detalle(_idGrupo);
+    if (!mounted || detalle == null) return;
+    final res = await mostrarSelectorUbicacionPerfil(
+      context,
+      provinciaActual: detalle.provincia ?? '',
+      ciudadActual: detalle.ciudad ?? '',
+    );
+    if (res == null || !mounted) return;
+    final ok = await _srv.setUbicacion(
+      _idGrupo,
+      ciudad: res.ciudad,
+      provincia: res.provincia,
+    );
+    if (!mounted) return;
+    if (ok) {
+      await _cargarDatos();
+    } else {
+      _mostrarError('No se pudo actualizar la ubicación del squad.');
+    }
+  }
 
   Future<void> _guardarNombre() async {
     final valor = _nombreCtrl.text.trim();
@@ -257,7 +293,8 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Eliminar squad'),
         content: const Text(
-            '¿Estás seguro? Esta acción no se puede deshacer y eliminará el squad para todos.'),
+          '¿Estás seguro? Esta acción no se puede deshacer y eliminará el squad para todos.',
+        ),
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -277,6 +314,40 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
       if (mounted) Navigator.of(context).pop(true);
     } else if (mounted) {
       _mostrarError('No se pudo eliminar el squad.');
+    }
+  }
+
+  Future<void> _salirSquad() async {
+    final esUltimoMiembro = _miembros.length <= 1;
+    final mensaje = _soyLider
+        ? esUltimoMiembro
+              ? 'Sos el último miembro. Si salís, el squad se eliminará.'
+              : 'Sos líder. Si salís, Fernecito pasará el liderazgo automáticamente a otro miembro para que el squad siga activo.'
+        : 'Vas a dejar de formar parte de este squad.';
+    final confirmado = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Salir del squad'),
+        content: Text(mensaje),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
+    final ok = await _srv.salir(_idGrupo);
+    if (ok) {
+      if (mounted) Navigator.of(context).pop(true);
+    } else if (mounted) {
+      _mostrarError('No se pudo salir del squad.');
     }
   }
 
@@ -336,7 +407,9 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
                 Text(
                   'Tomar foto',
                   style: GoogleFonts.baloo2(
-                      fontSize: 16, color: ColoresApp.principalMarca),
+                    fontSize: 16,
+                    color: ColoresApp.principalMarca,
+                  ),
                 ),
               ],
             ),
@@ -354,7 +427,9 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
                 Text(
                   'Subir desde galería',
                   style: GoogleFonts.baloo2(
-                      fontSize: 16, color: ColoresApp.principalMarca),
+                    fontSize: 16,
+                    color: ColoresApp.principalMarca,
+                  ),
                 ),
               ],
             ),
@@ -406,14 +481,16 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
 
   Future<void> _confirmarQuitarMiembro(MiembroSquad m) async {
     final username = '@${m.username}';
-    final nombreSquad =
-        _nombreCtrl.text.trim().isEmpty ? 'Mi squad' : _nombreCtrl.text.trim();
+    final nombreSquad = _nombreCtrl.text.trim().isEmpty
+        ? 'Mi squad'
+        : _nombreCtrl.text.trim();
     final confirmado = await showCupertinoDialog<bool>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text('Quitar miembro'),
-        content:
-            Text('¿Estás seguro que deseas eliminar a $username de $nombreSquad?'),
+        content: Text(
+          '¿Estás seguro que deseas eliminar a $username de $nombreSquad?',
+        ),
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -454,7 +531,10 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
     }
   }
 
-  Future<void> _aprobarPendiente(String idUsuario, {required bool aceptar}) async {
+  Future<void> _aprobarPendiente(
+    String idUsuario, {
+    required bool aceptar,
+  }) async {
     final ok = await _srv.aprobarMiembro(_idGrupo, idUsuario, aceptar: aceptar);
     if (ok) {
       await _cargarDatos();
@@ -518,7 +598,10 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
             ),
             if (esPedido) ...[
               CupertinoButton(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 color: ColoresApp.principalMarca,
                 borderRadius: BorderRadius.circular(50),
                 onPressed: () => _aprobarPendiente(p.idUsuario, aceptar: true),
@@ -533,7 +616,10 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
               ),
               const SizedBox(width: 6),
               CupertinoButton(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 onPressed: () => _aprobarPendiente(p.idUsuario, aceptar: false),
                 child: Text(
                   'Rechazar',
@@ -546,7 +632,10 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
               ),
             ] else
               CupertinoButton(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 onPressed: () => _cancelarInvitacion(p.idUsuario),
                 child: Text(
                   'Cancelar',
@@ -611,7 +700,9 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
       );
     }
     return GestureDetector(
-      onTap: _soyMiembroAceptado ? () => setState(() => _editNombre = true) : null,
+      onTap: _soyMiembroAceptado
+          ? () => setState(() => _editNombre = true)
+          : null,
       child: SquadTituloHero(
         texto: _nombreCtrl.text.trim().isEmpty
             ? 'Nombre del squad'
@@ -691,7 +782,9 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
       );
     }
     return GestureDetector(
-      onTap: _soyMiembroAceptado ? () => setState(() => _editVibe = true) : null,
+      onTap: _soyMiembroAceptado
+          ? () => setState(() => _editVibe = true)
+          : null,
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: MediaQuery.sizeOf(context).width * 0.88,
@@ -717,14 +810,16 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
             autofocus: true,
             placeholder: 'De qué va tu squad...',
             style: GoogleFonts.baloo2(
-              fontSize: 13,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
               color: ColoresApp.textoPrincipal,
+              height: 1.32,
             ),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: ColoresApp.fondoPrincipal.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(12),
-                          ),
+            ),
           ),
           const SizedBox(height: 8),
           CupertinoButton(
@@ -753,14 +848,12 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
           ? () => setState(() => _editDescripcion = true)
           : null,
       child: Text(
-        txt.isEmpty
-            ? 'Tocá para describir tu squad.'
-            : txt,
+        txt.isEmpty ? 'Tocá para describir tu squad.' : txt,
         style: GoogleFonts.baloo2(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: ColoresApp.textoSecundario,
-          height: 1.4,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: ColoresApp.textoPrincipal,
+          height: 1.32,
         ),
       ),
     );
@@ -771,9 +864,7 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
       onTap: () => _confirmarQuitarMiembro(m),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(50),
-                  ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(50)),
         child: Text(
           'Quitar',
           style: GoogleFonts.baloo2(
@@ -813,7 +904,9 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
                 imageUrl: _bannerUrl,
                 imageCacheKey: _bannerCacheKey,
                 subiendo: _subiendoBanner,
-                onBannerTap: _soyMiembroAceptado ? _mostrarOpcionesBanner : null,
+                onBannerTap: _soyMiembroAceptado
+                    ? _mostrarOpcionesBanner
+                    : null,
                 topBar: SquadBotonVolver(
                   onTap: () => Navigator.of(context).pop(),
                   trailing: _soyMiembroAceptado
@@ -869,7 +962,11 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
                         : null,
                   ),
                   const SizedBox(height: 10),
-                  SquadBadgeUbicacion(ubicacion: _ubicacion),
+                  SquadBadgeUbicacion(
+                    ubicacion: _ubicacion,
+                    editable: _soyMiembroAceptado,
+                    onTap: _editarUbicacionSquad,
+                  ),
                   if (_puedeAdministrar && _pendientes.isNotEmpty) ...[
                     const SizedBox(height: 18),
                     Text(
@@ -910,6 +1007,34 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
                         ],
                       ),
                     ),
+                  if (_soyMiembroAceptado) ...[
+                    const SizedBox(height: 12),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      borderRadius: BorderRadius.circular(18),
+                      color: ColoresApp.fondoSuperficie.withValues(alpha: 0.38),
+                      onPressed: _salirSquad,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            CupertinoIcons.escape,
+                            size: 18,
+                            color: ColoresApp.peligroMarca,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Salir del squad',
+                            style: GoogleFonts.baloo2(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: ColoresApp.peligroMarca,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (_puedeAdministrar) ...[
                     const SizedBox(height: 12),
                     CupertinoButton(

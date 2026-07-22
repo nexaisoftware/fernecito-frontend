@@ -39,6 +39,10 @@ import '../core/servicio_perfil_usuario.dart';
 import '../core/navegacion_evento_compartido.dart';
 import '../core/servicio_enlace_evento.dart';
 import '../core/supabase_client.dart';
+import '../core/coordenadas_ciudades.dart';
+import '../core/servicio_ubicacion_global.dart';
+import '../core/preferencias_cartelera.dart';
+import '../core/servicio_ubicacion_dispositivo.dart';
 import '../core/tema_fernecito.dart';
 import '../core/ubicaciones_data.dart';
 import '../widgets/avatar_local.dart';
@@ -50,6 +54,7 @@ import '../widgets/filtro_ubicaciones_sheet.dart';
 import '../widgets/modal_resena_post_visita.dart';
 import '../widgets/splash_carga_fernecito.dart';
 import '../widgets/spotlight_search_bar.dart';
+import '../widgets/busqueda_ia_sheet.dart';
 import '../widgets/top_ultra_stories_overlay.dart';
 import '../widgets/mapa_ui.dart';
 import 'pantalla_actividad.dart';
@@ -108,10 +113,14 @@ double homeTabBarBottomInset(BuildContext context) {
   return (safe * 0.35).clamp(10.0, 14.0);
 }
 
-/// Espacio entre el FAB QR y el borde superior de la navbar.
+/// Espacio entre el pill flotante y el borde superior de la navbar.
 const double kHomeFabGapSobreNav = 14.0;
 
-const double kHomeFabQrSize = 52.0;
+/// Ancho del pill vertical (mapa + QR).
+const double kHomeFabPillWidth = 52.0;
+
+/// Alto del pill: dos zonas táctiles compactas.
+const double kHomeFabPillHeight = 92.0;
 
 double homeFabBottomOffset(BuildContext context) {
   return kHomeTabBarHeight +
@@ -120,7 +129,7 @@ double homeFabBottomOffset(BuildContext context) {
 }
 
 double homeCarteleraScrollBottomPadding(BuildContext context) {
-  return homeFabBottomOffset(context) + kHomeFabQrSize + 12;
+  return homeFabBottomOffset(context) + kHomeFabPillHeight + 12;
 }
 
 class PantallaHome extends StatefulWidget {
@@ -174,7 +183,9 @@ class _PantallaHomeState extends State<PantallaHome>
 
   @override
   void dispose() {
-    ServicioPerfilUsuario().avatarNavbarUrl.removeListener(_onAvatarNavbarCambio);
+    ServicioPerfilUsuario().avatarNavbarUrl.removeListener(
+      _onAvatarNavbarCambio,
+    );
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -267,9 +278,7 @@ class _PantallaHomeState extends State<PantallaHome>
                 vista: _socialVistaInicial ?? SocialVista.explorar,
               ),
             ),
-            CupertinoTabView(
-              builder: (context) => const _PantallaCartelera(),
-            ),
+            CupertinoTabView(builder: (context) => const _PantallaCartelera()),
             CupertinoTabView(
               builder: (context) => PantallaNotificaciones(
                 reloadTick: _notifsReloadTick,
@@ -340,6 +349,7 @@ class _GlassTabBar extends StatelessWidget {
   static const _dotSize = 5.5;
   static const _dotTop = 5.0;
   static const _tabsVerticalPadding = 10.0;
+
   /// Social y Cartelera un poco más grandes para equilibrar la campana.
   static const _iconBoostSocialCartelera = 1.10;
 
@@ -373,7 +383,9 @@ class _GlassTabBar extends StatelessWidget {
     final iconSizeTab = iconSize * 0.94;
 
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(_topRadius)),
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(_topRadius),
+      ),
       child: SizedBox(
         width: double.infinity,
         height: totalHeight,
@@ -611,7 +623,7 @@ Widget _iconoNotificacionesConBadge(
               decoration: BoxDecoration(
                 color: const Color(0xFFEF4444),
                 borderRadius: BorderRadius.circular(50),
-                              ),
+              ),
               child: Center(
                 child: Text(
                   sinLeer > 99 ? '99+' : '$sinLeer',
@@ -654,8 +666,10 @@ class _TabItem extends StatefulWidget {
   final VoidCallback onTap;
   final double iconSize;
   final Color accentColor;
+
   /// Ícono central (Cartelera) un poco más grande cuando no está activo.
   final bool prominentWhenInactive;
+
   /// Escala al activar distinta a la default (ej. avatar de perfil).
   final double? activeScaleOverride;
 
@@ -692,7 +706,8 @@ class _TabItemState extends State<_TabItem> {
     if (!activo && widget.customIcon != null) {
       return widget.customIcon!;
     }
-    final size = widget.iconSize *
+    final size =
+        widget.iconSize *
         (widget.prominentWhenInactive && !activo ? 1.06 : 1.0);
     return Icon(
       activo ? widget.activeIcon! : widget.icon!,
@@ -711,16 +726,17 @@ class _TabItemState extends State<_TabItem> {
           switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
           transitionBuilder: (child, anim) {
-            final slide = Tween<Offset>(
-              begin: const Offset(0, 0.2),
-              end: Offset.zero,
-            ).animate(
-              CurvedAnimation(
-                parent: anim,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              ),
-            );
+            final slide =
+                Tween<Offset>(
+                  begin: const Offset(0, 0.2),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: anim,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  ),
+                );
             return SlideTransition(
               position: slide,
               child: FadeTransition(opacity: anim, child: child),
@@ -821,6 +837,10 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   String _provinciaActiva = UbicacionesData.provinciaPorDefecto;
   Set<String> _ciudadesActivas = <String>{};
 
+  /// Capa previa al filtro: GPS elige ciudades hardcode ≤20 km.
+  /// La query/filtro de cartelera siguen igual; solo cambia el set de ciudades.
+  bool _carteleraInteligente = false;
+
   // ---- UI ----
   int _seedShuffle = 0;
   bool _verMasNormal = false;
@@ -849,7 +869,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   /// 1. Lee provincia/ciudad del perfil del usuario.
   /// 2. Si faltan → modal obligatorio + bottomsheet (no cierra hasta elegir).
   /// 3. Persiste en perfiles_usuarios.
-  /// 4. Recién ahí inicializa filtros y carga la cartelera.
+  /// 4. Si “cartelera inteligente” estaba activa → resuelve ciudades por GPS
+  ///    (misma lista hardcode) y las usa como set de filtro.
+  /// 5. Recién ahí carga la cartelera (query igual que siempre).
   Future<void> _arrancar() async {
     final ok = await _asegurarUbicacionUsuario();
     if (!ok || !mounted) {
@@ -858,8 +880,53 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       BootstrapCartelera.marcarLista();
       return;
     }
+    await PreferenciasCartelera.instancia.cargar();
+    await _aplicarModoUbicacionAlArrancar();
+    if (!mounted) return;
     setState(() => _ubicacionLista = true);
     await _cargar();
+  }
+
+  /// Capa previa: si el modo inteligente está guardado, intenta GPS y arma el
+  /// set de ciudades hardcode a ≤20 km. Si falla, mantiene la ciudad del perfil.
+  Future<void> _aplicarModoUbicacionAlArrancar() async {
+    final prefs = PreferenciasCartelera.instancia;
+    _carteleraInteligente = prefs.inteligenteActiva;
+    if (!_carteleraInteligente) {
+      if (prefs.ciudadesCustom.isNotEmpty) {
+        _ciudadesActivas = {...prefs.ciudadesCustom};
+        _provinciaActiva = prefs.provinciaCustom ?? _provinciaActiva;
+      }
+      return;
+    }
+
+    try {
+      final gps = await ServicioUbicacionDispositivo.instancia
+          .iniciarDesdeGestoUsuario();
+      if (gps.exito && gps.latitud != null && gps.longitud != null) {
+        final cercanas = CoordenadasCiudades.ciudadesCercanas(
+          latitud: gps.latitud!,
+          longitud: gps.longitud!,
+          radioKm: PreferenciasCartelera.radioKmDefault,
+        );
+        if (cercanas.isNotEmpty) {
+          _ciudadesActivas = cercanas.toSet();
+          _provinciaActiva =
+              CoordenadasCiudades.provinciaDeCiudad(cercanas.first) ??
+              _provinciaActiva;
+          // Guarda el set del radio + la más cercana como principal en el perfil.
+          await ServicioUbicacionGlobal.aplicarInteligente(
+            ciudades: _ciudadesActivas,
+            provincia: _provinciaActiva,
+            principal: cercanas.first,
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ cartelera inteligente al arrancar: $e');
+    }
+    // Fallback: queda la ciudad del perfil (ya seteada en _asegurarUbicacionUsuario).
   }
 
   Future<bool> _asegurarUbicacionUsuario() async {
@@ -905,17 +972,20 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       if (res != null && res.ciudades.isNotEmpty) {
         _provinciaActiva = res.provincia;
         _ciudadesActivas = res.ciudades;
-        // Persistir en perfil (guardamos la primera ciudad como principal)
-        try {
-          await sb
-              .from('perfiles_usuarios')
-              .update({
-                'provincia': res.provincia,
-                'ciudad': res.ciudades.first,
-              })
-              .eq('id', uid);
-        } catch (e) {
-          debugPrint('⚠️ guardar ubicacion perfil falló: $e');
+        _carteleraInteligente = res.carteleraInteligente;
+        // Persistir set local + ciudad principal en el perfil (fuente de verdad).
+        if (res.carteleraInteligente) {
+          await ServicioUbicacionGlobal.aplicarInteligente(
+            ciudades: res.ciudades,
+            provincia: res.provincia,
+            principal: res.ciudadPrincipal,
+          );
+        } else {
+          await ServicioUbicacionGlobal.aplicarManual(
+            provincia: res.provincia,
+            ciudades: res.ciudades,
+            principal: res.ciudadPrincipal,
+          );
         }
         return true;
       }
@@ -1104,8 +1174,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   Future<void> _intentarModalResenaPostVisita() async {
     try {
       debugPrint('[ResenaPostVisita] buscando pendiente…');
-      final pendiente =
-          await ServicioResenaPostVisita.instancia.siguientePendiente();
+      final pendiente = await ServicioResenaPostVisita.instancia
+          .siguientePendiente();
       if (pendiente == null) {
         debugPrint('[ResenaPostVisita] sin pendiente');
         return;
@@ -1413,6 +1483,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       context,
       provinciaActual: _provinciaActiva,
       ciudadesActuales: _ciudadesActivas,
+      carteleraInteligente: _carteleraInteligente,
     );
     // Cartelera estricta: NUNCA quedar sin ciudad. Si el user vacía la selección
     // o cierra sin aplicar, mantenemos el estado anterior.
@@ -1420,21 +1491,22 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       setState(() {
         _provinciaActiva = res.provincia;
         _ciudadesActivas = res.ciudades;
+        _carteleraInteligente = res.carteleraInteligente;
       });
-      // Persistir la ciudad principal en el perfil (la primera seleccionada).
-      final uid = ServicioSupabase().usuarioActual?.id;
-      if (uid != null) {
-        try {
-          await ServicioSupabase().cliente
-              .from('perfiles_usuarios')
-              .update({
-                'provincia': res.provincia,
-                'ciudad': res.ciudades.first,
-              })
-              .eq('id', uid);
-        } catch (e) {
-          debugPrint('⚠️ persistir ubicacion (filtro GPS) falló: $e');
-        }
+
+      // Unifica: guarda el set local + sincroniza la ciudad principal al perfil.
+      if (res.carteleraInteligente) {
+        await ServicioUbicacionGlobal.aplicarInteligente(
+          ciudades: res.ciudades,
+          provincia: res.provincia,
+          principal: res.ciudadPrincipal,
+        );
+      } else {
+        await ServicioUbicacionGlobal.aplicarManual(
+          provincia: res.provincia,
+          ciudades: res.ciudades,
+          principal: res.ciudadPrincipal,
+        );
       }
     }
   }
@@ -1473,15 +1545,24 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     );
   }
 
-  void _abrirCercaTuyo() {
-    Navigator.of(context).push(
+  Future<void> _abrirCercaTuyo() async {
+    final res = await Navigator.of(context).push<ResultadoFiltroUbicacion>(
       CupertinoPageRoute(
         builder: (_) => PantallaMapa(
           provinciaInicial: _provinciaActiva,
           ciudadesIniciales: _ciudadesActivas,
+          carteleraInteligenteInicial: _carteleraInteligente,
         ),
       ),
     );
+    // Mismo filtro que el mapa: al volver sincronizamos chip / ciudades.
+    if (res == null || !mounted) return;
+    if (res.ciudades.isEmpty) return;
+    setState(() {
+      _provinciaActiva = res.provincia;
+      _ciudadesActivas = Set<String>.from(res.ciudades);
+      _carteleraInteligente = res.carteleraInteligente;
+    });
   }
 
   void _irAEvento(String idEvento) {
@@ -1548,8 +1629,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
                 Positioned(
                   right: 16,
                   bottom: homeFabBottomOffset(context),
-                  child: _BotonScannerInvitacion(
-                    onTap: _abrirScannerInvitacion,
+                  child: _PillMapaYQr(
+                    onMapa: _abrirCercaTuyo,
+                    onQr: _abrirScannerInvitacion,
                   ),
                 ),
               ],
@@ -1596,28 +1678,26 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     final localesPop = _localesPopularesFiltrados();
     // El badge de stories solo aparece si hay top_ultra en la(s) ciudad(es)
     // seleccionada(s) — consistente con que las stories ahora filtran por ciudad.
-    final tieneTopUltra = _eventos.where(_coincideCiudad).any(
-      (e) => (e['jerarquia']?.toString() ?? '') == JerarquiasData.topUltra.slug,
-    );
+    final tieneTopUltra = _eventos
+        .where(_coincideCiudad)
+        .any(
+          (e) =>
+              (e['jerarquia']?.toString() ?? '') ==
+              JerarquiasData.topUltra.slug,
+        );
 
     return <Widget>[
       _buildHeader(),
       _buildBarraSpotlight(),
       const SliverPadding(padding: EdgeInsets.only(top: 6)),
-      // Badge Top Ultra (reabre stories) — arriba de la sección TOP
+      // Badge Top Ultra solo si hay stories; el mapa vive en el pill flotante.
       if (tieneTopUltra)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 10, 16, 0),
-            child: Row(
-              children: [
-                TopUltraBadgeCartelera(onTap: _abrirTopUltraStories),
-                const Spacer(),
-                IconoMapaCarteleraAnimado(
-                  size: 24,
-                  onTap: _abrirCercaTuyo,
-                ),
-              ],
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TopUltraBadgeCartelera(onTap: _abrirTopUltraStories),
             ),
           ),
         ),
@@ -1688,11 +1768,13 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   // ---- Header con título + GPS ----
   Widget _buildHeader() {
     final topSafe = MediaQuery.paddingOf(context).top;
-    final ciudadTexto = _ciudadesActivas.isEmpty
-        ? _provinciaActiva
-        : (_ciudadesActivas.length == 1
-              ? _ciudadesActivas.first
-              : '${_ciudadesActivas.length} ciudades');
+    final ciudadTexto = _carteleraInteligente
+        ? 'cerca tuyo'
+        : (_ciudadesActivas.isEmpty
+              ? _provinciaActiva
+              : (_ciudadesActivas.length == 1
+                    ? _ciudadesActivas.first
+                    : '${_ciudadesActivas.length} ciudades'));
     return SliverToBoxAdapter(
       child: Padding(
         padding: EdgeInsets.fromLTRB(20, topSafe + 4, 16, 8),
@@ -1744,7 +1826,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
                           ),
                         ),
                       ),
-                      if (_ciudadesActivas.isNotEmpty) ...[
+                      if (!_carteleraInteligente &&
+                          _ciudadesActivas.isNotEmpty) ...[
                         const SizedBox(width: 6),
                         Container(
                           width: 18,
@@ -1786,6 +1869,13 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           onTiposChanged: (s) => setState(() => _tiposSeleccionados = s),
           filtroTiempo: _filtroTiempo,
           onFiltroTiempoChanged: (f) => setState(() => _filtroTiempo = f),
+          onBusquedaIa: (texto) {
+            mostrarBusquedaIaSheet(
+              context,
+              ciudades: _ciudadesActivas,
+              preguntaInicial: texto.isEmpty ? null : texto,
+            );
+          },
         ),
       ),
     );
@@ -2359,11 +2449,12 @@ class _CarruselAvataresLocalesState extends State<_CarruselAvataresLocales> {
                       size: _avatarSize,
                       esPionero: esPionero,
                       placeholderIcon: CupertinoIcons.building_2_fill,
-                      memCacheWidth: (_avatarSize *
-                              MediaQuery.of(context)
-                                  .devicePixelRatio
-                                  .clamp(1.0, 2.0))
-                          .round(),
+                      memCacheWidth:
+                          (_avatarSize *
+                                  MediaQuery.of(
+                                    context,
+                                  ).devicePixelRatio.clamp(1.0, 2.0))
+                              .round(),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.22),
@@ -2407,40 +2498,56 @@ class _CarruselAvataresLocalesState extends State<_CarruselAvataresLocales> {
   }
 }
 
-class _BotonScannerInvitacion extends StatelessWidget {
-  const _BotonScannerInvitacion({required this.onTap});
+/// Pill vertical único: mapa arriba, QR abajo. Los iconos son hit-targets;
+/// no hay botones anidados dentro de la cápsula.
+class _PillMapaYQr extends StatelessWidget {
+  const _PillMapaYQr({required this.onMapa, required this.onQr});
 
-  final VoidCallback onTap;
+  final VoidCallback onMapa;
+  final VoidCallback onQr;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: kHomeFabQrSize,
-        height: kHomeFabQrSize,
-        child: ClipOval(
-          clipBehavior: Clip.hardEdge,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-            child: ValueListenableBuilder<Color>(
-              valueListenable: TemaFernecito.instancia.colorActual,
-              builder: (context, colorTema, _) => Center(
-                child: Icon(
-                  CupertinoIcons.qrcode_viewfinder,
-                  color: colorTema,
-                  size: 30,
-                  shadows: [
-                    Shadow(
-                      color: colorTema.withValues(alpha: 0.45),
-                      blurRadius: 12,
+    return SizedBox(
+      width: kHomeFabPillWidth,
+      height: kHomeFabPillHeight,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: ColoresApp.fondoSuperficie,
+          borderRadius: BorderRadius.circular(kHomeFabPillWidth / 2),
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: onMapa,
+                behavior: HitTestBehavior.opaque,
+                child: const Center(child: IconoMapaCarteleraAnimado(size: 24)),
+              ),
+            ),
+            Expanded(
+              child: GestureDetector(
+                onTap: onQr,
+                behavior: HitTestBehavior.opaque,
+                child: ValueListenableBuilder<Color>(
+                  valueListenable: TemaFernecito.instancia.colorActual,
+                  builder: (context, colorTema, _) => Center(
+                    child: Icon(
+                      CupertinoIcons.qrcode_viewfinder,
+                      color: colorTema,
+                      size: 26,
+                      shadows: [
+                        Shadow(
+                          color: colorTema.withValues(alpha: 0.45),
+                          blurRadius: 12,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

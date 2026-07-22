@@ -26,9 +26,10 @@ class ServicioPools {
   Future<PoolData> pool(String idEvento) async {
     if (idEvento.isEmpty) return const PoolData();
     try {
-      final res = await ServicioSupabase()
-          .cliente
-          .rpc('evento_pool', params: {'p_evento': idEvento});
+      final res = await ServicioSupabase().cliente.rpc(
+        'evento_pool',
+        params: {'p_evento': idEvento},
+      );
       if (res is Map) {
         final personasRaw = res['personas'] as List? ?? const [];
         final squadsRaw = res['squads'] as List? ?? const [];
@@ -58,7 +59,8 @@ class ServicioPools {
           ? ''
           : (username.startsWith('@') ? username : '@$username'),
       'estado': m['mi_estado'] ?? '',
-      'avatar': ServicioSupabase().urlAvatar(m['foto_perfil_url'] as String?) ?? '',
+      'avatar':
+          ServicioSupabase().urlAvatar(m['foto_perfil_url'] as String?) ?? '',
       'edad': m['edad'],
       'instagram_url': m['instagram_url'] ?? '',
       'tiktok_url': m['tiktok_url'] ?? '',
@@ -71,13 +73,27 @@ class ServicioPools {
   Map<String, dynamic> _mapSquad(Map<String, dynamic> m) {
     final nombre = m['nombre_grupo'] as String? ?? 'Squad';
     final miembrosRaw = m['miembros'] as List? ?? const [];
+    final portada = ServicioSupabase().urlPortadaSquadDisplay(
+      m['url_portada'] as String?,
+      version: m['fecha_actualizacion']?.toString(),
+      fallbackSeed: m['url_portada']?.toString() ?? m['id_grupo']?.toString(),
+    );
     return {
       'id_grupo': m['id_grupo'],
       'nombre': nombre,
+      'username': m['username'],
+      'descripcion': m['descripcion_grupo'],
       'estado': m['vibe_grupo'] ?? '',
+      'vibe': m['vibe_grupo'] ?? '',
+      'url_portada': m['url_portada'],
+      'avatar': portada ?? '',
+      'banner_url': portada,
+      'es_publico': m['es_publico'] == true,
       'miembros': miembrosRaw
-          .map((e) =>
-              _mapPersona(Map<String, dynamic>.from(e as Map), squad: nombre))
+          .map(
+            (e) =>
+                _mapPersona(Map<String, dynamic>.from(e as Map), squad: nombre),
+          )
           .toList(),
     };
   }

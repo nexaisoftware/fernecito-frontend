@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -12,6 +13,8 @@ import '../core/constants.dart';
 import '../core/servicio_amigos.dart';
 import '../core/servicio_squads.dart';
 import '../core/supabase_client.dart';
+import '../core/preferencias_cartelera.dart';
+import '../core/servicio_ubicacion_global.dart';
 import '../core/ubicaciones_data.dart';
 import '../models/social.dart';
 import 'burbuja_estado.dart';
@@ -42,7 +45,8 @@ String arrobaExplorar(String u) {
 }
 
 /// Provincia + ciudades desde `perfiles_usuarios` (misma fuente que cartelera).
-Future<({String provincia, Set<String> ciudades})?> leerUbicacionPerfilExplorar() async {
+Future<({String provincia, Set<String> ciudades})?>
+leerUbicacionPerfilExplorar() async {
   final uid = ServicioSupabase().usuarioActual?.id;
   if (uid == null) return null;
   try {
@@ -53,7 +57,8 @@ Future<({String provincia, Set<String> ciudades})?> leerUbicacionPerfilExplorar(
         .maybeSingle();
     if (resp == null) return null;
 
-    final provincia = (resp['provincia'] as String?)?.trim() ??
+    final provincia =
+        (resp['provincia'] as String?)?.trim() ??
         (resp['provincia_usuario'] as String?)?.trim();
     final ciudad = (resp['ciudad'] as String?)?.trim();
     final prefsRaw = resp['ciudades_preferidas'];
@@ -98,12 +103,7 @@ class EncabezadoExplorarUbicacion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        compacto ? 6 : 16,
-        12,
-        compacto ? 4 : 8,
-      ),
+      padding: EdgeInsets.fromLTRB(20, compacto ? 6 : 16, 12, compacto ? 4 : 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -166,11 +166,19 @@ class ExplorarPersonasContenido extends StatefulWidget {
   const ExplorarPersonasContenido({
     super.key,
     required this.onPerfil,
+    this.provinciaInicial,
+    this.ciudadesIniciales,
+    this.carteleraInteligenteInicial,
+    this.encabezadoSuperior,
     this.embebido = true,
     this.paddingInferiorScroll = 0,
   });
 
   final void Function(UsuarioBusqueda u) onPerfil;
+  final String? provinciaInicial;
+  final Set<String>? ciudadesIniciales;
+  final bool? carteleraInteligenteInicial;
+  final Widget? encabezadoSuperior;
   final bool embebido;
   final double paddingInferiorScroll;
 
@@ -184,23 +192,65 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
   final ScrollController _scroll = ScrollController();
   String _provincia = UbicacionesData.provinciaPorDefecto;
   Set<String> _ciudades = {UbicacionesData.ciudadPorDefecto};
-  String? _ciudadActiva;
 
   List<UsuarioBusqueda> _personas = [];
   String? _errorCarga;
   bool _cargando = false;
   bool _hayMas = false;
   bool _cargandoMas = false;
+  bool _syncPreferenciasProgramado = false;
+
+  Set<String>? get _ciudadesDesdeWidget {
+    final ciudades = widget.ciudadesIniciales;
+    if (ciudades == null || ciudades.isEmpty) return null;
+    return Set<String>.from(ciudades);
+  }
+
+  String _tituloExplorar(String tipo, List<String> ciudades) {
+    if (ciudades.length == 1) return 'Explorar ${ciudades.first}';
+    if (ciudades.length > 1) {
+      final inteligente =
+          widget.carteleraInteligenteInicial ??
+          PreferenciasCartelera.instancia.inteligenteActiva;
+      return inteligente
+          ? 'Explorar $tipo cerca tuyo'
+          : 'Explorar $tipo en ${ciudades.length} ciudades';
+    }
+    return 'Explorar $tipo';
+  }
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScrollFin);
+    PreferenciasCartelera.instancia.cambios.addListener(
+      _sincronizarPreferenciasAhora,
+    );
     _inicializarUbicacion();
   }
 
   @override
+  void didUpdateWidget(covariant ExplorarPersonasContenido oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nuevas = _ciudadesDesdeWidget;
+    if (nuevas == null) return;
+    final provincia = widget.provinciaInicial ?? _provincia;
+    if (provincia == _provincia && setEquals(nuevas, _ciudades)) return;
+    setState(() {
+      _provincia = provincia;
+      _ciudades = nuevas;
+      _personas = [];
+      _errorCarga = null;
+      _hayMas = false;
+    });
+    _cargar(inicial: true);
+  }
+
+  @override
   void dispose() {
+    PreferenciasCartelera.instancia.cambios.removeListener(
+      _sincronizarPreferenciasAhora,
+    );
     _scroll.removeListener(_onScrollFin);
     _scroll.dispose();
     super.dispose();
@@ -214,6 +264,29 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
   }
 
   Future<void> _inicializarUbicacion() async {
+    final iniciales = _ciudadesDesdeWidget;
+    if (iniciales != null) {
+      if (!mounted) return;
+      setState(() {
+        _provincia = widget.provinciaInicial ?? _provincia;
+        _ciudades = iniciales;
+      });
+      _cargar(inicial: true);
+      return;
+    }
+    // Unificado: hereda la ubicación de la cartelera (misma fuente). Fallback: perfil.
+    await PreferenciasCartelera.instancia.cargar();
+    final activas = PreferenciasCartelera.instancia.ciudadesActivas;
+    if (activas.isNotEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _provincia =
+            PreferenciasCartelera.instancia.provinciaActiva ?? _provincia;
+        _ciudades = {...activas};
+      });
+      _cargar(inicial: true);
+      return;
+    }
     final ubi = await leerUbicacionPerfilExplorar();
     if (!mounted) return;
     setState(() {
@@ -221,50 +294,112 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
         _provincia = ubi.provincia;
         _ciudades = ubi.ciudades;
       }
-      _ciudadActiva = _ciudades.length == 1 ? _ciudades.first : null;
     });
-    if (_ciudadActiva != null) _cargar(inicial: true);
+    if (_ciudades.isNotEmpty) _cargar(inicial: true);
   }
 
-  Future<void> _elegirCiudad() async {
-    final res = await mostrarFiltroUbicacionesSheet(
-      context,
-      provinciaActual: _provincia,
-      ciudadesActuales: _ciudades,
-    );
-    if (res == null || !mounted) return;
-    setState(() {
-      _provincia = res.provincia;
-      _ciudades = res.ciudades.isEmpty
-          ? UbicacionesData.ciudadesDe(res.provincia).toSet()
-          : res.ciudades;
-      _ciudadActiva = _ciudades.length == 1 ? _ciudades.first : null;
-      _personas = [];
-      _hayMas = false;
+  void _programarSyncPreferencias() {
+    if (_syncPreferenciasProgramado || _cargando || _cargandoMas) return;
+    _syncPreferenciasProgramado = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncPreferenciasProgramado = false;
+      if (!mounted || _cargando || _cargandoMas) return;
+      final prefs = PreferenciasCartelera.instancia;
+      final activas = _ciudadesDesdeWidget ?? prefs.ciudadesActivas;
+      if (activas.isEmpty) return;
+      final provincia =
+          widget.provinciaInicial ?? prefs.provinciaActiva ?? _provincia;
+      if (provincia == _provincia && setEquals(activas, _ciudades)) return;
+      setState(() {
+        _provincia = provincia;
+        _ciudades = {...activas};
+        _personas = [];
+        _errorCarga = null;
+        _hayMas = false;
+      });
+      _cargar(inicial: true);
     });
-    if (_ciudadActiva != null) _cargar(inicial: true);
   }
 
-  void _seleccionarCiudadChip(String c) {
+  void _sincronizarPreferenciasAhora() {
+    if (!mounted) return;
+    if (_cargando || _cargandoMas) {
+      _programarSyncPreferencias();
+      return;
+    }
+    final prefs = PreferenciasCartelera.instancia;
+    final activas = _ciudadesDesdeWidget ?? prefs.ciudadesActivas;
+    if (activas.isEmpty) return;
+    final provincia =
+        widget.provinciaInicial ?? prefs.provinciaActiva ?? _provincia;
+    if (provincia == _provincia && setEquals(activas, _ciudades)) return;
     setState(() {
-      _ciudadActiva = c;
+      _provincia = provincia;
+      _ciudades = {...activas};
       _personas = [];
+      _errorCarga = null;
       _hayMas = false;
     });
     _cargar(inicial: true);
   }
 
+  Future<void> _elegirCiudad() async {
+    await PreferenciasCartelera.instancia.cargar();
+    if (!mounted) return;
+    final prefs = PreferenciasCartelera.instancia;
+    final ciudadesWidget = _ciudadesDesdeWidget;
+    final ciudadesActuales = ciudadesWidget != null
+        ? ciudadesWidget
+        : prefs.ciudadesActivas.isNotEmpty
+        ? prefs.ciudadesActivas
+        : _ciudades;
+    final provinciaActual =
+        widget.provinciaInicial ?? prefs.provinciaActiva ?? _provincia;
+    final res = await mostrarFiltroUbicacionesSheet(
+      context,
+      provinciaActual: provinciaActual,
+      ciudadesActuales: ciudadesActuales,
+      // Arrastra el estado real del modo inteligente (antes quedaba en false → el
+      // switch aparecía apagado cada vez que se abría el sheet desde explorar).
+      carteleraInteligente:
+          widget.carteleraInteligenteInicial ?? prefs.inteligenteActiva,
+    );
+    if (res == null || !mounted) return;
+    if (res.carteleraInteligente) {
+      await ServicioUbicacionGlobal.aplicarInteligente(
+        ciudades: res.ciudades,
+        provincia: res.provincia,
+        principal: res.ciudadPrincipal,
+      );
+    } else {
+      await ServicioUbicacionGlobal.aplicarManual(
+        provincia: res.provincia,
+        ciudades: res.ciudades,
+        principal: res.ciudadPrincipal,
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      _provincia = res.provincia;
+      _ciudades = res.ciudades.isEmpty
+          ? UbicacionesData.ciudadesDe(res.provincia).toSet()
+          : res.ciudades;
+      _personas = [];
+      _hayMas = false;
+    });
+    if (_ciudades.isNotEmpty) _cargar(inicial: true);
+  }
+
   Future<void> _cargar({required bool inicial}) async {
-    final ciudad = _ciudadActiva;
-    if (ciudad == null) return;
+    if (_ciudades.isEmpty) return;
     if (!inicial && (!_hayMas || _cargandoMas)) return;
     if (inicial) {
       setState(() => _cargando = true);
     } else {
       setState(() => _cargandoMas = true);
     }
-    final pagina = await _srv.explorarCiudad(
-      ciudad: ciudad,
+    final pagina = await _srv.explorarCiudades(
+      ciudades: _ciudades,
       provincia: _provincia,
       offset: inicial ? 0 : _personas.length,
       limit: _kExplorarPagina,
@@ -283,60 +418,20 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
     });
   }
 
-  Widget _chipsCiudad({
-    required String? ciudad,
-    required List<String> ciudadesLista,
-  }) {
-    if (ciudadesLista.length <= 1) return const SizedBox.shrink();
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: ciudadesLista.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final c = ciudadesLista[i];
-          final sel = c == ciudad;
-          return GestureDetector(
-            onTap: () => _seleccionarCiudadChip(c),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: sel
-                    ? ColoresApp.principalMarca
-                    : ColoresApp.fondoSuperficie,
-                borderRadius: BorderRadius.circular(20),
-                              ),
-              child: Text(
-                c,
-                style: GoogleFonts.baloo2(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: sel ? Colors.white : ColoresApp.textoPrincipal,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildEmbebido(
     BuildContext context,
-    String? ciudad,
+    bool tieneCiudades,
     List<String> ciudadesLista,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (widget.encabezadoSuperior != null) widget.encabezadoSuperior!,
         EncabezadoExplorarUbicacion(
-          titulo: ciudad != null ? 'Explorar $ciudad' : 'Explorar personas',
+          titulo: _tituloExplorar('personas', ciudadesLista),
           onEditar: _elegirCiudad,
         ),
-        _chipsCiudad(ciudad: ciudad, ciudadesLista: ciudadesLista),
-        if (ciudad == null)
+        if (!tieneCiudades)
           Expanded(
             child: Center(
               child: Text(
@@ -350,9 +445,7 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
             ),
           )
         else if (_cargando)
-          const Expanded(
-            child: FernecitoLoaderCentro(size: 28),
-          )
+          const Expanded(child: FernecitoLoaderCentro(size: 28))
         else if (_personas.isEmpty)
           Expanded(
             child: Center(
@@ -360,8 +453,8 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
                 padding: const EdgeInsets.all(24),
                 child: Text(
                   _errorCarga ??
-                      'No hay personas públicas en $ciudad.\n'
-                      'Solo aparecen quienes tienen ciudad en el perfil (cartelera) y perfil público.',
+                      'No hay personas públicas en estas ciudades.\n'
+                          'Solo aparecen quienes tienen ciudad en el perfil (cartelera) y perfil público.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.baloo2(
                     fontSize: 14,
@@ -383,18 +476,15 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
                   padding: _LayoutGridPersonasExplorar.padding,
                   sliver: SliverGrid(
                     gridDelegate: _LayoutGridPersonasExplorar.delegate,
-                    delegate: SliverChildBuilderDelegate(
-                      (context, i) {
-                        final p = _personas[i];
-                        return _CeldaPersonaExplorar(
-                          username: arrobaExplorar(p.username),
-                          avatarUrl: p.avatarUrl ?? '',
-                          estado: p.estado ?? '',
-                          onTap: () => widget.onPerfil(p),
-                        );
-                      },
-                      childCount: _personas.length,
-                    ),
+                    delegate: SliverChildBuilderDelegate((context, i) {
+                      final p = _personas[i];
+                      return _CeldaPersonaExplorar(
+                        username: arrobaExplorar(p.username),
+                        avatarUrl: p.avatarUrl ?? '',
+                        estado: p.estado ?? '',
+                        onTap: () => widget.onPerfil(p),
+                      );
+                    }, childCount: _personas.length),
                   ),
                 ),
                 if (_cargandoMas)
@@ -416,12 +506,13 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
 
   @override
   Widget build(BuildContext context) {
+    _programarSyncPreferencias();
     final h = MediaQuery.sizeOf(context).height * 0.9;
-    final ciudad = _ciudadActiva;
     final ciudadesLista = _ciudades.toList()..sort();
+    final tieneCiudades = ciudadesLista.isNotEmpty;
 
     if (widget.embebido) {
-      return _buildEmbebido(context, ciudad, ciudadesLista);
+      return _buildEmbebido(context, tieneCiudades, ciudadesLista);
     }
 
     final cuerpo = Column(
@@ -438,130 +529,86 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
           ),
         ],
         EncabezadoExplorarUbicacion(
-          titulo: ciudad != null
-              ? (widget.embebido
-                  ? 'Explorar $ciudad'
-                  : 'Personas de $ciudad')
-              : 'Explorar personas',
+          titulo: _tituloExplorar('personas', ciudadesLista),
           onEditar: _elegirCiudad,
         ),
-          if (ciudadesLista.length > 1)
-            SizedBox(
-              height: 38,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                itemCount: ciudadesLista.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (_, i) {
-                  final c = ciudadesLista[i];
-                  final sel = c == ciudad;
-                  return GestureDetector(
-                    onTap: () => _seleccionarCiudadChip(c),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: sel
-                            ? ColoresApp.principalMarca
-                            : ColoresApp.fondoSuperficie,
-                        borderRadius: BorderRadius.circular(20),
-                                              ),
-                      child: Text(
-                        c,
-                        style: GoogleFonts.baloo2(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: sel ? Colors.white : ColoresApp.textoPrincipal,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          if (ciudad == null)
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'Elegí una ciudad para ver personas',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.baloo2(
-                      fontSize: 15,
-                      color: ColoresApp.textoSecundario,
-                    ),
+        if (!tieneCiudades)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Elegí una ciudad para ver personas',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 15,
+                    color: ColoresApp.textoSecundario,
                   ),
                 ),
               ),
-            )
-          else if (_cargando)
-            const Expanded(
-              child: FernecitoLoaderCentro(size: 28),
-            )
-          else if (_personas.isEmpty)
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    _errorCarga ??
-                        'No hay personas públicas en $ciudad.\n'
-                        'Solo aparecen quienes tienen ciudad en el perfil (cartelera) y perfil público.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.baloo2(
-                      fontSize: 14,
-                      color: _errorCarga != null
-                          ? ColoresApp.principalMarca
-                          : ColoresApp.textoSecundario,
-                    ),
+            ),
+          )
+        else if (_cargando)
+          const Expanded(child: FernecitoLoaderCentro(size: 28))
+        else if (_personas.isEmpty)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _errorCarga ??
+                      'No hay personas públicas en estas ciudades.\n'
+                          'Solo aparecen quienes tienen ciudad en el perfil (cartelera) y perfil público.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 14,
+                    color: _errorCarga != null
+                        ? ColoresApp.principalMarca
+                        : ColoresApp.textoSecundario,
                   ),
                 ),
               ),
-            )
-          else
-            Expanded(
-              child: CustomScrollView(
-                controller: _scroll,
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  SliverPadding(
-                    padding: _LayoutGridPersonasExplorar.padding,
-                    sliver: SliverGrid(
-                      gridDelegate: _LayoutGridPersonasExplorar.delegate,
-                      delegate: SliverChildBuilderDelegate(
-                        (context, i) {
-                          final p = _personas[i];
-                          return _CeldaPersonaExplorar(
-                            username: arrobaExplorar(p.username),
-                            avatarUrl: p.avatarUrl ?? '',
-                            estado: p.estado ?? '',
-                            onTap: () => widget.onPerfil(p),
-                          );
-                        },
-                        childCount: _personas.length,
-                      ),
-                    ),
-                  ),
-                  if (_cargandoMas)
-                    const SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: FernecitoLoaderCentro(size: 28),
-                      ),
-                    ),
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: widget.embebido
-                          ? 24
-                          : MediaQuery.paddingOf(context).bottom + 16,
-                    ),
-                  ),
-                ],
-              ),
             ),
-        ],
+          )
+        else
+          Expanded(
+            child: CustomScrollView(
+              controller: _scroll,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: _LayoutGridPersonasExplorar.padding,
+                  sliver: SliverGrid(
+                    gridDelegate: _LayoutGridPersonasExplorar.delegate,
+                    delegate: SliverChildBuilderDelegate((context, i) {
+                      final p = _personas[i];
+                      return _CeldaPersonaExplorar(
+                        username: arrobaExplorar(p.username),
+                        avatarUrl: p.avatarUrl ?? '',
+                        estado: p.estado ?? '',
+                        onTap: () => widget.onPerfil(p),
+                      );
+                    }, childCount: _personas.length),
+                  ),
+                ),
+                if (_cargandoMas)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: FernecitoLoaderCentro(size: 28),
+                    ),
+                  ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: widget.embebido
+                        ? 24
+                        : MediaQuery.paddingOf(context).bottom + 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
 
     if (widget.embebido) {
@@ -692,11 +739,19 @@ class ExplorarSquadsContenido extends StatefulWidget {
   const ExplorarSquadsContenido({
     super.key,
     required this.onSquad,
+    this.provinciaInicial,
+    this.ciudadesIniciales,
+    this.carteleraInteligenteInicial,
+    this.encabezadoSuperior,
     this.embebido = true,
     this.paddingInferiorScroll = 0,
   });
 
   final void Function(SquadExplorarItem s) onSquad;
+  final String? provinciaInicial;
+  final Set<String>? ciudadesIniciales;
+  final bool? carteleraInteligenteInicial;
+  final Widget? encabezadoSuperior;
   final bool embebido;
   final double paddingInferiorScroll;
 
@@ -709,21 +764,91 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
   final ServicioSquads _srv = ServicioSquads();
   String _provincia = UbicacionesData.provinciaPorDefecto;
   Set<String> _ciudades = {UbicacionesData.ciudadPorDefecto};
-  String? _ciudadActiva;
 
   List<SquadExplorarItem> _squads = [];
   String? _errorCarga;
   bool _cargando = false;
   bool _hayMas = false;
   bool _cargandoMas = false;
+  bool _syncPreferenciasProgramado = false;
+
+  Set<String>? get _ciudadesDesdeWidget {
+    final ciudades = widget.ciudadesIniciales;
+    if (ciudades == null || ciudades.isEmpty) return null;
+    return Set<String>.from(ciudades);
+  }
+
+  String _tituloExplorar(List<String> ciudades) {
+    if (ciudades.length == 1) return 'Explorar ${ciudades.first}';
+    if (ciudades.length > 1) {
+      final inteligente =
+          widget.carteleraInteligenteInicial ??
+          PreferenciasCartelera.instancia.inteligenteActiva;
+      return inteligente
+          ? 'Explorar squads cerca tuyo'
+          : 'Explorar squads en ${ciudades.length} ciudades';
+    }
+    return 'Explorar squads';
+  }
 
   @override
   void initState() {
     super.initState();
+    PreferenciasCartelera.instancia.cambios.addListener(
+      _sincronizarPreferenciasAhora,
+    );
     _inicializarUbicacion();
   }
 
+  @override
+  void dispose() {
+    PreferenciasCartelera.instancia.cambios.removeListener(
+      _sincronizarPreferenciasAhora,
+    );
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant ExplorarSquadsContenido oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nuevas = _ciudadesDesdeWidget;
+    if (nuevas == null) return;
+    final provincia = widget.provinciaInicial ?? _provincia;
+    if (provincia == _provincia && setEquals(nuevas, _ciudades)) return;
+    setState(() {
+      _provincia = provincia;
+      _ciudades = nuevas;
+      _squads = [];
+      _errorCarga = null;
+      _hayMas = false;
+    });
+    _cargar(inicial: true);
+  }
+
   Future<void> _inicializarUbicacion() async {
+    final iniciales = _ciudadesDesdeWidget;
+    if (iniciales != null) {
+      if (!mounted) return;
+      setState(() {
+        _provincia = widget.provinciaInicial ?? _provincia;
+        _ciudades = iniciales;
+      });
+      _cargar(inicial: true);
+      return;
+    }
+    // Unificado: hereda la ubicación de la cartelera (misma fuente). Fallback: perfil.
+    await PreferenciasCartelera.instancia.cargar();
+    final activas = PreferenciasCartelera.instancia.ciudadesActivas;
+    if (activas.isNotEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _provincia =
+            PreferenciasCartelera.instancia.provinciaActiva ?? _provincia;
+        _ciudades = {...activas};
+      });
+      _cargar(inicial: true);
+      return;
+    }
     final ubi = await leerUbicacionPerfilExplorar();
     if (!mounted) return;
     setState(() {
@@ -731,45 +856,105 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
         _provincia = ubi.provincia;
         _ciudades = ubi.ciudades;
       }
-      _ciudadActiva = _ciudades.length == 1 ? _ciudades.first : null;
     });
-    if (_ciudadActiva != null) _cargar(inicial: true);
+    if (_ciudades.isNotEmpty) _cargar(inicial: true);
   }
 
-  Future<void> _elegirCiudad() async {
-    final res = await mostrarFiltroUbicacionesSheet(
-      context,
-      provinciaActual: _provincia,
-      ciudadesActuales: _ciudades,
-    );
-    if (res == null || !mounted) return;
-    setState(() {
-      _provincia = res.provincia;
-      _ciudades = res.ciudades.isEmpty
-          ? UbicacionesData.ciudadesDe(res.provincia).toSet()
-          : res.ciudades;
-      _ciudadActiva = _ciudades.length == 1 ? _ciudades.first : null;
-      _squads = [];
-      _hayMas = false;
+  void _programarSyncPreferencias() {
+    if (_syncPreferenciasProgramado || _cargando || _cargandoMas) return;
+    _syncPreferenciasProgramado = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncPreferenciasProgramado = false;
+      if (!mounted || _cargando || _cargandoMas) return;
+      final prefs = PreferenciasCartelera.instancia;
+      final activas = _ciudadesDesdeWidget ?? prefs.ciudadesActivas;
+      if (activas.isEmpty) return;
+      final provincia =
+          widget.provinciaInicial ?? prefs.provinciaActiva ?? _provincia;
+      if (provincia == _provincia && setEquals(activas, _ciudades)) return;
+      setState(() {
+        _provincia = provincia;
+        _ciudades = {...activas};
+        _squads = [];
+        _errorCarga = null;
+        _hayMas = false;
+      });
+      _cargar(inicial: true);
     });
-    if (_ciudadActiva != null) _cargar(inicial: true);
   }
 
-  void _seleccionarCiudadChip(String c) {
+  void _sincronizarPreferenciasAhora() {
+    if (!mounted) return;
+    if (_cargando || _cargandoMas) {
+      _programarSyncPreferencias();
+      return;
+    }
+    final prefs = PreferenciasCartelera.instancia;
+    final activas = _ciudadesDesdeWidget ?? prefs.ciudadesActivas;
+    if (activas.isEmpty) return;
+    final provincia =
+        widget.provinciaInicial ?? prefs.provinciaActiva ?? _provincia;
+    if (provincia == _provincia && setEquals(activas, _ciudades)) return;
     setState(() {
-      _ciudadActiva = c;
+      _provincia = provincia;
+      _ciudades = {...activas};
       _squads = [];
+      _errorCarga = null;
       _hayMas = false;
     });
     _cargar(inicial: true);
   }
 
+  Future<void> _elegirCiudad() async {
+    await PreferenciasCartelera.instancia.cargar();
+    if (!mounted) return;
+    final prefs = PreferenciasCartelera.instancia;
+    final ciudadesWidget = _ciudadesDesdeWidget;
+    final ciudadesActuales = ciudadesWidget != null
+        ? ciudadesWidget
+        : prefs.ciudadesActivas.isNotEmpty
+        ? prefs.ciudadesActivas
+        : _ciudades;
+    final provinciaActual =
+        widget.provinciaInicial ?? prefs.provinciaActiva ?? _provincia;
+    final res = await mostrarFiltroUbicacionesSheet(
+      context,
+      provinciaActual: provinciaActual,
+      ciudadesActuales: ciudadesActuales,
+      carteleraInteligente:
+          widget.carteleraInteligenteInicial ?? prefs.inteligenteActiva,
+    );
+    if (res == null || !mounted) return;
+    if (res.carteleraInteligente) {
+      await ServicioUbicacionGlobal.aplicarInteligente(
+        ciudades: res.ciudades,
+        provincia: res.provincia,
+        principal: res.ciudadPrincipal,
+      );
+    } else {
+      await ServicioUbicacionGlobal.aplicarManual(
+        provincia: res.provincia,
+        ciudades: res.ciudades,
+        principal: res.ciudadPrincipal,
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      _provincia = res.provincia;
+      _ciudades = res.ciudades.isEmpty
+          ? UbicacionesData.ciudadesDe(res.provincia).toSet()
+          : res.ciudades;
+      _squads = [];
+      _hayMas = false;
+    });
+    if (_ciudades.isNotEmpty) _cargar(inicial: true);
+  }
+
   Future<void> _cargar({required bool inicial}) async {
-    final ciudad = _ciudadActiva;
-    if (ciudad == null) return;
+    if (_ciudades.isEmpty) return;
     setState(() => inicial ? _cargando = true : _cargandoMas = true);
-    final pagina = await _srv.explorarCiudad(
-      ciudad: ciudad,
+    final pagina = await _srv.explorarCiudades(
+      ciudades: _ciudades,
       provincia: _provincia,
       offset: inicial ? 0 : _squads.length,
       limit: inicial ? 40 : 20,
@@ -788,67 +973,23 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
     });
   }
 
-  Widget _chipsCiudadSquads({
-    required String? ciudad,
-    required List<String> ciudadesLista,
-  }) {
-    if (ciudadesLista.length <= 1) return const SizedBox.shrink();
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: ciudadesLista.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final c = ciudadesLista[i];
-          final sel = c == ciudad;
-          return GestureDetector(
-            onTap: () => _seleccionarCiudadChip(c),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: sel
-                    ? ColoresApp.principalMarca
-                    : ColoresApp.fondoSuperficie,
-                borderRadius: BorderRadius.circular(20),
-                              ),
-              child: Text(
-                c,
-                style: GoogleFonts.baloo2(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: sel ? Colors.white : ColoresApp.textoPrincipal,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   Widget _buildSquadsEmbebido(
     BuildContext context,
-    String? ciudad,
+    bool tieneCiudades,
     List<String> ciudadesLista,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (widget.encabezadoSuperior != null) widget.encabezadoSuperior!,
         EncabezadoExplorarUbicacion(
-          titulo: ciudad != null ? 'Explorar $ciudad' : 'Explorar squads',
+          titulo: _tituloExplorar(ciudadesLista),
           onEditar: _elegirCiudad,
         ),
-        _chipsCiudadSquads(ciudad: ciudad, ciudadesLista: ciudadesLista),
-        if (ciudad == null)
-          const Expanded(
-            child: Center(child: Text('Elegí una ciudad')),
-          )
+        if (!tieneCiudades)
+          const Expanded(child: Center(child: Text('Elegí una ciudad')))
         else if (_cargando)
-          const Expanded(
-            child: FernecitoLoaderCentro(size: 28),
-          )
+          const Expanded(child: FernecitoLoaderCentro(size: 28))
         else if (_squads.isEmpty)
           Expanded(
             child: Padding(
@@ -856,8 +997,8 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
               child: Center(
                 child: Text(
                   _errorCarga ??
-                      'No hay squads públicos con miembros en $ciudad.\n'
-                      'En la base no hay miembros aceptados en squads todavía.',
+                      'No hay squads públicos en estas ciudades.\n'
+                          'En la base no hay miembros aceptados en squads todavía.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.baloo2(
                     fontSize: 14,
@@ -879,26 +1020,23 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
                   sliver: SliverGrid(
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 8,
-                      crossAxisSpacing: 8,
-                      childAspectRatio: 0.88,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, i) {
-                        final s = _squads[i];
-                        return _CeldaSquadExplorar(
-                          nombre: s.nombre,
-                          avatares: s.avataresResueltos,
-                          portada: s.portadaUrl,
-                          portadaCacheKey: s.portadaCacheKey,
-                          total: s.cantidadMiembros,
-                          extra: s.miembrosExtra,
-                          onTap: () => widget.onSquad(s),
-                        );
-                      },
-                      childCount: _squads.length,
-                    ),
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          childAspectRatio: 0.88,
+                        ),
+                    delegate: SliverChildBuilderDelegate((context, i) {
+                      final s = _squads[i];
+                      return _CeldaSquadExplorar(
+                        nombre: s.nombre,
+                        avatares: s.avataresResueltos,
+                        portada: s.portadaUrl,
+                        portadaCacheKey: s.portadaCacheKey,
+                        total: s.cantidadMiembros,
+                        extra: s.miembrosExtra,
+                        onTap: () => widget.onSquad(s),
+                      );
+                    }, childCount: _squads.length),
                   ),
                 ),
                 if (_hayMas)
@@ -935,12 +1073,13 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
 
   @override
   Widget build(BuildContext context) {
+    _programarSyncPreferencias();
     final h = MediaQuery.sizeOf(context).height * 0.9;
-    final ciudad = _ciudadActiva;
     final ciudadesLista = _ciudades.toList()..sort();
+    final tieneCiudades = ciudadesLista.isNotEmpty;
 
     if (widget.embebido) {
-      return _buildSquadsEmbebido(context, ciudad, ciudadesLista);
+      return _buildSquadsEmbebido(context, tieneCiudades, ciudadesLista);
     }
 
     final cuerpo = Column(
@@ -957,140 +1096,96 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
           ),
         ],
         EncabezadoExplorarUbicacion(
-          titulo: ciudad != null
-              ? (widget.embebido ? 'Explorar $ciudad' : 'Squads en $ciudad')
-              : 'Explorar squads',
+          titulo: _tituloExplorar(ciudadesLista),
           onEditar: _elegirCiudad,
           compacto: widget.embebido,
         ),
-          if (ciudadesLista.length > 1)
-            SizedBox(
-              height: 38,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                itemCount: ciudadesLista.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (_, i) {
-                  final c = ciudadesLista[i];
-                  final sel = c == ciudad;
-                  return GestureDetector(
-                    onTap: () => _seleccionarCiudadChip(c),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: sel
-                            ? ColoresApp.principalMarca
-                            : ColoresApp.fondoSuperficie,
-                        borderRadius: BorderRadius.circular(20),
-                                              ),
-                      child: Text(
-                        c,
-                        style: GoogleFonts.baloo2(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: sel ? Colors.white : ColoresApp.textoPrincipal,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          if (ciudad == null)
-            const Expanded(
-              child: Center(
-                child: Text('Elegí una ciudad'),
-              ),
-            )
-          else if (_cargando)
-            const Expanded(child: FernecitoLoaderCentro(size: 28))
-          else if (_squads.isEmpty)
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    _errorCarga ??
-                        'No hay squads públicos con miembros en $ciudad.\n'
-                        'En la base no hay miembros aceptados en squads todavía.',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.baloo2(
-                      fontSize: 14,
-                      color: _errorCarga != null
-                          ? ColoresApp.principalMarca
-                          : ColoresApp.textoSecundario,
-                    ),
+        if (!tieneCiudades)
+          const Expanded(child: Center(child: Text('Elegí una ciudad')))
+        else if (_cargando)
+          const Expanded(child: FernecitoLoaderCentro(size: 28))
+        else if (_squads.isEmpty)
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _errorCarga ??
+                      'No hay squads públicos en estas ciudades.\n'
+                          'En la base no hay miembros aceptados en squads todavía.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 14,
+                    color: _errorCarga != null
+                        ? ColoresApp.principalMarca
+                        : ColoresApp.textoSecundario,
                   ),
                 ),
               ),
-            )
-          else
-            Expanded(
-              child: CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    sliver: SliverGrid(
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 0.88,
+            ),
+          )
+        else
+          Expanded(
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.88,
+                        ),
+                    delegate: SliverChildBuilderDelegate((context, i) {
+                      final s = _squads[i];
+                      return _CeldaSquadExplorar(
+                        nombre: s.nombre,
+                        avatares: s.avataresResueltos,
+                        portada: s.portadaUrl,
+                        portadaCacheKey: s.portadaCacheKey,
+                        total: s.cantidadMiembros,
+                        extra: s.miembrosExtra,
+                        onTap: () => widget.onSquad(s),
+                      );
+                    }, childCount: _squads.length),
+                  ),
+                ),
+                if (_hayMas)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        4,
+                        20,
+                        widget.embebido
+                            ? 24
+                            : MediaQuery.paddingOf(context).bottom + 16,
                       ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, i) {
-                          final s = _squads[i];
-                          return _CeldaSquadExplorar(
-                            nombre: s.nombre,
-                            avatares: s.avataresResueltos,
-                            portada: s.portadaUrl,
-                            portadaCacheKey: s.portadaCacheKey,
-                            total: s.cantidadMiembros,
-                            extra: s.miembrosExtra,
-                            onTap: () => widget.onSquad(s),
-                          );
-                        },
-                        childCount: _squads.length,
+                      child: CupertinoButton(
+                        color: ColoresApp.fondoSuperficie,
+                        borderRadius: BorderRadius.circular(14),
+                        onPressed: _cargandoMas
+                            ? null
+                            : () => _cargar(inicial: false),
+                        child: _cargandoMas
+                            ? const FernecitoLoader.inline(size: 16)
+                            : Text(
+                                'Ver más squads',
+                                style: GoogleFonts.baloo2(
+                                  fontWeight: FontWeight.w800,
+                                  color: ColoresApp.principalMarca,
+                                ),
+                              ),
                       ),
                     ),
                   ),
-                  if (_hayMas)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          20,
-                          4,
-                          20,
-                          widget.embebido
-                              ? 24
-                              : MediaQuery.paddingOf(context).bottom + 16,
-                        ),
-                        child: CupertinoButton(
-                          color: ColoresApp.fondoSuperficie,
-                          borderRadius: BorderRadius.circular(14),
-                          onPressed: _cargandoMas
-                              ? null
-                              : () => _cargar(inicial: false),
-                          child: _cargandoMas
-                              ? const FernecitoLoader.inline(size: 16)
-                              : Text(
-                                  'Ver más squads',
-                                  style: GoogleFonts.baloo2(
-                                    fontWeight: FontWeight.w800,
-                                    color: ColoresApp.principalMarca,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+              ],
             ),
-        ],
+          ),
+      ],
     );
 
     if (widget.embebido) {
@@ -1156,11 +1251,11 @@ class _CeldaSquadExplorar extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withValues(alpha: 0.42),
-                    Colors.black.withValues(alpha: 0.58),
-                    Colors.black.withValues(alpha: 0.78),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.18),
+                    Colors.black.withValues(alpha: 0.72),
                   ],
-                  stops: const [0.0, 0.45, 1.0],
+                  stops: const [0.48, 0.72, 1.0],
                 ),
               ),
             ),
@@ -1212,16 +1307,7 @@ class _CeldaSquadExplorar extends StatelessWidget {
   }
 
   Widget _fondoFallback() {
-    return ColoredBox(
-      color: ColoresApp.fondoSuperficie,
-      child: Center(
-        child: Icon(
-          CupertinoIcons.person_3_fill,
-          size: 36,
-          color: ColoresApp.principalMarca.withValues(alpha: 0.28),
-        ),
-      ),
-    );
+    return const ColoredBox(color: ColoresApp.fondoPrincipal);
   }
 }
 
@@ -1281,13 +1367,15 @@ class _StackAvataresExplorar extends StatelessWidget {
                   color: bordeClaro
                       ? ColoresApp.principalMarca.withValues(alpha: 0.85)
                       : ColoresApp.principalMarca.withValues(alpha: 0.2),
-                                  ),
+                ),
                 child: Text(
                   '+$extra',
                   style: GoogleFonts.baloo2(
                     fontSize: 11,
                     fontWeight: FontWeight.w900,
-                    color: bordeClaro ? Colors.white : ColoresApp.principalMarca,
+                    color: bordeClaro
+                        ? Colors.white
+                        : ColoresApp.principalMarca,
                   ),
                 ),
               ),
@@ -1303,7 +1391,7 @@ class _StackAvataresExplorar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-                boxShadow: bordeClaro
+        boxShadow: bordeClaro
             ? [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.35),

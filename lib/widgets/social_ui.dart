@@ -10,15 +10,11 @@ import '../core/constants.dart';
 import '../core/tema_fernecito.dart';
 import 'fernecito_loader.dart';
 
-/// Reserva inferior en tab Social embebido (navbar home + switch flotante).
+/// Reserva inferior en tab Social embebido (navbar home).
 const double kSocialNavHomeAltura = 70.0;
-const double kSocialSwitchFlotanteGap = 10.0;
 
 double reservaInferiorSocialEmbebido(BuildContext context) {
-  return MediaQuery.paddingOf(context).bottom +
-      kSocialNavHomeAltura +
-      kSocialSwitchFlotanteGap +
-      54;
+  return MediaQuery.paddingOf(context).bottom + kSocialNavHomeAltura + 14;
 }
 
 /// Encabezado de sección (título + opcional subtítulo).
@@ -528,14 +524,14 @@ class ToggleSegmentadoSocial extends StatelessWidget {
                   curve: Curves.easeOutCubic,
                   padding: EdgeInsets.symmetric(vertical: paddingVertical),
                   decoration: BoxDecoration(
-                    color: activo ? accent : Colors.transparent,
+                    color: activo ? accent : const Color(0xFF2B2B30),
                     borderRadius: BorderRadius.circular(50),
                     boxShadow: activo && !sinGlowActivo
                         ? [
                             BoxShadow(
-                              color: accent.withValues(alpha: 0.30),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
+                              color: accent.withValues(alpha: 0.14),
+                              blurRadius: 6,
+                              offset: const Offset(0, 1),
                             ),
                           ]
                         : null,
@@ -586,14 +582,14 @@ class SwitchExplorarFlotanteSocial extends StatelessWidget {
             borderRadius: BorderRadius.circular(_radio + 14),
             boxShadow: [
               BoxShadow(
-                color: accent.withValues(alpha: 0.38),
-                blurRadius: 34,
-                spreadRadius: 2,
+                color: accent.withValues(alpha: 0.12),
+                blurRadius: 18,
+                spreadRadius: 0,
               ),
               BoxShadow(
-                color: accent.withValues(alpha: 0.20),
-                blurRadius: 52,
-                spreadRadius: 8,
+                color: accent.withValues(alpha: 0.06),
+                blurRadius: 26,
+                spreadRadius: 2,
               ),
             ],
           ),

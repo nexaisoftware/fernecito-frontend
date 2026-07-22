@@ -11,15 +11,16 @@ import 'package:latlong2/latlong.dart';
 import '../core/constants.dart';
 import '../core/coordenadas_ciudades.dart';
 import '../core/estado_busqueda_ia.dart';
+import '../core/preferencias_cartelera.dart';
 import '../core/servicio_busqueda_ia.dart';
 import '../core/servicio_ubicacion_dispositivo.dart';
-import '../core/ubicaciones_data.dart';
 import '../PANTALLAS/pantalla_local_perfil.dart';
 import '../PANTALLAS/pantalla_ver_evento.dart';
 import 'avatar_local.dart';
 
 const _kDorado = Color(0xFFE0B800);
 const _kVioleta = Color(0xFFBB8FCE);
+
 /// Violeta oscuro (app locales) — contraste sobre dorado / mostaza.
 const _kVioletaOscuro = Color(0xFF4A1A8A);
 
@@ -31,7 +32,8 @@ String? _distanciaHastaCiudad(LatLng? ref, String? ciudad) {
   final metros = const Distance()(ref, dest);
   if (metros < 1000) return 'A ${metros.round()} m de ti';
   final km = metros / 1000;
-  if (km < 10) return 'A ${km.toStringAsFixed(1).replaceAll('.', ',')} km de ti';
+  if (km < 10)
+    return 'A ${km.toStringAsFixed(1).replaceAll('.', ',')} km de ti';
   return 'A ${km.round()} km de ti';
 }
 
@@ -114,9 +116,7 @@ class _PromoBadgesIa extends StatelessWidget {
     return Wrap(
       spacing: 6,
       runSpacing: 5,
-      children: [
-        for (final b in badges.take(3)) _BadgePromoIa(texto: b),
-      ],
+      children: [for (final b in badges.take(3)) _BadgePromoIa(texto: b)],
     );
   }
 }
@@ -139,10 +139,7 @@ Future<void> mostrarBusquedaIaSheet(
 }
 
 class _BusquedaIaChatSheet extends StatefulWidget {
-  const _BusquedaIaChatSheet({
-    required this.ciudades,
-    this.preguntaInicial,
-  });
+  const _BusquedaIaChatSheet({required this.ciudades, this.preguntaInicial});
 
   final Set<String> ciudades;
   final String? preguntaInicial;
@@ -158,8 +155,6 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
   final _scroll = ScrollController();
   final _cache = EstadoBusquedaIaCache.instancia;
   bool _cargando = false;
-  /// Alcance de búsqueda: false = mi zona (ciudades activas), true = toda la app.
-  bool _alcanceTodas = false;
 
   /// Posición del usuario para el badge "a X km de ti" (null = sin badge).
   LatLng? _refUsuario;
@@ -176,11 +171,11 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
 
     _refUsuario = ServicioUbicacionDispositivo.instancia.ultimaPosicionConocida;
     if (_refUsuario == null) {
-      ServicioUbicacionDispositivo.instancia
-          .posicionAproximadaSinPrompt()
-          .then((p) {
-        if (p != null && mounted) setState(() => _refUsuario = p);
-      });
+      ServicioUbicacionDispositivo.instancia.posicionAproximadaSinPrompt().then(
+        (p) {
+          if (p != null && mounted) setState(() => _refUsuario = p);
+        },
+      );
     }
   }
 
@@ -197,8 +192,14 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
   void didChangeMetrics() {
     // El sheet se achica con el teclado; el ListView no se reacomoda solo.
     // Al crecer el inset, bajamos al final para que el chat quede arriba del input.
-    final bottom = WidgetsBinding
-            .instance.platformDispatcher.views.first.viewInsets.bottom /
+    final bottom =
+        WidgetsBinding
+            .instance
+            .platformDispatcher
+            .views
+            .first
+            .viewInsets
+            .bottom /
         WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
     if (bottom > _keyboardPrev + 40) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -245,8 +246,6 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
     final res = await ServicioBusquedaIa.instancia.buscar(
       pregunta: texto,
       ciudades: widget.ciudades,
-      ciudadesDisponibles: UbicacionesData.todasLasCiudades,
-      alcanceTodas: _alcanceTodas,
       seguirConversacion: seguir,
       historial: seguir ? _cache.historialParaEdge() : const [],
     );
@@ -328,6 +327,7 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
     final padBottomInput = 10 + (keyboard > 0 ? 0.0 : bottomSafe);
     final hayChat = _cache.mensajes.isNotEmpty;
     final puedeSeguir = _cache.puedeSeguir && hayChat;
+    final ubicacionTexto = _textoUbicacionIa();
 
     return Padding(
       padding: EdgeInsets.only(bottom: keyboard),
@@ -406,15 +406,10 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
                 ],
               ),
             ),
-            // Conversación empezada: el alcance sube acá (libera la zona del pulgar).
-            if (hayChat)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: _ToggleAlcance(
-                  todas: _alcanceTodas,
-                  onChanged: (v) => setState(() => _alcanceTodas = v),
-                ),
-              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+              child: _BadgeUbicacionIa(texto: ubicacionTexto),
+            ),
             Expanded(
               child: hayChat
                   ? ListView.builder(
@@ -447,7 +442,8 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
                   children: [
                     Expanded(
                       child: _PillContexto(
-                        texto: 'Te quedan ${_cache.seguimientosRestantes} '
+                        texto:
+                            'Te quedan ${_cache.seguimientosRestantes} '
                             'mensaje${_cache.seguimientosRestantes == 1 ? '' : 's'} en esta conversación',
                       ),
                     ),
@@ -456,13 +452,8 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
                   ],
                 ),
               ),
-            // Solo al INICIAR: alcance abajo (zona del pulgar) + chips de ideas.
+            // Solo al INICIAR: chips de ideas.
             if (!hayChat) ...[
-              _ToggleAlcance(
-                todas: _alcanceTodas,
-                onChanged: (v) => setState(() => _alcanceTodas = v),
-              ),
-              const SizedBox(height: 8),
               if (!_cargando) _ChipsSugerencias(onTap: _usarSugerencia),
               const SizedBox(height: 8),
             ],
@@ -472,85 +463,98 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
                 child: _BotonNuevaGrande(onTap: _nuevaConsulta),
               )
             else
-            Padding(
-              padding: EdgeInsets.fromLTRB(14, 4, 14, padBottomInput),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1F),
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _ctrl,
-                        focusNode: _focus,
-                        maxLength: ServicioBusquedaIa.maxPregunta,
-                        maxLines: 4,
-                        minLines: 1,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _enviar(),
-                        cursorColor: _kVioleta,
-                        style: GoogleFonts.baloo2(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: InputDecoration(
-                          isCollapsed: true,
-                          counterText: '',
-                          hintText: hayChat
-                              ? (puedeSeguir
-                                  ? 'Seguí preguntando…'
-                                  : 'Tu próxima pregunta abre una nueva…')
-                              : '¿Qué querés hacer?',
-                          hintStyle: GoogleFonts.baloo2(
-                            color: Colors.white38,
-                            fontSize: 14,
+              Padding(
+                padding: EdgeInsets.fromLTRB(14, 4, 14, padBottomInput),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1C1C1F),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _ctrl,
+                          focusNode: _focus,
+                          maxLength: ServicioBusquedaIa.maxPregunta,
+                          maxLines: 4,
+                          minLines: 1,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _enviar(),
+                          cursorColor: _kVioleta,
+                          style: GoogleFonts.baloo2(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
                           ),
-                          border: InputBorder.none,
+                          decoration: InputDecoration(
+                            isCollapsed: true,
+                            counterText: '',
+                            hintText: hayChat
+                                ? (puedeSeguir
+                                      ? 'Seguí preguntando…'
+                                      : 'Tu próxima pregunta abre una nueva…')
+                                : '¿Qué querés hacer?',
+                            hintStyle: GoogleFonts.baloo2(
+                              color: Colors.white38,
+                              fontSize: 14,
+                            ),
+                            border: InputBorder.none,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: _cargando ? null : _enviar,
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        alignment: Alignment.center,
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [_kDorado, Color(0xFFF5D76E)],
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: _cargando ? null : _enviar,
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          alignment: Alignment.center,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [_kDorado, Color(0xFFF5D76E)],
+                            ),
+                            shape: BoxShape.circle,
                           ),
-                          shape: BoxShape.circle,
-                        ),
-                        child: _cargando
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CupertinoActivityIndicator(
-                                  color: Colors.black87,
-                                  radius: 8,
+                          child: _cargando
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CupertinoActivityIndicator(
+                                    color: Colors.black87,
+                                    radius: 8,
+                                  ),
+                                )
+                              : const Icon(
+                                  CupertinoIcons.arrow_up,
+                                  color: _kVioletaOscuro,
+                                  size: 20,
                                 ),
-                              )
-                            : const Icon(
-                                CupertinoIcons.arrow_up,
-                                color: _kVioletaOscuro,
-                                size: 20,
-                              ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
     );
+  }
+
+  String _textoUbicacionIa() {
+    final ciudades = widget.ciudades.toList()..sort();
+    final inteligente = PreferenciasCartelera.instancia.inteligenteActiva;
+    final detalle = ciudades.isEmpty
+        ? 'ubicación de la cartelera'
+        : ciudades.length == 1
+        ? ciudades.first
+        : '${ciudades.length} ciudades';
+    return inteligente
+        ? 'Resultados según ubicación inteligente · $detalle'
+        : 'Resultados según ubicación de cartelera · $detalle';
   }
 }
 
@@ -596,11 +600,7 @@ class _PillContexto extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            CupertinoIcons.chat_bubble_2,
-            size: 13,
-            color: c,
-          ),
+          const Icon(CupertinoIcons.chat_bubble_2, size: 13, color: c),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -615,6 +615,49 @@ class _PillContexto extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _BadgeUbicacionIa extends StatelessWidget {
+  const _BadgeUbicacionIa({required this.texto});
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.055),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              CupertinoIcons.location_solid,
+              size: 13,
+              color: _kVioleta,
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                texto,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.baloo2(
+                  color: Colors.white60,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -679,7 +722,11 @@ class _BotonNuevaGrande extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(CupertinoIcons.arrow_2_circlepath, size: 18, color: _kVioletaOscuro),
+            const Icon(
+              CupertinoIcons.arrow_2_circlepath,
+              size: 18,
+              color: _kVioletaOscuro,
+            ),
             const SizedBox(width: 8),
             Text(
               'Nueva conversación',
@@ -689,64 +736,6 @@ class _BotonNuevaGrande extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ToggleAlcance extends StatelessWidget {
-  const _ToggleAlcance({required this.todas, required this.onChanged});
-  final bool todas;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget opt(String label, IconData ic, bool sel, VoidCallback onTap) {
-      return Expanded(
-        child: GestureDetector(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: sel ? _kVioleta.withValues(alpha: 0.22) : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(ic, size: 13, color: sel ? _kVioleta : Colors.white54),
-                const SizedBox(width: 5),
-                Text(
-                  label,
-                  style: GoogleFonts.baloo2(
-                    color: sel ? _kVioleta : Colors.white54,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Container(
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            opt('Mi zona', CupertinoIcons.location_solid, !todas, () => onChanged(false)),
-            opt('Toda la app', CupertinoIcons.globe, todas, () => onChanged(true)),
           ],
         ),
       ),
@@ -892,7 +881,8 @@ class _BubbleEscribiendoState extends State<_BubbleEscribiendo>
               mainAxisSize: MainAxisSize.min,
               children: List.generate(3, (i) {
                 final t = (_c.value + i * 0.22) % 1.0;
-                final scale = 0.65 + 0.35 * (1 - (t - 0.5).abs() * 2).clamp(0.0, 1.0);
+                final scale =
+                    0.65 + 0.35 * (1 - (t - 0.5).abs() * 2).clamp(0.0, 1.0);
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 3),
                   child: Transform.scale(
@@ -985,7 +975,11 @@ class _BloqueAsistente extends StatelessWidget {
 }
 
 class _CardEventoIa extends StatelessWidget {
-  const _CardEventoIa({required this.item, required this.onVer, this.refUsuario});
+  const _CardEventoIa({
+    required this.item,
+    required this.onVer,
+    this.refUsuario,
+  });
   final RecomendacionIa item;
   final VoidCallback onVer;
   final LatLng? refUsuario;
@@ -1111,7 +1105,11 @@ class _CardEventoIa extends StatelessWidget {
 }
 
 class _CardLocalIa extends StatelessWidget {
-  const _CardLocalIa({required this.item, required this.onVer, this.refUsuario});
+  const _CardLocalIa({
+    required this.item,
+    required this.onVer,
+    this.refUsuario,
+  });
   final RecomendacionIa item;
   final VoidCallback onVer;
   final LatLng? refUsuario;

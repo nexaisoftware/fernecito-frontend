@@ -8,6 +8,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../core/constants.dart';
 import '../core/privacidad_perfil.dart';
 import '../core/servicio_amigos.dart';
+import '../core/servicio_perfil_usuario.dart';
 import '../core/servicio_squads.dart';
 import '../models/rompehielo.dart';
 import '../models/social.dart';
@@ -21,8 +22,9 @@ import '../widgets/fernecito_loader.dart';
 import '../widgets/social_explorar_sheets.dart';
 import '../widgets/social_ui.dart';
 
-String _arroba(String username) =>
-    username.isEmpty ? '' : (username.startsWith('@') ? username : '@$username');
+String _arroba(String username) => username.isEmpty
+    ? ''
+    : (username.startsWith('@') ? username : '@$username');
 
 EstadoRelacionUsuario _estadoUsuarioDesde(String estadoAmistad) {
   switch (estadoAmistad) {
@@ -54,45 +56,48 @@ EstadoRelacionSquad _estadoSquadDesde(
 }
 
 Map<String, dynamic> _mapAmigo(Amigo a, {bool? esEnviada}) => {
-      'id_usuario': a.idUsuario,
-      'id_relacion': a.idRelacion,
-      'nombre': a.nombre,
-      'username': _arroba(a.username),
-      'avatar': a.avatarUrl ?? '',
-      'estado': a.miEstado ?? '',
-      'instagram_url': a.instagramUrl ?? '',
-      'tiktok_url': a.tiktokUrl ?? '',
-      if (esEnviada != null) 'esEnviada': esEnviada,
-      'perfil_publico': a.perfilPublico,
-    };
+  'id_usuario': a.idUsuario,
+  'id_relacion': a.idRelacion,
+  'nombre': a.nombre,
+  'username': _arroba(a.username),
+  'avatar': a.avatarUrl ?? '',
+  'estado': a.miEstado ?? '',
+  'instagram_url': a.instagramUrl ?? '',
+  'tiktok_url': a.tiktokUrl ?? '',
+  if (esEnviada != null) 'esEnviada': esEnviada,
+  'perfil_publico': a.perfilPublico,
+};
 
 Map<String, dynamic> _mapSquadResumen(SquadResumen s) => {
-      'id_grupo': s.idGrupo,
-      'id_squad': s.idGrupo,
-      'nombre': s.nombre,
-      'nombre_squad': s.nombre,
-      'username': _arroba(s.username ?? ''),
-      'descripcion': s.descripcion ?? '',
-      'estado': s.vibe ?? s.estado ?? '',
-      'estado_squad': s.vibe ?? s.estado ?? '',
-      'vibe': s.vibe ?? '',
-      'avatar': s.portadaUrl ?? '',
-      'banner_url': s.portadaUrl,
-      'es_publico': s.esPublico,
-      'id_creador': s.idCreador,
-      'id_lider': s.idCreador,
-      'eresAdmin': s.soyLider,
-      'soy_lider': s.soyLider,
-      'mi_estado': 'aceptado',
-      'mi_rol': s.miRol,
-      'miembros': s.cantidadMiembros,
-      'miembrosAvatares': s.avataresMiembros,
-    };
+  'id_grupo': s.idGrupo,
+  'id_squad': s.idGrupo,
+  'nombre': s.nombre,
+  'nombre_squad': s.nombre,
+  'username': _arroba(s.username ?? ''),
+  'descripcion': s.descripcion ?? '',
+  'estado': s.vibe ?? s.estado ?? '',
+  'estado_squad': s.vibe ?? s.estado ?? '',
+  'vibe': s.vibe ?? '',
+  'avatar': s.portadaUrl ?? '',
+  'banner_url': s.portadaUrl,
+  'es_publico': s.esPublico,
+  'id_creador': s.idCreador,
+  'id_lider': s.idCreador,
+  'eresAdmin': s.soyLider,
+  'soy_lider': s.soyLider,
+  'mi_estado': 'aceptado',
+  'mi_rol': s.miRol,
+  'origen_pendiente': s.origenPendiente,
+  'miembros': s.cantidadMiembros,
+  'miembrosAvatares': s.avataresMiembros,
+};
 
 Map<String, dynamic> _mapInvitacionSquad(SquadResumen s) {
   final map = _mapSquadResumen(s);
+  final esSolicitudEnviada = s.origenPendiente == 'solicitud';
   map['mi_estado'] = 'pendiente';
-  map['es_invitacion_recibida'] = true;
+  map['es_invitacion_recibida'] = !esSolicitudEnviada;
+  map['es_solicitud_enviada'] = esSolicitudEnviada;
   return map;
 }
 
@@ -101,12 +106,18 @@ enum SocialVista { explorar, amigos, squads }
 class PantallaSocial extends StatefulWidget {
   final SocialVista vista;
   final bool mostrarVolver;
+  final String? provinciaInicial;
+  final Set<String>? ciudadesIniciales;
+  final bool? carteleraInteligenteInicial;
 
   /// Compatibilidad: 0 → amigos, 1 → squads (desde notificaciones antiguas).
   const PantallaSocial({
     super.key,
     this.vista = SocialVista.explorar,
     this.mostrarVolver = false,
+    this.provinciaInicial,
+    this.ciudadesIniciales,
+    this.carteleraInteligenteInicial,
     @Deprecated('Usar vista') this.initialTabIndex = 0,
   });
 
@@ -231,6 +242,7 @@ class _PantallaSocialState extends State<PantallaSocial> {
 
       final idUsuario = solicitud['id_usuario']?.toString();
       if (idUsuario != null && idUsuario.isNotEmpty) {
+        ServicioPerfilUsuario().invalidarUsuario(idUsuario);
         _quitarSolicitudLocal(idUsuario);
       }
       await _cargarAmigos(silencioso: true);
@@ -267,6 +279,7 @@ class _PantallaSocialState extends State<PantallaSocial> {
       final ok = await _srvAmigos.responder(idRelacion, aceptar: false);
       if (ok) {
         if (idUsuario != null && idUsuario.isNotEmpty) {
+          ServicioPerfilUsuario().invalidarUsuario(idUsuario);
           _quitarSolicitudLocal(idUsuario);
         }
         await _cargarAmigos(silencioso: true);
@@ -282,6 +295,7 @@ class _PantallaSocialState extends State<PantallaSocial> {
     try {
       final ok = await _srvAmigos.eliminar(idUsuario);
       if (ok) {
+        ServicioPerfilUsuario().invalidarUsuario(idUsuario);
         _quitarSolicitudLocal(idUsuario);
         await _cargarAmigos(silencioso: true);
       }
@@ -294,20 +308,30 @@ class _PantallaSocialState extends State<PantallaSocial> {
 
   void _quitarInvitacionLocal(String idGrupo) {
     setState(() {
-      _invitaciones =
-          _invitaciones.where((s) => s.idGrupo != idGrupo).toList();
+      _invitaciones = _invitaciones.where((s) => s.idGrupo != idGrupo).toList();
     });
   }
 
-  Future<void> _responderInvitacion(String idGrupo, {required bool aceptar}) async {
+  Future<void> _resolverPendienteSquad(
+    Map<String, dynamic> squad, {
+    required bool aceptar,
+  }) async {
+    final idGrupo = squad['id_grupo']?.toString() ?? '';
+    if (idGrupo.isEmpty) return;
     if (_squadProcesandoId != null) return;
     setState(() => _squadProcesandoId = idGrupo);
     try {
-      final ok =
-          await _srvSquads.responderInvitacion(idGrupo, aceptar: aceptar);
+      final esSolicitudEnviada = squad['es_solicitud_enviada'] == true;
+      final ok = esSolicitudEnviada
+          ? await _srvSquads.salir(idGrupo)
+          : await _srvSquads.responderInvitacion(idGrupo, aceptar: aceptar);
       if (!ok) {
         if (mounted) {
-          _mostrarError('No se pudo ${aceptar ? 'aceptar' : 'rechazar'} la invitación.');
+          _mostrarError(
+            esSolicitudEnviada
+                ? 'No se pudo cancelar la solicitud.'
+                : 'No se pudo ${aceptar ? 'aceptar' : 'rechazar'} la invitación.',
+          );
         }
         return;
       }
@@ -319,29 +343,30 @@ class _PantallaSocialState extends State<PantallaSocial> {
   }
 
   Map<String, dynamic> _mapUsuarioBusqueda(UsuarioBusqueda u) => {
-        'id_usuario': u.idUsuario,
-        'nombre': u.nombre,
-        'username': _arroba(u.username),
-        'avatar': u.avatarUrl ?? '',
-        'estado': u.estado ?? '',
-        'instagram_url': u.instagramUrl ?? '',
-        'tiktok_url': u.tiktokUrl ?? '',
-        'estado_amistad': u.estadoAmistad,
-        'perfil_publico': u.perfilPublico,
-      };
+    'id_usuario': u.idUsuario,
+    'nombre': u.nombre,
+    'username': _arroba(u.username),
+    'avatar': u.avatarUrl ?? '',
+    'estado': u.estado ?? '',
+    'instagram_url': u.instagramUrl ?? '',
+    'tiktok_url': u.tiktokUrl ?? '',
+    'estado_amistad': u.estadoAmistad,
+    'perfil_publico': u.perfilPublico,
+  };
 
   Map<String, dynamic> _mapSquadExplorar(SquadExplorarItem s) => {
-        'id_grupo': s.idGrupo,
-        'id_squad': s.idGrupo,
-        'nombre': s.nombre,
-        'nombre_squad': s.nombre,
-        'avatar': s.portadaUrl ?? '',
-        'banner_url': s.portadaUrl,
-        'miembros': s.cantidadMiembros,
-        'es_publico': true,
-        'mi_estado': s.miEstado,
-        'miembrosAvatares': s.avataresResueltos,
-      };
+    'id_grupo': s.idGrupo,
+    'id_squad': s.idGrupo,
+    'nombre': s.nombre,
+    'nombre_squad': s.nombre,
+    'avatar': s.portadaUrl ?? '',
+    'banner_url': s.portadaUrl,
+    'url_portada': s.urlPortada,
+    'miembros': s.cantidadMiembros,
+    'es_publico': true,
+    'mi_estado': s.miEstado,
+    'miembrosAvatares': s.avataresResueltos,
+  };
 
   void _abrirCrearSquad(BuildContext context) {
     Navigator.of(context)
@@ -372,6 +397,11 @@ class _PantallaSocialState extends State<PantallaSocial> {
     Map<String, dynamic> squad, {
     required EstadoRelacionSquad estado,
   }) {
+    if (estado == EstadoRelacionSquad.miembro ||
+        squad['mi_estado']?.toString() == 'aceptado') {
+      _abrirMisSquad(context, squad);
+      return;
+    }
     Navigator.of(context)
         .push(
           CupertinoPageRoute(
@@ -387,7 +417,9 @@ class _PantallaSocialState extends State<PantallaSocial> {
 
   void _abrirMisSquad(BuildContext context, Map<String, dynamic> squad) {
     Navigator.of(context)
-        .push(CupertinoPageRoute(builder: (_) => PantallaMisSquads(squad: squad)))
+        .push(
+          CupertinoPageRoute(builder: (_) => PantallaMisSquads(squad: squad)),
+        )
         .then((_) => _cargarSquads());
   }
 
@@ -401,6 +433,22 @@ class _PantallaSocialState extends State<PantallaSocial> {
 
   void _volverAExplorar() {
     setState(() => _vista = SocialVista.explorar);
+  }
+
+  Widget _switchExplorarSuperior() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+      child: ToggleSegmentadoSocial(
+        opciones: const ['Personas', 'Squads'],
+        indice: _explorarIndice,
+        onChanged: (i) => setState(() => _explorarIndice = i),
+        anchoMaximo: 320,
+        paddingVertical: 7,
+        fontSize: 13.5,
+        sinBorde: true,
+        sinGlowActivo: true,
+      ),
+    );
   }
 
   Widget _barraVolverEmbebida({required String titulo}) {
@@ -489,8 +537,7 @@ class _PantallaSocialState extends State<PantallaSocial> {
   Widget build(BuildContext context) {
     const fondoSocial = ColoresApp.fondoPrincipal;
 
-    final idsAmigos =
-        _amistades.amigos.map((a) => a.idUsuario).toSet();
+    final idsAmigos = _amistades.amigos.map((a) => a.idUsuario).toSet();
     final solicitudesAmigos = <Map<String, dynamic>>[
       ..._amistades.recibidas
           .where((a) => !idsAmigos.contains(a.idUsuario))
@@ -499,8 +546,7 @@ class _PantallaSocialState extends State<PantallaSocial> {
     ];
     final amigos = _amistades.amigos.map((a) => _mapAmigo(a)).toList();
 
-    final solicitudesSquads =
-        _invitaciones.map(_mapInvitacionSquad).toList();
+    final solicitudesSquads = _invitaciones.map(_mapInvitacionSquad).toList();
     final misGrupos = _misSquads.map((s) => _mapSquadResumen(s)).toList();
     final novedadesAmigos = _amistades.recibidas
         .where((a) => !idsAmigos.contains(a.idUsuario))
@@ -543,10 +589,8 @@ class _PantallaSocialState extends State<PantallaSocial> {
                   cargando: _cargandoAmigos,
                   solicitudProcesandoKey: _solicitudProcesandoKey,
                   srvAmigos: _srvAmigos,
-                  onRefresh: () => _cargarAmigos(
-                    silencioso: true,
-                    forzarCompleto: true,
-                  ),
+                  onRefresh: () =>
+                      _cargarAmigos(silencioso: true, forzarCompleto: true),
                   onAceptar: _aceptarAmigo,
                   onCancelarRechazar: (s) {
                     final esEnviada = s['esEnviada'] as bool? ?? false;
@@ -615,14 +659,10 @@ class _PantallaSocialState extends State<PantallaSocial> {
                       esInvitacionRecibida: s['es_invitacion_recibida'] == true,
                     ),
                   ),
-                  onAceptarInvitacion: (s) => _responderInvitacion(
-                    s['id_grupo'] as String,
-                    aceptar: true,
-                  ),
-                  onRechazarInvitacion: (s) => _responderInvitacion(
-                    s['id_grupo'] as String,
-                    aceptar: false,
-                  ),
+                  onAceptarInvitacion: (s) =>
+                      _resolverPendienteSquad(s, aceptar: true),
+                  onRechazarInvitacion: (s) =>
+                      _resolverPendienteSquad(s, aceptar: false),
                   onAbrirMisSquad: (s) => _abrirMisSquad(context, s),
                 ),
               ),
@@ -667,45 +707,37 @@ class _PantallaSocialState extends State<PantallaSocial> {
               ),
             ),
             Expanded(
-              child: Stack(
-                clipBehavior: Clip.none,
+              child: IndexedStack(
+                index: _explorarIndice,
                 children: [
-                  IndexedStack(
-                    index: _explorarIndice,
-                    children: [
-                      ExplorarPersonasContenido(
-                        paddingInferiorScroll:
-                            reservaInferiorSocialEmbebido(context),
-                        onPerfil: (u) => _abrirPerfilUsuario(
-                          context,
-                          _mapUsuarioBusqueda(u),
-                          estadoRelacion:
-                              _estadoUsuarioDesde(u.estadoAmistad),
-                        ),
-                      ),
-                      ExplorarSquadsContenido(
-                        paddingInferiorScroll:
-                            reservaInferiorSocialEmbebido(context),
-                        onSquad: (s) => _abrirPerfilSquad(
-                          context,
-                          _mapSquadExplorar(s),
-                          estado: _estadoSquadDesde(s.miEstado),
-                        ),
-                      ),
-                    ],
+                  ExplorarPersonasContenido(
+                    provinciaInicial: widget.provinciaInicial,
+                    ciudadesIniciales: widget.ciudadesIniciales,
+                    carteleraInteligenteInicial:
+                        widget.carteleraInteligenteInicial,
+                    encabezadoSuperior: _switchExplorarSuperior(),
+                    paddingInferiorScroll: reservaInferiorSocialEmbebido(
+                      context,
+                    ),
+                    onPerfil: (u) => _abrirPerfilUsuario(
+                      context,
+                      _mapUsuarioBusqueda(u),
+                      estadoRelacion: _estadoUsuarioDesde(u.estadoAmistad),
+                    ),
                   ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: MediaQuery.paddingOf(context).bottom +
-                        kSocialNavHomeAltura +
-                        kSocialSwitchFlotanteGap,
-                    child: Align(
-                      alignment: Alignment.center,
-                      child: SwitchExplorarFlotanteSocial(
-                        indice: _explorarIndice,
-                        onChanged: (i) => setState(() => _explorarIndice = i),
-                      ),
+                  ExplorarSquadsContenido(
+                    provinciaInicial: widget.provinciaInicial,
+                    ciudadesIniciales: widget.ciudadesIniciales,
+                    carteleraInteligenteInicial:
+                        widget.carteleraInteligenteInicial,
+                    encabezadoSuperior: _switchExplorarSuperior(),
+                    paddingInferiorScroll: reservaInferiorSocialEmbebido(
+                      context,
+                    ),
+                    onSquad: (s) => _abrirPerfilSquad(
+                      context,
+                      _mapSquadExplorar(s),
+                      estado: _estadoSquadDesde(s.miEstado),
                     ),
                   ),
                 ],
@@ -728,7 +760,8 @@ class _TabAmigos extends StatefulWidget {
   final Future<void> Function() onRefresh;
   final void Function(Map<String, dynamic>) onAceptar;
   final void Function(Map<String, dynamic>) onCancelarRechazar;
-  final void Function(Map<String, dynamic>, EstadoRelacionUsuario) onAbrirPerfil;
+  final void Function(Map<String, dynamic>, EstadoRelacionUsuario)
+  onAbrirPerfil;
 
   const _TabAmigos({
     this.pantallaDedicada = false,
@@ -784,7 +817,12 @@ class _TabAmigosState extends State<_TabAmigos> {
 
     final lista = FernecitoRefreshableList(
       onRefresh: widget.onRefresh,
-      padding: EdgeInsets.fromLTRB(20, widget.pantallaDedicada ? 12 : 6, 20, bottomPad),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        widget.pantallaDedicada ? 12 : 6,
+        20,
+        bottomPad,
+      ),
       children: contenido,
     );
 
@@ -804,10 +842,7 @@ class _TabAmigosState extends State<_TabAmigos> {
     return FernecitoRefreshableList(
       onRefresh: widget.onRefresh,
       padding: EdgeInsets.fromLTRB(20, 6, 20, bottomPad),
-      children: [
-        _barraBusqueda(),
-        ...contenido,
-      ],
+      children: [_barraBusqueda(), ...contenido],
     );
   }
 
@@ -822,148 +857,149 @@ class _TabAmigosState extends State<_TabAmigos> {
 
   List<Widget> _contenidoLista(bool mostrandoBusqueda) {
     return [
-        if (!mostrandoBusqueda && !widget.pantallaDedicada) const SizedBox(height: 12),
-        if (_buscando)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: FernecitoLoaderCentro(size: 26),
-          )
-        else if (mostrandoBusqueda) ...[
-          const SizedBox(height: 12),
-          EncabezadoSeccionSocial(
-            titulo: 'Resultados',
-            subtitulo: _resultados.isEmpty
-                ? 'Sin coincidencias — probá otro nombre'
-                : '${_resultados.length} encontrados',
-          ),
-          if (_resultados.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text(
-                'No encontramos a nadie con "$_ultimaQuery"',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.baloo2(
-                  fontSize: 13,
-                  color: ColoresApp.textoSecundario,
-                ),
+      if (!mostrandoBusqueda && !widget.pantallaDedicada)
+        const SizedBox(height: 12),
+      if (_buscando)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: FernecitoLoaderCentro(size: 26),
+        )
+      else if (mostrandoBusqueda) ...[
+        const SizedBox(height: 12),
+        EncabezadoSeccionSocial(
+          titulo: 'Resultados',
+          subtitulo: _resultados.isEmpty
+              ? 'Sin coincidencias — probá otro nombre'
+              : '${_resultados.length} encontrados',
+        ),
+        if (_resultados.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No encontramos a nadie con "$_ultimaQuery"',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.baloo2(
+                fontSize: 13,
+                color: ColoresApp.textoSecundario,
               ),
-            )
-          else
-            ..._resultados.map((u) {
-              final raw = {
-                'id_usuario': u.idUsuario,
-                'nombre': u.nombre,
-                'username': _arroba(u.username),
-                'avatar': u.avatarUrl ?? '',
-                'estado': u.estado ?? '',
-                'instagram_url': u.instagramUrl ?? '',
-                'tiktok_url': u.tiktokUrl ?? '',
-                'estado_amistad': u.estadoAmistad,
-                'perfil_publico': u.perfilPublico,
-              };
-              final candado = PrivacidadPerfil.mostrarCandadoEnBusqueda(
-                perfilPublico: u.perfilPublico,
-              );
-              return CardSuperficieSocial(
-                onTap: () => widget.onAbrirPerfil(
-                  raw,
-                  _estadoUsuarioDesde(u.estadoAmistad),
-                ),
-                child: Row(
-                  children: [
-                    AvatarSocialPrivacidad(
-                      url: u.avatarUrl ?? '',
-                      size: 48,
-                      mostrarCandado: candado,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            PrivacidadPerfil.nombreEnBusqueda(
-                              perfilPublico: u.perfilPublico,
-                              nombre: u.nombre,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.baloo2(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              color: ColoresApp.textoPrincipal,
-                            ),
+            ),
+          )
+        else
+          ..._resultados.map((u) {
+            final raw = {
+              'id_usuario': u.idUsuario,
+              'nombre': u.nombre,
+              'username': _arroba(u.username),
+              'avatar': u.avatarUrl ?? '',
+              'estado': u.estado ?? '',
+              'instagram_url': u.instagramUrl ?? '',
+              'tiktok_url': u.tiktokUrl ?? '',
+              'estado_amistad': u.estadoAmistad,
+              'perfil_publico': u.perfilPublico,
+            };
+            final candado = PrivacidadPerfil.mostrarCandadoEnBusqueda(
+              perfilPublico: u.perfilPublico,
+            );
+            return CardSuperficieSocial(
+              onTap: () => widget.onAbrirPerfil(
+                raw,
+                _estadoUsuarioDesde(u.estadoAmistad),
+              ),
+              child: Row(
+                children: [
+                  AvatarSocialPrivacidad(
+                    url: u.avatarUrl ?? '',
+                    size: 48,
+                    mostrarCandado: candado,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          PrivacidadPerfil.nombreEnBusqueda(
+                            perfilPublico: u.perfilPublico,
+                            nombre: u.nombre,
                           ),
-                          const SizedBox(height: 4),
-                          ChipSocial(texto: _arroba(u.username)),
-                        ],
-                      ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.baloo2(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: ColoresApp.textoPrincipal,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        ChipSocial(texto: _arroba(u.username)),
+                      ],
                     ),
-                    Icon(CupertinoIcons.chevron_right,
-                        size: 16, color: ColoresApp.textoSecundario),
-                  ],
-                ),
-              );
-            }),
+                  ),
+                  Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 16,
+                    color: ColoresApp.textoSecundario,
+                  ),
+                ],
+              ),
+            );
+          }),
+        const SizedBox(height: 8),
+      ],
+      if (!mostrandoBusqueda && widget.cargando)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 30),
+          child: FernecitoLoaderCentro(size: 26),
+        )
+      else if (!mostrandoBusqueda) ...[
+        if (widget.solicitudes.isNotEmpty) ...[
+          const EncabezadoSeccionSocial(
+            titulo: 'Solicitudes',
+            subtitulo: 'Pendientes de respuesta',
+          ),
+          ...widget.solicitudes.map((s) {
+            final clave =
+                s['id_relacion']?.toString() ??
+                s['id_usuario']?.toString() ??
+                '';
+            final esEnviada = s['esEnviada'] as bool? ?? false;
+            final yaAceptado =
+                !esEnviada &&
+                widget.amigos.any((a) => a['id_usuario'] == s['id_usuario']);
+            return _CardSolicitudAmigo(
+              solicitud: s,
+              procesando: widget.solicitudProcesandoKey == clave,
+              yaAceptado: yaAceptado,
+              onAceptar: () => widget.onAceptar(s),
+              onCancelar: () => widget.onCancelarRechazar(s),
+              onVerPerfil: () => widget.onAbrirPerfil(
+                s,
+                esEnviada
+                    ? EstadoRelacionUsuario.solicitudEnviada
+                    : EstadoRelacionUsuario.solicitudRecibida,
+              ),
+            );
+          }),
+          const SizedBox(height: 20),
+        ] else if (widget.pantallaDedicada) ...[
+          const EncabezadoSeccionSocial(
+            titulo: 'Solicitudes',
+            subtitulo: 'Sin pendientes por ahora',
+          ),
           const SizedBox(height: 8),
         ],
-        if (!mostrandoBusqueda && widget.cargando)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 30),
-            child: FernecitoLoaderCentro(size: 26),
-          )
-        else if (!mostrandoBusqueda) ...[
-          if (widget.solicitudes.isNotEmpty) ...[
-            const EncabezadoSeccionSocial(
-              titulo: 'Solicitudes',
-              subtitulo: 'Pendientes de respuesta',
+        if (widget.amigos.isNotEmpty || widget.pantallaDedicada)
+          EncabezadoAmigosCentrado(cantidad: widget.amigos.length),
+        if (widget.amigos.isEmpty)
+          const _PanelVacioAmigosSocial()
+        else
+          ...widget.amigos.map(
+            (a) => _CardAmigo(
+              amigo: a,
+              onTap: () => widget.onAbrirPerfil(a, EstadoRelacionUsuario.amigo),
             ),
-            ...widget.solicitudes.map(
-              (s) {
-                final clave = s['id_relacion']?.toString() ??
-                    s['id_usuario']?.toString() ??
-                    '';
-                final esEnviada = s['esEnviada'] as bool? ?? false;
-                final yaAceptado = !esEnviada &&
-                    widget.amigos.any(
-                      (a) => a['id_usuario'] == s['id_usuario'],
-                    );
-                return _CardSolicitudAmigo(
-                  solicitud: s,
-                  procesando: widget.solicitudProcesandoKey == clave,
-                  yaAceptado: yaAceptado,
-                  onAceptar: () => widget.onAceptar(s),
-                  onCancelar: () => widget.onCancelarRechazar(s),
-                  onVerPerfil: () => widget.onAbrirPerfil(
-                    s,
-                    esEnviada
-                        ? EstadoRelacionUsuario.solicitudEnviada
-                        : EstadoRelacionUsuario.solicitudRecibida,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-          ] else if (widget.pantallaDedicada) ...[
-            const EncabezadoSeccionSocial(
-              titulo: 'Solicitudes',
-              subtitulo: 'Sin pendientes por ahora',
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (widget.amigos.isNotEmpty || widget.pantallaDedicada)
-            EncabezadoAmigosCentrado(
-              cantidad: widget.amigos.length,
-            ),
-          if (widget.amigos.isEmpty)
-            const _PanelVacioAmigosSocial()
-          else
-            ...widget.amigos.map((a) => _CardAmigo(
-                  amigo: a,
-                  onTap: () =>
-                      widget.onAbrirPerfil(a, EstadoRelacionUsuario.amigo),
-                )),
-        ],
+          ),
+      ],
     ];
   }
 }
@@ -990,9 +1026,7 @@ class _PanelVacioAmigosSocial extends StatelessWidget {
 class _PanelVacioSquadsSocial extends StatelessWidget {
   final VoidCallback onCrear;
 
-  const _PanelVacioSquadsSocial({
-    required this.onCrear,
-  });
+  const _PanelVacioSquadsSocial({required this.onCrear});
 
   @override
   Widget build(BuildContext context) {
@@ -1036,136 +1070,147 @@ class _CardSolicitudAmigo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final esEnviada = solicitud['esEnviada'] as bool? ?? false;
-    final esPrivadaRecibida = PrivacidadPerfil.solicitudRecibidaPrivada(solicitud);
+    final esPrivadaRecibida = PrivacidadPerfil.solicitudRecibidaPrivada(
+      solicitud,
+    );
 
     return CardSuperficieSocial(
       onTap: onVerPerfil,
       destacada: !esEnviada && !yaAceptado,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            AvatarSocialPrivacidad(
-              url: solicitud['avatar'] as String? ?? '',
-              size: 44,
-              mostrarCandado: esPrivadaRecibida,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    esPrivadaRecibida
-                        ? PrivacidadPerfil.tituloPerfilPrivado
-                        : (solicitud['nombre'] as String? ?? 'Usuario'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.baloo2(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: ColoresApp.textoPrincipal,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    esPrivadaRecibida
-                        ? (solicitud['username'] as String? ?? '@usuario')
-                        : (solicitud['username'] as String? ?? ''),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.baloo2(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: ColoresApp.textoSecundario,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (esEnviada)
-              SizedBox(
-                width: 86,
-                child: CupertinoButton(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  color: ColoresApp.fondoPrincipal,
-                  borderRadius: BorderRadius.circular(50),
-                  onPressed: procesando ? null : onCancelar,
-                  child: procesando
-                      ? const FernecitoLoader.inline(size: 16)
-                      : Text('Cancelar',
-                          style: GoogleFonts.baloo2(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: ColoresApp.textoPrincipal)),
-                ),
-              )
-            else if (yaAceptado)
-              SizedBox(
-                width: 88,
-                child: CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-                  color: ColoresApp.fondoSuperficie,
-                  borderRadius: BorderRadius.circular(50),
-                  onPressed: null,
-                  child: Text(
-                    'Aceptaste',
-                    style: GoogleFonts.baloo2(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: ColoresApp.textoSecundario,
-                    ),
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          AvatarSocialPrivacidad(
+            url: solicitud['avatar'] as String? ?? '',
+            size: 44,
+            mostrarCandado: esPrivadaRecibida,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  esPrivadaRecibida
+                      ? PrivacidadPerfil.tituloPerfilPrivado
+                      : (solicitud['nombre'] as String? ?? 'Usuario'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: ColoresApp.textoPrincipal,
                   ),
                 ),
-              )
-            else
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 82,
-                    child: CupertinoButton(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 7),
-                      color: ColoresApp.principalMarca,
-                      borderRadius: BorderRadius.circular(50),
-                      onPressed: procesando ? null : onAceptar,
-                      child: procesando
-                          ? const FernecitoLoader.inline(size: 16, color: Colors.white)
-                          : Text(
-                              'Aceptar',
-                              style: GoogleFonts.baloo2(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                    ),
+                const SizedBox(height: 2),
+                Text(
+                  esPrivadaRecibida
+                      ? (solicitud['username'] as String? ?? '@usuario')
+                      : (solicitud['username'] as String? ?? ''),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: ColoresApp.textoSecundario,
                   ),
-                  const SizedBox(height: 5),
-                  SizedBox(
-                    width: 82,
-                    child: CupertinoButton(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 7),
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(50),
-                      onPressed: procesando ? null : onCancelar,
-                      child: Text(
-                        'Rechazar',
+                ),
+              ],
+            ),
+          ),
+          if (esEnviada)
+            SizedBox(
+              width: 86,
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                color: ColoresApp.fondoPrincipal,
+                borderRadius: BorderRadius.circular(50),
+                onPressed: procesando ? null : onCancelar,
+                child: procesando
+                    ? const FernecitoLoader.inline(size: 16)
+                    : Text(
+                        'Cancelar',
                         style: GoogleFonts.baloo2(
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: ColoresApp.textoSecundario,
+                          color: ColoresApp.textoPrincipal,
                         ),
+                      ),
+              ),
+            )
+          else if (yaAceptado)
+            SizedBox(
+              width: 88,
+              child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                color: ColoresApp.fondoSuperficie,
+                borderRadius: BorderRadius.circular(50),
+                onPressed: null,
+                child: Text(
+                  'Aceptaste',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: ColoresApp.textoSecundario,
+                  ),
+                ),
+              ),
+            )
+          else
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 82,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 7,
+                    ),
+                    color: ColoresApp.principalMarca,
+                    borderRadius: BorderRadius.circular(50),
+                    onPressed: procesando ? null : onAceptar,
+                    child: procesando
+                        ? const FernecitoLoader.inline(
+                            size: 16,
+                            color: Colors.white,
+                          )
+                        : Text(
+                            'Aceptar',
+                            style: GoogleFonts.baloo2(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                SizedBox(
+                  width: 82,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 7,
+                    ),
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(50),
+                    onPressed: procesando ? null : onCancelar,
+                    child: Text(
+                      'Rechazar',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: ColoresApp.textoSecundario,
                       ),
                     ),
                   ),
-                ],
-              ),
-          ],
-        ),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1184,8 +1229,7 @@ class _CardAmigo extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-        decoration: BoxDecoration(
-                  ),
+        decoration: BoxDecoration(),
         child: Row(
           children: [
             AvatarSocial(url: amigo['avatar'] as String? ?? '', size: 40),
@@ -1303,7 +1347,12 @@ class _TabSquadsState extends State<_TabSquads> {
 
     final lista = FernecitoRefreshableList(
       onRefresh: widget.onRefresh,
-      padding: EdgeInsets.fromLTRB(20, widget.pantallaDedicada ? 12 : 6, 20, bottomPad),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        widget.pantallaDedicada ? 12 : 6,
+        20,
+        bottomPad,
+      ),
       children: contenido,
     );
 
@@ -1323,10 +1372,7 @@ class _TabSquadsState extends State<_TabSquads> {
     return FernecitoRefreshableList(
       onRefresh: widget.onRefresh,
       padding: EdgeInsets.fromLTRB(20, 6, 20, bottomPad),
-      children: [
-        _barraBusqueda(),
-        ...contenido,
-      ],
+      children: [_barraBusqueda(), ...contenido],
     );
   }
 
@@ -1336,122 +1382,123 @@ class _TabSquadsState extends State<_TabSquads> {
       onQueryChanged: _onBuscar,
       flexBarraColapsada: 4,
       flexPorAccionColapsada: 3,
-      accionesColapsado: [
-        BotonSquadMasSocial(onTap: widget.onCrearSquad),
-      ],
+      accionesColapsado: [BotonSquadMasSocial(onTap: widget.onCrearSquad)],
     );
   }
 
   List<Widget> _contenidoLista(bool mostrandoBusqueda) {
     return [
-        if (!mostrandoBusqueda && !widget.pantallaDedicada) const SizedBox(height: 12),
-        if (_buscando)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: FernecitoLoaderCentro(size: 26),
-          )
-        else if (mostrandoBusqueda) ...[
-          const SizedBox(height: 12),
-          EncabezadoSeccionSocial(
-            titulo: 'Resultados',
-            subtitulo: _resultados.isEmpty
-                ? 'Sin coincidencias'
-                : '${_resultados.length} squads',
-          ),
-          ..._resultados.map((s) {
-            final raw = {
-              'id_grupo': s.idGrupo,
-              'id_squad': s.idGrupo,
-              'nombre': s.nombre,
-              'descripcion': s.descripcion ?? '',
-              'vibe': s.vibe ?? '',
-              'avatar': s.urlPortada ?? '',
-              'miembros': s.cantidadMiembros,
-              'es_publico': s.esPublico,
-              'id_creador': s.idCreador,
-              'mi_estado': s.miEstado,
-              'miembrosAvatares': const <String>[],
-            };
-            return CardSuperficieSocial(
-              onTap: () => widget.onAbrirPerfilSquad(
-                raw,
-              ),
-              child: Row(
-                children: [
-                  AvatarSocial(url: s.urlPortada ?? '', size: 48),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          s.nombre,
-                          style: GoogleFonts.baloo2(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: ColoresApp.textoPrincipal,
-                          ),
+      if (!mostrandoBusqueda && !widget.pantallaDedicada)
+        const SizedBox(height: 12),
+      if (_buscando)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: FernecitoLoaderCentro(size: 26),
+        )
+      else if (mostrandoBusqueda) ...[
+        const SizedBox(height: 12),
+        EncabezadoSeccionSocial(
+          titulo: 'Resultados',
+          subtitulo: _resultados.isEmpty
+              ? 'Sin coincidencias'
+              : '${_resultados.length} squads',
+        ),
+        ..._resultados.map((s) {
+          final portada = s.portadaUrl;
+          final raw = {
+            'id_grupo': s.idGrupo,
+            'id_squad': s.idGrupo,
+            'nombre': s.nombre,
+            'descripcion': s.descripcion ?? '',
+            'vibe': s.vibe ?? '',
+            'avatar': portada ?? '',
+            'banner_url': portada,
+            'url_portada': s.urlPortada,
+            'miembros': s.cantidadMiembros,
+            'es_publico': s.esPublico,
+            'id_creador': s.idCreador,
+            'mi_estado': s.miEstado,
+            'miembrosAvatares': const <String>[],
+          };
+          return CardSuperficieSocial(
+            onTap: () => widget.onAbrirPerfilSquad(raw),
+            child: Row(
+              children: [
+                AvatarSocial(url: portada ?? '', size: 48),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        s.nombre,
+                        style: GoogleFonts.baloo2(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: ColoresApp.textoPrincipal,
                         ),
-                        Text(
-                          '${s.cantidadMiembros} miembros',
-                          style: GoogleFonts.baloo2(
-                            fontSize: 12,
-                            color: ColoresApp.textoSecundario,
-                          ),
+                      ),
+                      Text(
+                        '${s.cantidadMiembros} miembros',
+                        style: GoogleFonts.baloo2(
+                          fontSize: 12,
+                          color: ColoresApp.textoSecundario,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  Icon(CupertinoIcons.chevron_right,
-                      size: 16, color: ColoresApp.textoSecundario),
-                ],
-              ),
+                ),
+                Icon(
+                  CupertinoIcons.chevron_right,
+                  size: 16,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ],
+            ),
+          );
+        }),
+        const SizedBox(height: 8),
+      ],
+      if (!mostrandoBusqueda && widget.cargando)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 30),
+          child: FernecitoLoaderCentro(size: 26),
+        )
+      else if (!mostrandoBusqueda) ...[
+        if (widget.solicitudes.isNotEmpty) ...[
+          const EncabezadoSeccionSocial(
+            titulo: 'Solicitudes',
+            subtitulo: 'Invitaciones y pedidos enviados',
+          ),
+          ...widget.solicitudes.map((s) {
+            final idGrupo = s['id_grupo']?.toString() ?? '';
+            final procesando = widget.squadProcesandoId == idGrupo;
+            return _CardSolicitudSquad(
+              squad: s,
+              procesando: procesando,
+              onVerGrupo: () => widget.onAbrirPerfilSquad(s),
+              onRechazar: () => widget.onRechazarInvitacion(s),
+              onUnirse: () => widget.onAceptarInvitacion(s),
             );
           }),
+          const SizedBox(height: 20),
+        ] else if (widget.pantallaDedicada) ...[
+          const EncabezadoSeccionSocial(
+            titulo: 'Solicitudes',
+            subtitulo: 'Sin pendientes por ahora',
+          ),
           const SizedBox(height: 8),
         ],
-        if (!mostrandoBusqueda && widget.cargando)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 30),
-            child: FernecitoLoaderCentro(size: 26),
-          )
-        else if (!mostrandoBusqueda) ...[
-          if (widget.solicitudes.isNotEmpty) ...[
-            const EncabezadoSeccionSocial(
-              titulo: 'Invitaciones',
-              subtitulo: 'Te invitaron a unirte',
-            ),
-            ...widget.solicitudes.map((s) {
-              final idGrupo = s['id_grupo']?.toString() ?? '';
-              final procesando = widget.squadProcesandoId == idGrupo;
-              return _CardSolicitudSquad(
-                squad: s,
-                procesando: procesando,
-                onVerGrupo: () => widget.onAbrirPerfilSquad(s),
-                onRechazar: () => widget.onRechazarInvitacion(s),
-                onUnirse: () => widget.onAceptarInvitacion(s),
-              );
-            }),
-            const SizedBox(height: 20),
-          ] else if (widget.pantallaDedicada) ...[
-            const EncabezadoSeccionSocial(
-              titulo: 'Invitaciones',
-              subtitulo: 'Sin invitaciones pendientes',
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (widget.misGrupos.isNotEmpty || widget.pantallaDedicada)
-            EncabezadoSquadsCentrado(cantidad: widget.misGrupos.length),
-          if (widget.misGrupos.isEmpty)
-            _PanelVacioSquadsSocial(
-              onCrear: widget.onCrearSquad,
-            )
-          else
-            ...widget.misGrupos.map((g) => _CardMiGrupo(
-                  grupo: g,
-                  onTap: () => widget.onAbrirMisSquad(g),
-                )),
-        ],
+        if (widget.misGrupos.isNotEmpty || widget.pantallaDedicada)
+          EncabezadoSquadsCentrado(cantidad: widget.misGrupos.length),
+        if (widget.misGrupos.isEmpty)
+          _PanelVacioSquadsSocial(onCrear: widget.onCrearSquad)
+        else
+          ...widget.misGrupos.map(
+            (g) =>
+                _CardMiGrupo(grupo: g, onTap: () => widget.onAbrirMisSquad(g)),
+          ),
+      ],
     ];
   }
 }
@@ -1473,13 +1520,13 @@ class _CardSolicitudSquad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final esSolicitudEnviada = squad['es_solicitud_enviada'] == true;
     return GestureDetector(
       onTap: onVerGrupo,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
-        decoration: SuperficiesApp.card(radius: 20, temaTint: 0.18).copyWith(
-                  ),
+        decoration: SuperficiesApp.card(radius: 20, temaTint: 0.18).copyWith(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1491,12 +1538,24 @@ class _CardSolicitudSquad extends StatelessWidget {
                 color: ColoresApp.textoPrincipal,
               ),
             ),
+            if (esSolicitudEnviada) ...[
+              const SizedBox(height: 2),
+              Text(
+                'Solicitud enviada',
+                style: GoogleFonts.baloo2(
+                  fontSize: 12.5,
+                  color: ColoresApp.textoSecundario,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
             const SizedBox(height: 6),
             Row(
               children: [
                 _StackAvataresMiembros(
-                  avatares:
-                      List<String>.from(squad['miembrosAvatares'] as List? ?? []),
+                  avatares: List<String>.from(
+                    squad['miembrosAvatares'] as List? ?? [],
+                  ),
                   totalMiembros: squad['miembros'] as int? ?? 0,
                 ),
                 const SizedBox(width: 10),
@@ -1516,12 +1575,14 @@ class _CardSolicitudSquad extends StatelessWidget {
                 Expanded(
                   child: CupertinoButton(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     color: ColoresApp.fondoPrincipal,
                     borderRadius: BorderRadius.circular(50),
                     onPressed: procesando ? null : onRechazar,
                     child: Text(
-                      'Rechazar',
+                      esSolicitudEnviada ? 'Cancelar solicitud' : 'Rechazar',
                       style: GoogleFonts.baloo2(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -1531,25 +1592,31 @@ class _CardSolicitudSquad extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: CupertinoButton(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    color: ColoresApp.principalMarca,
-                    borderRadius: BorderRadius.circular(50),
-                    onPressed: procesando ? null : onUnirse,
-                    child: procesando
-                        ? const FernecitoLoader.inline(size: 16, color: Colors.white)
-                        : Text(
-                            'Unirse',
-                            style: GoogleFonts.baloo2(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
+                if (!esSolicitudEnviada)
+                  Expanded(
+                    child: CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      color: ColoresApp.principalMarca,
+                      borderRadius: BorderRadius.circular(50),
+                      onPressed: procesando ? null : onUnirse,
+                      child: procesando
+                          ? const FernecitoLoader.inline(
+                              size: 16,
                               color: Colors.white,
+                            )
+                          : Text(
+                              'Unirse',
+                              style: GoogleFonts.baloo2(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
                             ),
-                          ),
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -1572,8 +1639,7 @@ class _StackAvataresMiembros extends StatelessWidget {
   Widget build(BuildContext context) {
     const mostrar = 3;
     final visibles = avatares.length >= mostrar ? mostrar : avatares.length;
-    final overflow =
-        totalMiembros > visibles ? totalMiembros - visibles : 0;
+    final overflow = totalMiembros > visibles ? totalMiembros - visibles : 0;
 
     return SizedBox(
       width: 90,
@@ -1587,9 +1653,7 @@ class _StackAvataresMiembros extends StatelessWidget {
               child: Container(
                 width: 28,
                 height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                                  ),
+                decoration: BoxDecoration(shape: BoxShape.circle),
                 child: ClipOval(
                   child: CachedNetworkImage(
                     imageUrl: avatares[i],
@@ -1613,7 +1677,7 @@ class _StackAvataresMiembros extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: ColoresApp.principalMarca,
-                              ),
+              ),
               child: Text(
                 '+$overflow',
                 style: GoogleFonts.baloo2(
@@ -1646,8 +1710,7 @@ class _CardMiGrupo extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
-        decoration: SuperficiesApp.card(radius: 20, temaTint: 0.18).copyWith(
-                  ),
+        decoration: SuperficiesApp.card(radius: 20, temaTint: 0.18).copyWith(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1666,7 +1729,9 @@ class _CardMiGrupo extends StatelessWidget {
                 if (esAdmin)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: ColoresApp.promoMarca.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(50),
@@ -1674,9 +1739,10 @@ class _CardMiGrupo extends StatelessWidget {
                     child: Text(
                       'Sos líder',
                       style: GoogleFonts.baloo2(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: ColoresApp.promoMarca),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: ColoresApp.promoMarca,
+                      ),
                     ),
                   ),
               ],
@@ -1685,8 +1751,9 @@ class _CardMiGrupo extends StatelessWidget {
             Row(
               children: [
                 _StackAvataresMiembros(
-                  avatares:
-                      List<String>.from(grupo['miembrosAvatares'] as List? ?? []),
+                  avatares: List<String>.from(
+                    grupo['miembrosAvatares'] as List? ?? [],
+                  ),
                   totalMiembros: grupo['miembros'] as int? ?? 0,
                 ),
                 const SizedBox(width: 10),
@@ -1696,11 +1763,16 @@ class _CardMiGrupo extends StatelessWidget {
                         ? '${grupo['miembros']} miembros'
                         : '$estado • ${grupo['miembros']} miembros',
                     style: GoogleFonts.baloo2(
-                        fontSize: 13, color: ColoresApp.textoSecundario),
+                      fontSize: 13,
+                      color: ColoresApp.textoSecundario,
+                    ),
                   ),
                 ),
-                Icon(CupertinoIcons.chevron_right,
-                    size: 18, color: ColoresApp.textoSecundario),
+                Icon(
+                  CupertinoIcons.chevron_right,
+                  size: 18,
+                  color: ColoresApp.textoSecundario,
+                ),
               ],
             ),
           ],

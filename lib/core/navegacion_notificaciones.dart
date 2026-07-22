@@ -22,10 +22,7 @@ import 'squad_helpers.dart';
 import 'supabase_client.dart';
 
 /// Cambia tab del home (0 actividad, 1 social, 2 cartelera, …).
-typedef NotifIrATab = void Function(
-  int tabIndex, {
-  SocialVista? socialVista,
-});
+typedef NotifIrATab = void Function(int tabIndex, {SocialVista? socialVista});
 
 NavigatorState? get _nav => navigatorKey.currentState;
 
@@ -33,10 +30,42 @@ BuildContext? get _ctx => navigatorKey.currentContext;
 
 Future<T?> _push<T>(Route<T> route) async => _nav?.push(route);
 
+Future<bool> _irATabOFallback(
+  int tab, {
+  NotifIrATab? onIrATab,
+  SocialVista? socialVista,
+}) async {
+  if (onIrATab != null) {
+    onIrATab(tab, socialVista: socialVista);
+    return true;
+  }
+
+  switch (tab) {
+    case 0:
+      await _push(
+        CupertinoPageRoute(builder: (_) => const PantallaActividad()),
+      );
+      return true;
+    case 1:
+      await _push(
+        CupertinoPageRoute(
+          builder: (_) => PantallaSocial(
+            vista: socialVista ?? SocialVista.explorar,
+            mostrarVolver: true,
+          ),
+        ),
+      );
+      return true;
+    case 2:
+      return true; // abrir la app/cartelera alcanza para broadcasts o home.
+    default:
+      return false;
+  }
+}
+
 /// Resuelve contraparte del rompehielo desde el payload de la notificación.
-({String otroTipo, String otroId, String? idGrupoActor})? resolverRompehieloNotif(
-  Notificacion n,
-) {
+({String otroTipo, String otroId, String? idGrupoActor})?
+resolverRompehieloNotif(Notificacion n) {
   final payload = n.payload;
   if (payload == null) return null;
 
@@ -50,17 +79,17 @@ Future<T?> _push<T>(Route<T> route) async => _nav?.push(route);
     return null;
   }
 
-  final idGrupo = payload['id_grupo']?.toString() ??
-      payload['id_grupo_actor']?.toString();
+  final idGrupo =
+      payload['id_grupo']?.toString() ?? payload['id_grupo_actor']?.toString();
   return (otroTipo: otroTipo, otroId: otroId, idGrupoActor: idGrupo);
 }
 
-Future<void> abrirRompehieloDesdeNotificacionUsuario(Notificacion n) async {
+Future<bool> abrirRompehieloDesdeNotificacionUsuario(Notificacion n) async {
   final ctx = _ctx;
-  if (ctx == null || !ctx.mounted) return;
+  if (ctx == null || !ctx.mounted) return false;
 
   final resuelto = resolverRompehieloNotif(n);
-  if (resuelto == null) return;
+  if (resuelto == null) return false;
 
   final otroTipo = resuelto.otroTipo;
   final otroId = resuelto.otroId;
@@ -75,7 +104,7 @@ Future<void> abrirRompehieloDesdeNotificacionUsuario(Notificacion n) async {
     otroId: otroId,
     idGrupoActor: idGrupoActor,
   );
-  if (!ctx.mounted) return;
+  if (!ctx.mounted) return false;
 
   idGrupoActor ??= estado.idGrupoActorMio;
 
@@ -84,17 +113,19 @@ Future<void> abrirRompehieloDesdeNotificacionUsuario(Notificacion n) async {
   if (otroTipo == 'usuario') {
     tipo = TipoContraparte.usuario;
     final det = await srvPerfil.detalle(otroId);
-    if (!ctx.mounted) return;
+    if (!ctx.mounted) return false;
     contraparte = {
       'id_usuario': otroId,
       'username': det?['username'] ?? '@usuario',
-      'avatar': ServicioSupabase().urlAvatar(det?['foto_perfil_url']?.toString()),
+      'avatar': ServicioSupabase().urlAvatar(
+        det?['foto_perfil_url']?.toString(),
+      ),
     };
   } else {
     tipo = TipoContraparte.squad;
     final det = await srvSquads.detalle(otroId);
-    if (!ctx.mounted) return;
-    if (det == null) return;
+    if (!ctx.mounted) return false;
+    if (det == null) return false;
     contraparte = mapNavegacionDesdeDetalle(det);
   }
 
@@ -106,7 +137,7 @@ Future<void> abrirRompehieloDesdeNotificacionUsuario(Notificacion n) async {
     }
   }
 
-  if (!ctx.mounted) return;
+  if (!ctx.mounted) return false;
   await abrirRompehieloDesdeNotificacion(
     ctx,
     tipoContraparte: tipo,
@@ -115,16 +146,18 @@ Future<void> abrirRompehieloDesdeNotificacionUsuario(Notificacion n) async {
     idGrupoActor: idGrupoActor,
     squadActor: squadActor,
   );
+  return true;
 }
 
-Future<void> abrirEventoDesdeNotificacion(Notificacion n) async {
+Future<bool> abrirEventoDesdeNotificacion(Notificacion n) async {
   final ctx = _ctx;
   final idEvento = n.ctaIdRef?.trim();
-  if (ctx == null || idEvento == null || idEvento.isEmpty) return;
+  if (ctx == null || idEvento == null || idEvento.isEmpty) return false;
   await abrirEventoCompartidoPorId(ctx, idEvento);
+  return true;
 }
 
-Future<void> abrirSquadDesdeNotificacion(Notificacion n) async {
+Future<bool> abrirSquadDesdeNotificacion(Notificacion n) async {
   final idGrupo = n.ctaIdRef?.trim();
   if (idGrupo == null || idGrupo.isEmpty) {
     await _push(
@@ -135,13 +168,23 @@ Future<void> abrirSquadDesdeNotificacion(Notificacion n) async {
         ),
       ),
     );
-    return;
+    return true;
   }
 
   final det = await ServicioSquads().detalle(idGrupo);
   final ctx = _ctx;
-  if (ctx == null || !ctx.mounted) return;
-  if (det == null) return;
+  if (ctx == null || !ctx.mounted) return false;
+  if (det == null) {
+    await _push(
+      CupertinoPageRoute(
+        builder: (_) => const PantallaSocial(
+          vista: SocialVista.squads,
+          mostrarVolver: true,
+        ),
+      ),
+    );
+    return true;
+  }
 
   final map = mapNavegacionDesdeDetalle(det);
   if (notifEsPedidoUnionSquad(n) &&
@@ -149,32 +192,33 @@ Future<void> abrirSquadDesdeNotificacion(Notificacion n) async {
     await _push(
       CupertinoPageRoute(builder: (_) => PantallaMisSquads(squad: map)),
     );
-    return;
+    return true;
   }
 
   final estado = det.miEstado == 'pendiente'
       ? EstadoRelacionSquad.solicitudPendiente
       : (det.miEstado == 'aceptado'
-          ? EstadoRelacionSquad.miembro
-          : EstadoRelacionSquad.ninguno);
+            ? EstadoRelacionSquad.miembro
+            : EstadoRelacionSquad.ninguno);
   await _push(
     CupertinoPageRoute(
-      builder: (_) => PantallaPerfilSquads(
-        squad: map,
-        estadoRelacion: estado,
-      ),
+      builder: (_) => PantallaPerfilSquads(squad: map, estadoRelacion: estado),
     ),
   );
+  return true;
 }
 
-Future<void> abrirPerfilAmistadDesdeNotificacion(Notificacion n) async {
+Future<bool> abrirPerfilAmistadDesdeNotificacion(
+  Notificacion n, {
+  EstadoRelacionUsuario estado = EstadoRelacionUsuario.solicitudRecibida,
+}) async {
   final idEmisor = n.ctaIdRef?.trim();
   final ctx = _ctx;
-  if (ctx == null) return;
+  if (ctx == null) return false;
 
   if (idEmisor != null && idEmisor.isNotEmpty) {
     final det = await ServicioPerfilUsuario().detalle(idEmisor);
-    if (!ctx.mounted) return;
+    if (!ctx.mounted) return false;
     await _push(
       CupertinoPageRoute(
         builder: (_) => PantallaPerfilUsuarios(
@@ -182,93 +226,109 @@ Future<void> abrirPerfilAmistadDesdeNotificacion(Notificacion n) async {
             'id_usuario': idEmisor,
             'perfil_publico': det?['perfil_publico'] == true,
             if (det?['foto_perfil_url'] != null)
-              'avatar': ServicioSupabase()
-                  .urlAvatar(det!['foto_perfil_url']?.toString()),
+              'avatar': ServicioSupabase().urlAvatar(
+                det!['foto_perfil_url']?.toString(),
+              ),
             'username': det?['username'],
           },
-          estadoRelacion: EstadoRelacionUsuario.solicitudRecibida,
+          estadoRelacion: estado,
         ),
       ),
     );
-    return;
+    return true;
   }
 
   await _push(
     CupertinoPageRoute(
-      builder: (_) => const PantallaSocial(
-        vista: SocialVista.amigos,
-        mostrarVolver: true,
-      ),
+      builder: (_) =>
+          const PantallaSocial(vista: SocialVista.amigos, mostrarVolver: true),
     ),
   );
+  return true;
 }
 
-Future<void> navegarDesdeNotificacion(
+Future<bool> navegarDesdeNotificacion(
   Notificacion n, {
   NotifIrATab? onIrATab,
 }) async {
   switch (n.tipo) {
     case 'solicitud_amistad':
-      await abrirPerfilAmistadDesdeNotificacion(n);
-      break;
+      return abrirPerfilAmistadDesdeNotificacion(n);
     case 'amistad_aceptada':
-      onIrATab?.call(1, socialVista: SocialVista.amigos);
-      break;
+      final id = n.ctaIdRef?.trim();
+      if (id != null && id.isNotEmpty) {
+        final abierta = await abrirPerfilAmistadDesdeNotificacion(
+          n,
+          estado: EstadoRelacionUsuario.amigo,
+        );
+        if (abierta) return true;
+      }
+      return _irATabOFallback(
+        1,
+        onIrATab: onIrATab,
+        socialVista: SocialVista.amigos,
+      );
     case 'solicitud_squad':
-      await abrirSquadDesdeNotificacion(n);
-      break;
+      return abrirSquadDesdeNotificacion(n);
     case 'squad_aceptada':
-      onIrATab?.call(1, socialVista: SocialVista.squads);
-      break;
+      final abierta = await abrirSquadDesdeNotificacion(n);
+      if (abierta) return true;
+      return _irATabOFallback(
+        1,
+        onIrATab: onIrATab,
+        socialVista: SocialVista.squads,
+      );
     case 'rompehielo_recibido':
     case 'rompehielo_respondido':
     case 'rompehielo_replicado':
-      await abrirRompehieloDesdeNotificacionUsuario(n);
-      break;
+      final abierta = await abrirRompehieloDesdeNotificacionUsuario(n);
+      if (abierta) return true;
+      return _irATabOFallback(1, onIrATab: onIrATab);
     case 'lista_aceptada':
     case 'recordatorio_evento':
       final idEvento = n.ctaIdRef?.trim();
       if (idEvento != null && idEvento.isNotEmpty) {
-        await abrirEventoDesdeNotificacion(n);
+        final abierta = await abrirEventoDesdeNotificacion(n);
+        if (abierta) return true;
       } else {
-        onIrATab?.call(0);
+        return _irATabOFallback(0, onIrATab: onIrATab);
       }
-      break;
+      return _irATabOFallback(0, onIrATab: onIrATab);
     case 'pase_canjeado':
-      onIrATab?.call(0);
-      break;
+      return _irATabOFallback(0, onIrATab: onIrATab);
     case 'cuenta_pausada':
     case 'cuenta_reactivada':
-      break;
+      return true;
     default:
       final ruta = n.ctaRuta?.trim() ?? '';
       switch (ruta) {
         case '/rompehielo':
-          await abrirRompehieloDesdeNotificacionUsuario(n);
-          break;
+          final abierta = await abrirRompehieloDesdeNotificacionUsuario(n);
+          if (abierta) return true;
+          return _irATabOFallback(1, onIrATab: onIrATab);
         case '/social':
-          onIrATab?.call(1, socialVista: SocialVista.amigos);
-          break;
+          return _irATabOFallback(
+            1,
+            onIrATab: onIrATab,
+            socialVista: SocialVista.amigos,
+          );
         case '/actividad':
-          onIrATab?.call(0);
-          break;
+          return _irATabOFallback(0, onIrATab: onIrATab);
         case '/home':
-          onIrATab?.call(2);
-          break;
+          return _irATabOFallback(2, onIrATab: onIrATab);
         case '/soporte':
           await _push(
             CupertinoPageRoute(builder: (_) => const PantallaSoporte()),
           );
-          break;
+          return true;
         default:
           if (n.ctaIdRef != null && n.ctaIdRef!.isNotEmpty) {
-            await abrirEventoDesdeNotificacion(n);
+            final abierta = await abrirEventoDesdeNotificacion(n);
+            if (abierta) return true;
           } else {
-            onIrATab?.call(0);
-            await _push(
-              CupertinoPageRoute(builder: (_) => const PantallaActividad()),
-            );
+            return _irATabOFallback(0, onIrATab: onIrATab);
           }
+          return _irATabOFallback(0, onIrATab: onIrATab);
       }
   }
 }
@@ -283,7 +343,9 @@ Future<bool> aceptarAmistadDesdeNotificacion(Notificacion n) async {
   final srv = ServicioAmigos();
   var ok = false;
   final data = await srv.listar();
-  final recibida = data.recibidas.where((a) => a.idUsuario == idEmisor).toList();
+  final recibida = data.recibidas
+      .where((a) => a.idUsuario == idEmisor)
+      .toList();
   if (recibida.isNotEmpty) {
     final rel = recibida.first.idRelacion?.toString();
     if (rel != null && rel.isNotEmpty) {
@@ -301,10 +363,7 @@ Future<bool> aceptarAmistadDesdeNotificacion(Notificacion n) async {
   await _push(
     CupertinoPageRoute(
       builder: (_) => PantallaPerfilUsuarios(
-        usuario: {
-          'id_usuario': idEmisor,
-          'perfil_publico': false,
-        },
+        usuario: {'id_usuario': idEmisor, 'perfil_publico': false},
         estadoRelacion: EstadoRelacionUsuario.amigo,
       ),
     ),

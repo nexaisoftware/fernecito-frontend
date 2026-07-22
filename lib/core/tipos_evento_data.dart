@@ -1,13 +1,14 @@
 /// Tipos de evento que el local puede elegir al crear/editar un evento.
 ///
-/// 🔁 SYNC: debe coincidir con la lista hardcodeada en
-/// `frontend_locales/lib/PANTALLAS/locales_crear_evento.dart` (≈línea 1898).
+/// 🔁 SYNC (slugs): debe coincidir con la lista hardcodeada en
+/// `frontend_locales/lib/PANTALLAS/locales_crear_evento.dart`.
 /// Si agregás un tipo nuevo, sincronizá los dos lados.
 ///
-/// El `slug` matchea la columna `eventos.tipo_evento` en Supabase (lowercase).
+/// Los `slug` matchean `eventos.tipo_evento` en Supabase (lowercase).
+/// Los iconos son solo UI del filtro (usuarios); se pueden cambiar sin tocar slugs.
 library;
 
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 
 class TipoEvento {
   const TipoEvento({
@@ -25,17 +26,58 @@ class TiposEventoData {
   TiposEventoData._();
 
   /// Lista canónica + orden visual.
+  /// Slugs invariables (producción). Labels/iconos = solo presentación.
   static const List<TipoEvento> todos = <TipoEvento>[
-    TipoEvento(slug: 'boliche', label: 'Boliche', icono: CupertinoIcons.music_house_fill),
-    TipoEvento(slug: 'fiesta', label: 'Fiesta', icono: CupertinoIcons.sparkles),
-    TipoEvento(slug: 'baile', label: 'Baile', icono: CupertinoIcons.music_note_2),
-    TipoEvento(slug: 'sunset', label: 'Sunset', icono: CupertinoIcons.sun_max_fill),
-    TipoEvento(slug: 'concierto', label: 'Concierto', icono: CupertinoIcons.music_mic),
-    TipoEvento(slug: 'bar', label: 'Bar', icono: CupertinoIcons.drop_fill),
-    TipoEvento(slug: 'gastro', label: 'Gastro', icono: CupertinoIcons.bag_fill),
-    TipoEvento(slug: 'cafe', label: 'Café', icono: CupertinoIcons.book_fill),
-    TipoEvento(slug: 'evento', label: 'Evento', icono: CupertinoIcons.calendar),
-    TipoEvento(slug: 'otro', label: 'Otro', icono: CupertinoIcons.ellipsis),
+    TipoEvento(
+      slug: 'boliche',
+      label: 'Boliche',
+      icono: Icons.nightlife,
+    ),
+    TipoEvento(
+      slug: 'fiesta',
+      label: 'Fiesta',
+      icono: Icons.celebration,
+    ),
+    TipoEvento(
+      slug: 'baile',
+      label: 'Baile',
+      icono: Icons.music_note,
+    ),
+    TipoEvento(
+      slug: 'sunset',
+      label: 'Sunset',
+      icono: Icons.wb_twilight,
+    ),
+    TipoEvento(
+      slug: 'concierto',
+      label: 'Concierto',
+      icono: Icons.mic,
+    ),
+    TipoEvento(
+      slug: 'bar',
+      label: 'Bar',
+      icono: Icons.local_bar,
+    ),
+    TipoEvento(
+      slug: 'gastro',
+      label: 'Comer',
+      icono: Icons.restaurant,
+    ),
+    TipoEvento(
+      slug: 'cafe',
+      label: 'Café',
+      icono: Icons.local_cafe,
+    ),
+    TipoEvento(
+      slug: 'evento',
+      label: 'Evento',
+      icono: Icons.event,
+    ),
+    TipoEvento(
+      slug: 'otro',
+      label: 'Otro',
+      icono: Icons.more_horiz,
+    ),
   ];
 
   static TipoEvento? desdeSlug(String? slug) {

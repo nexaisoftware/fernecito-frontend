@@ -78,10 +78,10 @@ class RecomendacionIa {
           : const [],
       promoBadges: promoBadgesRaw is List
           ? promoBadgesRaw
-              .map((e) => e.toString().trim())
-              .where((s) => s.isNotEmpty)
-              .take(3)
-              .toList()
+                .map((e) => e.toString().trim())
+                .where((s) => s.isNotEmpty)
+                .take(3)
+                .toList()
           : const [],
       imagenUrl: j['imagen_url']?.toString(),
       ciudad: j['ciudad']?.toString(),
@@ -134,10 +134,12 @@ class ResultadoBusquedaIa {
       ok: j['ok'] == true,
       recomendados: list is List
           ? list
-              .whereType<Map>()
-              .map((e) => RecomendacionIa.fromJson(Map<String, dynamic>.from(e)))
-              .where((r) => r.id.isNotEmpty)
-              .toList()
+                .whereType<Map>()
+                .map(
+                  (e) => RecomendacionIa.fromJson(Map<String, dynamic>.from(e)),
+                )
+                .where((r) => r.id.isNotEmpty)
+                .toList()
           : const [],
       mensaje: j['mensaje']?.toString(),
       nota: j['nota']?.toString(),
@@ -159,8 +161,6 @@ class ServicioBusquedaIa {
   Future<ResultadoBusquedaIa> buscar({
     required String pregunta,
     required Set<String> ciudades,
-    Set<String> ciudadesDisponibles = const {},
-    bool alcanceTodas = false,
     List<Map<String, dynamic>> historial = const [],
     bool seguirConversacion = false,
   }) async {
@@ -202,8 +202,6 @@ class ServicioBusquedaIa {
         body: {
           'pregunta': q,
           'ciudades': ciudades.toList(),
-          'ciudades_disponibles': ciudadesDisponibles.toList(),
-          'alcance': alcanceTodas ? 'todas' : 'zona',
           'seguir': seguirConversacion,
           'historial': historial,
         },

@@ -23,6 +23,7 @@ import '../core/constants.dart';
 import '../core/servicio_amigos.dart';
 import '../core/servicio_locales_megusta.dart';
 import '../core/servicio_perfil_usuario.dart';
+import '../core/servicio_ubicacion_global.dart';
 import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
 import '../core/ubicaciones_data.dart';
@@ -35,7 +36,7 @@ import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/burbuja_estado.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
 import '../widgets/perfil_actividad_sheet.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../core/lanzador_externo.dart';
 import '../widgets/banner_perfil_usuario.dart';
 import '../widgets/fernecito_loader.dart';
 import '../widgets/recortar_avatar_sheet.dart';
@@ -394,8 +395,22 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
 
       print('📤 Subiendo foto actualizada...');
 
-      // Subir con upsert
+      // Limpiar extensiones viejas del mismo slot (jpg vs webp, etc.).
+      try {
+        final pathsViejos = <String>{
+          'usuarios/${usuario.id}/avatar.jpg',
+          'usuarios/${usuario.id}/avatar.jpeg',
+          'usuarios/${usuario.id}/avatar.webp',
+          'usuarios/${usuario.id}/avatar.png',
+        }..remove(pathRelativo);
+        if (pathsViejos.isNotEmpty) {
+          await supabase.cliente.storage
+              .from('avatars')
+              .remove(pathsViejos.toList());
+        }
+      } catch (_) {}
 
+      // Subir con upsert (mismo path base → reemplaza bytes del archivo actual)
       await supabase.cliente.storage
           .from('avatars')
           .uploadBinary(
@@ -745,14 +760,11 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
 
     setState(() => _guardando = true);
     try {
-      final supabase = ServicioSupabase();
-      final usuario = supabase.usuarioActual;
-      if (usuario == null) throw Exception('No hay usuario autenticado');
-
-      await supabase.cliente
-          .from('perfiles_usuarios')
-          .update({'provincia': res.provincia, 'ciudad': res.ciudad})
-          .eq('id', usuario.id);
+      await ServicioUbicacionGlobal.aplicarManual(
+        provincia: res.provincia,
+        ciudades: {res.ciudad},
+        principal: res.ciudad,
+      );
 
       if (mounted) {
         setState(() {
@@ -1505,9 +1517,19 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   }
 
   Future<void> _abrirUrlRed(String urlString) async {
-    final url = Uri.tryParse(urlString);
-    if (url != null && await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+    var normalizada = urlString.trim();
+    if (normalizada.isEmpty) return;
+    if (!normalizada.startsWith('http://') &&
+        !normalizada.startsWith('https://')) {
+      normalizada = 'https://$normalizada';
+    }
+    final url = Uri.tryParse(normalizada);
+    if (url == null) return;
+    try {
+      await lanzarExternoConFallback(url);
+    } catch (_) {
+      // Link externo opcional: si Android no tiene app/navegador disponible,
+      // evitamos romper la pantalla de perfil.
     }
   }
 
@@ -1751,6 +1773,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                                   compacta: true,
                                   ajustarAnchoAlTexto: true,
                                   maxLines: 2,
+                                  centrar: false,
                                 ),
                               ),
                               const SizedBox(width: 7),
@@ -1801,7 +1824,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final screenHeight = MediaQuery.sizeOf(context).height;
     final isNarrow = screenWidth < 400;
-    final avatarSize = isNarrow ? 68.0 : (screenHeight < 700 ? 76.0 : 84.0);
+    final avatarSize = isNarrow ? 82.0 : (screenHeight < 700 ? 91.0 : 101.0);
     final ig = (_instagramUrl ?? '').trim();
     final tt = (_tiktokUrl ?? '').trim();
     final fondoBanner = _bannerPerfilUrl ?? _fotoPerfilUrl ?? '';
@@ -1908,6 +1931,8 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                         texto: _textoUbicacion.isEmpty
                             ? 'Tu ubicación'
                             : _textoUbicacion,
+                        // Read-only: la ubicación se edita solo desde la cartelera.
+                        editable: false,
                         onEditar: _editarUbicacion,
                       ),
                     ],

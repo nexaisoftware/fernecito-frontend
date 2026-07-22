@@ -77,8 +77,10 @@ class _ModalResenaPostVisitaState extends State<_ModalResenaPostVisita> {
     });
     // Al mostrar: ignorado (si cierra la app sin decidir, no vuelve a salir).
     unawaited(
-      ServicioResenaPostVisita.instancia
-          .marcarCalificado(widget.pendiente.idToken, 'ignorado'),
+      ServicioResenaPostVisita.instancia.marcarCalificado(
+        widget.pendiente.idToken,
+        'ignorado',
+      ),
     );
     _timerCerrar = Timer(const Duration(seconds: 3), () {
       if (mounted) setState(() => _mostrarCerrar = true);
@@ -93,9 +95,14 @@ class _ModalResenaPostVisitaState extends State<_ModalResenaPostVisita> {
     super.dispose();
   }
 
-  Future<void> _cerrar({required String calificado, bool publicado = false}) async {
-    await ServicioResenaPostVisita.instancia
-        .marcarCalificado(widget.pendiente.idToken, calificado);
+  Future<void> _cerrar({
+    required String calificado,
+    bool publicado = false,
+  }) async {
+    await ServicioResenaPostVisita.instancia.marcarCalificado(
+      widget.pendiente.idToken,
+      calificado,
+    );
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).pop(publicado);
   }
@@ -105,14 +112,17 @@ class _ModalResenaPostVisitaState extends State<_ModalResenaPostVisita> {
     setState(() => _enviando = true);
     _focus.unfocus();
     try {
-      await ServicioSupabase().cliente.rpc('publicar_resena', params: {
-        'p_id_local': widget.pendiente.idLocal,
-        'p_estrellas': _estrellas,
-        'p_comentario': _texto.text.trim(),
-      });
+      await ServicioSupabase().cliente.rpc(
+        'publicar_resena_post_visita',
+        params: {
+          'p_id_token': widget.pendiente.idToken,
+          'p_estrellas': _estrellas,
+          'p_comentario': _texto.text.trim(),
+        },
+      );
       HapticFeedback.mediumImpact();
       if (!mounted) return;
-      await _cerrar(calificado: 'si', publicado: true);
+      Navigator.of(context, rootNavigator: true).pop(true);
     } on PostgrestException catch (e) {
       debugPrint('⚠️ post-visita publicar_resena: ${e.message}');
       if (!mounted) return;
@@ -205,8 +215,9 @@ class _ModalResenaPostVisitaState extends State<_ModalResenaPostVisita> {
                           child: Icon(
                             CupertinoIcons.xmark_circle_fill,
                             size: 28,
-                            color: ColoresApp.textoSecundario
-                                .withValues(alpha: 0.85),
+                            color: ColoresApp.textoSecundario.withValues(
+                              alpha: 0.85,
+                            ),
                           ),
                         ),
                       ),
@@ -344,10 +355,7 @@ class _ModalResenaPostVisitaState extends State<_ModalResenaPostVisita> {
 }
 
 class _EstrellasTactiles extends StatelessWidget {
-  const _EstrellasTactiles({
-    required this.valor,
-    required this.onChanged,
-  });
+  const _EstrellasTactiles({required this.valor, required this.onChanged});
 
   final int valor;
   final ValueChanged<int> onChanged;

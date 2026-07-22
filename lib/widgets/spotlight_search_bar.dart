@@ -1,13 +1,10 @@
-/// Barra de búsqueda estilo Spotlight (macOS).
-///
-/// Comportamiento:
-/// - En reposo: muestra un círculo con icono de lupa + 2 dropdowns (filtros).
-/// - Al tocar la lupa: el círculo se transforma en un `TextField` ancho con
-///   animación de expansión; los dropdowns se ocultan con fade.
-/// - Al perder foco (o tocar "X"): vuelve al estado de reposo.
-///
-/// Diseño minimalista, dark, alineado con el tema Fernecito.
+/// Barra Spotlight (misma fila que siempre):
+/// - Reposo: lupa circular + Plan + Cuándo
+/// - Expandido: TextField + pill «Búsqueda IA»; los filtros se ocultan
+/// - Demo suave cada ~10s (3s abierta) si está en viewport y sin focus
 library;
+
+import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +13,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/constants.dart';
 import '../core/jerarquias_data.dart';
 import '../core/tipos_evento_data.dart';
+
+/// Dorado del pill IA + violeta oscuro (app locales) para contraste.
+const kDoradoBusquedaIa = Color(0xFFE0B800);
+const kVioletaOscuroIa = Color(0xFF4A1A8A);
 
 class SpotlightSearchBar extends StatefulWidget {
   const SpotlightSearchBar({
@@ -26,40 +27,57 @@ class SpotlightSearchBar extends StatefulWidget {
     required this.onTiposChanged,
     required this.filtroTiempo,
     required this.onFiltroTiempoChanged,
+    this.onBusquedaIa,
   });
 
   final String queryActual;
   final ValueChanged<String> onQueryChanged;
-
-  /// Tipos de evento marcados (boliche, fiesta, sunset, etc.). Vacío = "todos".
   final Set<String> tiposSeleccionados;
   final ValueChanged<Set<String>> onTiposChanged;
-
   final FiltroTiempo filtroTiempo;
   final ValueChanged<FiltroTiempo> onFiltroTiempoChanged;
+  final ValueChanged<String>? onBusquedaIa;
 
   @override
   State<SpotlightSearchBar> createState() => _SpotlightSearchBarState();
 }
 
 class _SpotlightSearchBarState extends State<SpotlightSearchBar>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final TextEditingController _ctrl;
   late final FocusNode _focus;
   late final AnimationController _anim;
+  late final Animation<double> _curva;
+  late final AnimationController _shimmerIa;
   bool _expandido = false;
+  bool _focusUsuario = false;
+  bool _bloquearColapsoPorIa = false;
+  bool _demoEnCurso = false;
+  Timer? _cicloTimer;
+  Timer? _colapsoTimer;
 
   @override
   void initState() {
     super.initState();
     _ctrl = TextEditingController(text: widget.queryActual);
-    _focus = FocusNode();
+    _focus = FocusNode()..addListener(_onFocusChange);
     _anim = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 280),
-      reverseDuration: const Duration(milliseconds: 220),
+      duration: const Duration(milliseconds: 620),
+      reverseDuration: const Duration(milliseconds: 540),
     );
-    _focus.addListener(_onFocusChange);
+    _curva = CurvedAnimation(
+      parent: _anim,
+      curve: Curves.easeInOutCubic,
+      reverseCurve: Curves.easeInOutCubic,
+    );
+    _shimmerIa = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..repeat();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _arrancarCicloDemo();
+    });
   }
 
   @override
@@ -72,59 +90,155 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
 
   @override
   void dispose() {
+    _cicloTimer?.cancel();
+    _colapsoTimer?.cancel();
     _focus.removeListener(_onFocusChange);
     _focus.dispose();
     _ctrl.dispose();
     _anim.dispose();
+    _shimmerIa.dispose();
     super.dispose();
   }
 
+  bool _estaEnViewport() {
+    final ro = context.findRenderObject();
+    if (ro is! RenderBox || !ro.hasSize) return false;
+    final pos = ro.localToGlobal(Offset.zero);
+    final h = ro.size.height;
+    final screenH = MediaQuery.sizeOf(context).height;
+    return pos.dy + h > 40 && pos.dy < screenH - 90;
+  }
+
+  void _arrancarCicloDemo() {
+    _cicloTimer?.cancel();
+    _cicloTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted || _focusUsuario || _focus.hasFocus || _demoEnCurso) return;
+      if (!_estaEnViewport()) return;
+      _demoExpandirYColapsar();
+    });
+    Future<void>.delayed(const Duration(milliseconds: 1200), () {
+      if (!mounted || _focusUsuario || _focus.hasFocus) return;
+      if (_estaEnViewport()) _demoExpandirYColapsar();
+    });
+  }
+
+  Future<void> _demoExpandirYColapsar() async {
+    if (_focusUsuario || _focus.hasFocus || _demoEnCurso) return;
+    if (_anim.value > 0.01) return;
+    _demoEnCurso = true;
+    setState(() => _expandido = true);
+    await _anim.forward();
+    if (!mounted || _focusUsuario || _focus.hasFocus) {
+      _demoEnCurso = false;
+      return;
+    }
+    _colapsoTimer?.cancel();
+    _colapsoTimer = Timer(const Duration(seconds: 3), () async {
+      if (!mounted || _focusUsuario || _focus.hasFocus) {
+        _demoEnCurso = false;
+        return;
+      }
+      await _colapsarSuave();
+      _demoEnCurso = false;
+    });
+  }
+
   void _onFocusChange() {
-    if (!_focus.hasFocus && _ctrl.text.isEmpty) {
-      _colapsar();
+    if (_focus.hasFocus) {
+      _focusUsuario = true;
+      _demoEnCurso = false;
+      _colapsoTimer?.cancel();
+      return;
+    }
+    if (_bloquearColapsoPorIa) return;
+    if (_focusUsuario) {
+      _focusUsuario = false;
+      if (_ctrl.text.trim().isEmpty) {
+        Future<void>.delayed(const Duration(milliseconds: 140), () {
+          if (!mounted || _focus.hasFocus || _bloquearColapsoPorIa) return;
+          _colapsarSuave();
+        });
+      }
     }
   }
 
   void _expandir() {
+    _colapsoTimer?.cancel();
+    _demoEnCurso = false;
+    _focusUsuario = true;
     setState(() => _expandido = true);
     _anim.forward();
-    Future<void>.delayed(const Duration(milliseconds: 60), () {
+    Future<void>.delayed(const Duration(milliseconds: 80), () {
       if (mounted) _focus.requestFocus();
     });
   }
 
-  void _colapsar() {
+  Future<void> _colapsarSuave() async {
+    if (_anim.value <= 0 && !_expandido) return;
+    _colapsoTimer?.cancel();
     _focus.unfocus();
-    _anim.reverse();
+    await _anim.reverse();
+    if (!mounted) return;
+    if (_focus.hasFocus || _focusUsuario) return;
     setState(() => _expandido = false);
+  }
+
+  void _colapsar() {
+    _colapsarSuave();
+  }
+
+  void _abrirBusquedaIa() {
+    final onIa = widget.onBusquedaIa;
+    if (onIa == null) return;
+    _bloquearColapsoPorIa = true;
+    _colapsoTimer?.cancel();
+    final texto = _ctrl.text.trim();
+    onIa(texto);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focusUsuario = false;
+      _focus.unfocus();
+      _colapsar();
+      _bloquearColapsoPorIa = false;
+    });
+  }
+
+  double _posicionBrillo(double t) {
+    const ventana = 0.38;
+    if (t > ventana) return -0.4;
+    return Curves.easeInOutCubic.transform(t / ventana);
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _anim,
+      animation: Listenable.merge([_curva, _shimmerIa]),
       builder: (context, _) {
-        final t = Curves.easeOutCubic.transform(_anim.value);
+        final t = _curva.value;
+        // Flex interpolado: evita el “salto” de layout.
+        final flexSearch = (18 + (82 * t)).round().clamp(18, 100);
+        final flexFilters = (82 * (1.0 - t)).round().clamp(0, 82);
+        final mostrarCampo = t > 0.04;
+        final mostrarFiltros = t < 0.96 && flexFilters > 0;
+
         return SizedBox(
           height: 38,
           child: Row(
             children: [
-              // === Lupa / TextField expandible ===
               Expanded(
-                flex: _expandido ? 100 : 18,
-                child: _expandido
+                flex: flexSearch,
+                child: mostrarCampo
                     ? _buildTextFieldExpandido(t)
                     : _buildBotonLupaCircular(),
               ),
-              if (!_expandido) const SizedBox(width: 10),
-              // === Filtros (se desvanecen al expandir) ===
-              if (!_expandido)
+              if (mostrarFiltros) ...[
+                SizedBox(width: 10 * (1.0 - t)),
                 Expanded(
-                  flex: 82,
+                  flex: flexFilters < 1 ? 1 : flexFilters,
                   child: Opacity(
-                    opacity: 1 - t,
+                    opacity: Curves.easeOut.transform((1.0 - t).clamp(0.0, 1.0)),
                     child: IgnorePointer(
-                      ignoring: _expandido,
+                      ignoring: t > 0.12,
                       child: Row(
                         children: [
                           Expanded(child: _buildDropdownPlan()),
@@ -135,6 +249,7 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
                     ),
                   ),
                 ),
+              ],
             ],
           ),
         );
@@ -149,11 +264,11 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: ColoresApp.fondoSuperficie.withOpacity(0.85),
+          color: ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
           shape: BoxShape.circle,
-                    boxShadow: [
+          boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.25),
+              color: Colors.black.withValues(alpha: 0.25),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
@@ -169,54 +284,93 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
   }
 
   Widget _buildTextFieldExpandido(double t) {
-    return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: ColoresApp.fondoSuperficie.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(19),
-                boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3 * t),
-            blurRadius: 14 * t,
-            offset: Offset(0, 4 * t),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Icon(CupertinoIcons.search,
-              color: ColoresApp.textoPrincipal, size: 19),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: _ctrl,
-              focusNode: _focus,
-              onChanged: widget.onQueryChanged,
-              cursorColor: ColoresApp.principalMarca,
-              style: GoogleFonts.baloo2(
-                color: ColoresApp.textoPrincipal,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
+    final fadeIn = Curves.easeOut.transform(t.clamp(0.0, 1.0));
+    return Opacity(
+      opacity: fadeIn,
+      child: Transform.scale(
+        scale: 0.96 + (0.04 * fadeIn),
+        alignment: Alignment.centerLeft,
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.only(left: 12, right: 6),
+          decoration: BoxDecoration(
+            color: ColoresApp.fondoSuperficie.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(19),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.22 * fadeIn),
+                blurRadius: 12 * fadeIn,
+                offset: Offset(0, 3 * fadeIn),
               ),
-              decoration: InputDecoration(
-                isCollapsed: true,
-                              ),
-            ),
+            ],
           ),
-          GestureDetector(
-            onTap: () {
-              _ctrl.clear();
-              widget.onQueryChanged('');
-              _colapsar();
-            },
-            child: const Icon(
-              CupertinoIcons.clear_circled_solid,
-              color: ColoresApp.textoSecundario,
-              size: 18,
-            ),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: _colapsar,
+                behavior: HitTestBehavior.opaque,
+                child: const Icon(
+                  CupertinoIcons.search,
+                  color: ColoresApp.textoPrincipal,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _ctrl,
+                  focusNode: _focus,
+                  onChanged: widget.onQueryChanged,
+                  onTap: () {
+                    _focusUsuario = true;
+                    _colapsoTimer?.cancel();
+                    _demoEnCurso = false;
+                  },
+                  cursorColor: ColoresApp.principalMarca,
+                  style: GoogleFonts.baloo2(
+                    color: ColoresApp.textoPrincipal,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    hintText: '¿Qué buscás?',
+                    hintStyle: GoogleFonts.baloo2(
+                      color: ColoresApp.textoSecundario,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                  ),
+                ),
+              ),
+              if (widget.onBusquedaIa != null) ...[
+                const SizedBox(width: 6),
+                Opacity(
+                  opacity: Curves.easeOut.transform(
+                    ((t - 0.35) / 0.65).clamp(0.0, 1.0),
+                  ),
+                  child: Listener(
+                    onPointerDown: (_) => _bloquearColapsoPorIa = true,
+                    child: GestureDetector(
+                      onTap: _abrirBusquedaIa,
+                      behavior: HitTestBehavior.opaque,
+                      child: _PillBusquedaIa(
+                        shimmer: _shimmerIa,
+                        posicionBrillo: _posicionBrillo,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -247,7 +401,6 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
     );
   }
 
-  // Altura aproximada de la navbar global, sumada al safearea inferior.
   static const double _kAlturaNavbarUI = 58.0;
 
   Future<void> _abrirSheetPlanes() async {
@@ -403,6 +556,87 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
   }
 }
 
+class _PillBusquedaIa extends StatelessWidget {
+  const _PillBusquedaIa({
+    required this.shimmer,
+    required this.posicionBrillo,
+  });
+
+  final Animation<double> shimmer;
+  final double Function(double) posicionBrillo;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        height: 30,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            const Positioned.fill(child: ColoredBox(color: kDoradoBusquedaIa)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.auto_awesome,
+                    color: kVioletaOscuroIa,
+                    size: 13,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Búsqueda IA',
+                    style: GoogleFonts.baloo2(
+                      color: kVioletaOscuroIa,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: LayoutBuilder(
+                  builder: (context, size) {
+                    final ancho = size.maxWidth;
+                    final alto = size.maxHeight;
+                    final p = posicionBrillo(shimmer.value);
+                    final x = -ancho * 0.45 + p * (ancho * 1.85);
+                    return Transform.translate(
+                      offset: Offset(x, 0),
+                      child: Transform.rotate(
+                        angle: -0.42,
+                        child: Container(
+                          width: ancho * 0.28,
+                          height: alto * 2.4,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                Colors.white.withValues(alpha: 0.65),
+                                Colors.white.withValues(alpha: 0.18),
+                                Colors.transparent,
+                              ],
+                              stops: const [0.0, 0.48, 0.52, 1.0],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Pildora extends StatelessWidget {
   const _Pildora({
     required this.icono,
@@ -417,7 +651,8 @@ class _Pildora extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = activo ? ColoresApp.principalMarca : ColoresApp.textoSecundario;
+    final color =
+        activo ? ColoresApp.principalMarca : ColoresApp.textoSecundario;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -425,9 +660,9 @@ class _Pildora extends StatelessWidget {
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: ColoresApp.fondoSuperficie.withOpacity(0.85),
+          color: ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(19),
-                  ),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -445,8 +680,11 @@ class _Pildora extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            Icon(CupertinoIcons.chevron_down,
-                size: 13, color: ColoresApp.textoSecundario),
+            Icon(
+              CupertinoIcons.chevron_down,
+              size: 13,
+              color: ColoresApp.textoSecundario,
+            ),
           ],
         ),
       ),
@@ -462,7 +700,7 @@ class _HandleSheet extends StatelessWidget {
         width: 38,
         height: 4,
         decoration: BoxDecoration(
-          color: ColoresApp.textoSecundario.withOpacity(0.35),
+          color: ColoresApp.textoSecundario.withValues(alpha: 0.35),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -491,10 +729,10 @@ class _ChipPlan extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: seleccionado
-              ? ColoresApp.principalMarca.withOpacity(0.18)
-              : ColoresApp.fondoSuperficie.withOpacity(0.85),
+              ? ColoresApp.principalMarca.withValues(alpha: 0.18)
+              : ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(18),
-                  ),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -536,7 +774,7 @@ class _OpcionTiempo extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: seleccionado
-              ? ColoresApp.principalMarca.withOpacity(0.12)
+              ? ColoresApp.principalMarca.withValues(alpha: 0.12)
               : Colors.transparent,
         ),
         child: Row(
