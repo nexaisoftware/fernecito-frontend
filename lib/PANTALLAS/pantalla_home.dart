@@ -44,6 +44,7 @@ import '../core/coordenadas_ciudades.dart';
 import '../core/servicio_ubicacion_global.dart';
 import '../core/preferencias_cartelera.dart';
 import '../core/servicio_ubicacion_dispositivo.dart';
+import '../core/sexo_perfil.dart';
 import '../core/tema_fernecito.dart';
 import '../core/ubicaciones_data.dart';
 import '../widgets/avatar_local.dart';
@@ -826,6 +827,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   /// True hasta que confirmamos provincia+ciudad del usuario.
   /// Si quedan sin definir, NO disparamos consulta de eventos.
   bool _ubicacionLista = false;
+  bool _pedidoSexoArranqueHecho = false;
 
   // ---- Datos crudos (de Supabase) ----
   List<Map<String, dynamic>> _eventos = const [];
@@ -872,7 +874,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   /// 3. Persiste en perfiles_usuarios.
   /// 4. Si “cartelera inteligente” estaba activa → resuelve ciudades por GPS
   ///    (misma lista hardcode) y las usa como set de filtro.
-  /// 5. Recién ahí carga la cartelera (query igual que siempre).
+  /// 5. Si falta género → modal con Hombre/Mujer/Otro (se puede posponer).
+  /// 6. Recién ahí carga la cartelera (query igual que siempre).
   Future<void> _arrancar() async {
     final ok = await _asegurarUbicacionUsuario();
     if (!ok || !mounted) {
@@ -885,7 +888,43 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     await _aplicarModoUbicacionAlArrancar();
     if (!mounted) return;
     setState(() => _ubicacionLista = true);
+    await _asegurarSexoUsuario();
+    if (!mounted) return;
     await _cargar();
+  }
+
+  /// Perfiles viejos sin `sexo`: pide género al abrir la app (una vez por sesión).
+  Future<void> _asegurarSexoUsuario() async {
+    if (_pedidoSexoArranqueHecho) return;
+    _pedidoSexoArranqueHecho = true;
+
+    final sb = ServicioSupabase().cliente;
+    final uid = ServicioSupabase().usuarioActual?.id;
+    if (uid == null || !mounted) return;
+
+    String? sexo;
+    try {
+      final resp = await sb
+          .from('perfiles_usuarios')
+          .select('sexo')
+          .eq('id', uid)
+          .maybeSingle();
+      sexo = SexoPerfil.normalizar(resp?['sexo']);
+    } catch (e) {
+      debugPrint('⚠️ leer sexo perfil falló: $e');
+      return;
+    }
+
+    if (SexoPerfil.esValido(sexo) || !mounted) return;
+
+    final elegido = await mostrarDialogoPedirSexo(context);
+    if (!mounted || elegido == null || !SexoPerfil.esValido(elegido)) return;
+
+    try {
+      await sb.from('perfiles_usuarios').update({'sexo': elegido}).eq('id', uid);
+    } catch (e) {
+      debugPrint('⚠️ guardar sexo perfil falló: $e');
+    }
   }
 
   /// Capa previa: si el modo inteligente está guardado, intenta GPS y arma el

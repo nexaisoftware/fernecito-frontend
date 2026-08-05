@@ -5,8 +5,8 @@
 /// - Path fijo, siempre con upsert: true
 /// - DB: foto_perfil_url guarda SOLO el path relativo (sin query params)
 /// - Anti-cache: agregar ?v=timestamp al mostrar, no al guardar
-/// - Obligatorio: username + nombre
-/// - Opcional: edad, foto, perfil_publico, redes
+/// - Obligatorio: username + nombre + fecha_nacimiento + sexo
+/// - Opcional: foto, perfil_publico, redes, mi_estado
 /// - perfil_completo = true cuando username + nombre existen
 library;
 
@@ -21,6 +21,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../core/comprimir_imagen_storage.dart';
 import '../core/constants.dart';
+import '../core/sexo_perfil.dart';
 import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
@@ -50,9 +51,9 @@ const String _kTextoTerminos =
 
 const String _kTextoPrivacidad =
     'Tu privacidad nos importa.\n\n'
-    '• Datos que usamos: nombre o apodo, edad, ciudad y provincia, foto de '
-    'perfil, email de tu cuenta y, solo si lo permitís, tus redes sociales y una '
-    'ubicación aproximada.\n\n'
+    '• Datos que usamos: nombre o apodo, edad, género, ciudad y provincia, foto '
+    'de perfil, email de tu cuenta y, solo si lo permitís, tus redes sociales y '
+    'una ubicación aproximada.\n\n'
     '• Para qué los usamos: mostrar tu perfil, armar la cartelera de tu zona, '
     'gestionar tus reservas y conectarte con otras personas y eventos.\n\n'
     '• No vendemos tus datos a terceros. Usamos proveedores de infraestructura '
@@ -83,6 +84,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
 
   // Estado
   DateTime? _fechaNacimientoSeleccionada; // Obligatorio
+  String? _sexoSeleccionado; // Obligatorio — hombre | mujer | otro
   Uint8List? _imagenBytes;
   bool _perfilPublico = false;
   bool _validandoUsername = false;
@@ -310,6 +312,11 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
       return;
     }
 
+    if (!SexoPerfil.esValido(_sexoSeleccionado)) {
+      _mostrarError('Elegí tu género para continuar');
+      return;
+    }
+
     // Si no hay foto, mostrar diálogo de confirmación
     if (_imagenBytes == null) {
       final continuar = await _mostrarDialogoSinFoto();
@@ -357,6 +364,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
         // Cumpleaños real. La DB mantiene edad derivada para compatibilidad.
         'fecha_nacimiento': _fechaIso(_fechaNacimientoSeleccionada!),
         'edad': _edadDesdeFecha(_fechaNacimientoSeleccionada!),
+        'sexo': _sexoSeleccionado,
         'foto_perfil_url': pathFotoRelativo, // Path relativo o null
         'mi_estado': _controladorEstado.text.trim().isEmpty
             ? null
@@ -586,6 +594,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
         _usernameDisponible &&
         nombreOk &&
         _fechaNacimientoSeleccionada != null &&
+        SexoPerfil.esValido(_sexoSeleccionado) &&
         _aceptoPoliticas &&
         !_guardandoPerfil;
 
@@ -668,6 +677,10 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                       _label('Tu cumple'),
                       const SizedBox(height: 8),
                       _card([_filaEdad()]),
+                      const SizedBox(height: 18),
+                      _label('Tu género'),
+                      const SizedBox(height: 8),
+                      _card([_filaSexo()]),
                       const SizedBox(height: 18),
                       _label('Privacidad'),
                       const SizedBox(height: 8),
@@ -1264,6 +1277,65 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
     final d = fecha.day.toString().padLeft(2, '0');
     final m = fecha.month.toString().padLeft(2, '0');
     return '$d/$m/${fecha.year}';
+  }
+
+  // ── Fila de género (obligatoria) ──
+  Widget _filaSexo() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Para mejores recomendaciones',
+            style: GoogleFonts.baloo2(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: ColoresApp.textoSecundario,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              for (var i = 0; i < SexoPerfil.opciones.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                Expanded(child: _chipSexo(SexoPerfil.opciones[i])),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chipSexo(String valor) {
+    final sel = _sexoSeleccionado == valor;
+    final marca = ColoresApp.principalMarca;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _sexoSeleccionado = valor),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: sel ? marca.withValues(alpha: 0.18) : ColoresApp.fondoPrincipal,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: sel ? marca : ColoresApp.textoSecundario.withValues(alpha: 0.22),
+            width: sel ? 1.6 : 1,
+          ),
+        ),
+        child: Text(
+          SexoPerfil.etiqueta(valor),
+          style: GoogleFonts.baloo2(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: sel ? marca : ColoresApp.textoPrincipal,
+          ),
+        ),
+      ),
+    );
   }
 
   // ── Fila de cumpleaños (obligatoria) ──

@@ -24,6 +24,7 @@ import '../core/servicio_amigos.dart';
 import '../core/servicio_locales_megusta.dart';
 import '../core/servicio_perfil_usuario.dart';
 import '../core/servicio_ubicacion_global.dart';
+import '../core/sexo_perfil.dart';
 import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
 import '../core/ubicaciones_data.dart';
@@ -70,6 +71,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   String _nombre = '';
   int? _edad;
   DateTime? _fechaNacimiento;
+  String? _sexo;
   bool _perfilPublico = false;
   String? _instagramUrl;
   String? _tiktokUrl;
@@ -79,6 +81,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   bool _subiendoFoto = false;
   bool _subiendoBanner = false;
   bool _pedidoCumpleMostrado = false;
+  bool _pedidoSexoMostrado = false;
   String? _bannerPath;
   String? _bannerPerfilUrl;
   bool _editandoNombreInline = false;
@@ -152,6 +155,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
               : (edadRaw is int
                     ? edadRaw
                     : int.tryParse(edadRaw?.toString() ?? ''));
+          _sexo = SexoPerfil.normalizar(respuesta['sexo']);
           _perfilPublico = respuesta['perfil_publico'] ?? false;
           _instagramUrl = respuesta['instagram_url'];
           _tiktokUrl = respuesta['tiktok_url'];
@@ -195,6 +199,11 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           _pedidoCumpleMostrado = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) _mostrarPedidoCumple();
+          });
+        } else if (!SexoPerfil.esValido(_sexo) && !_pedidoSexoMostrado) {
+          _pedidoSexoMostrado = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _mostrarPedidoSexo();
           });
         }
       }
@@ -808,6 +817,53 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     final fecha = _fechaNacimiento;
     if (fecha == null) return _edad != null ? '${_edad!} años' : 'Tu cumple';
     return '${_fechaCumpleTexto(fecha)} · ${_edadDesdeFecha(fecha)} años';
+  }
+
+  String get _textoSexo {
+    final sexo = _sexo;
+    if (!SexoPerfil.esValido(sexo)) return 'Tu género';
+    return SexoPerfil.etiqueta(sexo!);
+  }
+
+  Future<void> _mostrarPedidoSexo() async {
+    final elegido = await mostrarDialogoPedirSexo(context);
+    if (!mounted || elegido == null) return;
+    await _guardarSexo(elegido);
+  }
+
+  Future<void> _editarSexo() async {
+    final elegido = await mostrarDialogoPedirSexo(
+      context,
+      titulo: 'Tu género',
+      mensaje: 'Elegí la opción que mejor te represente.',
+      permitirDespues: SexoPerfil.esValido(_sexo),
+    );
+    if (!mounted || elegido == null) return;
+    await _guardarSexo(elegido);
+  }
+
+  Future<void> _guardarSexo(String valor) async {
+    if (!SexoPerfil.esValido(valor)) return;
+    setState(() => _guardando = true);
+    try {
+      final supabase = ServicioSupabase();
+      final usuario = supabase.usuarioActual;
+      if (usuario == null) throw Exception('No hay usuario autenticado');
+
+      await supabase.cliente
+          .from('perfiles_usuarios')
+          .update({'sexo': valor})
+          .eq('id', usuario.id);
+
+      if (!mounted) return;
+      setState(() => _sexo = valor);
+      _mostrarExito('Género guardado correctamente');
+    } catch (error) {
+      debugPrint('❌ Error actualizando sexo: $error');
+      if (mounted) _mostrarError('No se pudo guardar tu género');
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
   }
 
   void _mostrarPedidoCumple() {
@@ -1925,6 +1981,12 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                         // El cumple queda fijo una vez cargado (como el username).
                         editable: _fechaNacimiento == null,
                         onEditar: _actualizarEdad,
+                      ),
+                      _chipEditableMP(
+                        icono: CupertinoIcons.person_2_fill,
+                        texto: _textoSexo,
+                        editable: true,
+                        onEditar: _editarSexo,
                       ),
                       _chipEditableMP(
                         icono: CupertinoIcons.location_solid,
