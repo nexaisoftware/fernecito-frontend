@@ -19,9 +19,21 @@ class ServicioGeocodificacion {
   LatLng? parsearDesdeUrlMaps(String? url) {
     final raw = url?.trim() ?? '';
     if (raw.isEmpty) return null;
+    final uri = Uri.tryParse(raw);
+    if (uri != null) {
+      for (final value in <String?>[
+        uri.queryParameters['q'],
+        uri.queryParameters['query'],
+        uri.queryParameters['ll'],
+      ]) {
+        final coord = _parsearLatLng(value);
+        if (coord != null) return coord;
+      }
+    }
     final patrones = <RegExp>[
       RegExp(r'@(-?\d+\.\d+),(-?\d+\.\d+)'),
       RegExp(r'[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)'),
+      RegExp(r'[?&]query=(-?\d+\.\d+),(-?\d+\.\d+)'),
       RegExp(r'[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)'),
       RegExp(r'!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)'),
     ];
@@ -33,6 +45,19 @@ class ServicioGeocodificacion {
       if (lat != null && lng != null) return LatLng(lat, lng);
     }
     return null;
+  }
+
+  LatLng? _parsearLatLng(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return null;
+    final m = RegExp(
+      r'^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)$',
+    ).firstMatch(value);
+    if (m == null) return null;
+    final lat = double.tryParse(m.group(1)!);
+    final lng = double.tryParse(m.group(2)!);
+    if (lat == null || lng == null) return null;
+    return LatLng(lat, lng);
   }
 
   Future<LatLng?> resolver({
@@ -78,7 +103,10 @@ class ServicioGeocodificacion {
       return null;
     }
 
-    final geo = await _geocodificarNominatim(partes.join(', '));
+    final geo = await _geocodificarNominatim(
+      partes.join(', '),
+      ciudadEsperada: ciudad,
+    );
     if (geo != null) {
       _cache[key] = geo;
       return geo;
@@ -93,7 +121,10 @@ class ServicioGeocodificacion {
     return null;
   }
 
-  Future<LatLng?> _geocodificarNominatim(String consulta) async {
+  Future<LatLng?> _geocodificarNominatim(
+    String consulta, {
+    String? ciudadEsperada,
+  }) async {
     try {
       final ahora = DateTime.now();
       if (_ultimaPeticion != null) {
@@ -108,7 +139,7 @@ class ServicioGeocodificacion {
 
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/search'
-        '?q=${Uri.encodeComponent(consulta)}&format=json&limit=1',
+        '?q=${Uri.encodeComponent(consulta)}&format=json&limit=5',
       );
       final resp = await http.get(
         uri,
@@ -117,7 +148,26 @@ class ServicioGeocodificacion {
       if (resp.statusCode != 200) return null;
       final lista = jsonDecode(resp.body);
       if (lista is! List || lista.isEmpty) return null;
-      final row = lista.first;
+      final centroCiudad = CoordenadasCiudades.deCiudad(ciudadEsperada);
+      final rowsConDistancia = centroCiudad == null
+          ? const <({Map row, double km})>[]
+          : lista
+                .whereType<Map>()
+                .map((m) {
+                  final lat = double.tryParse(m['lat']?.toString() ?? '');
+                  final lon = double.tryParse(m['lon']?.toString() ?? '');
+                  if (lat == null || lon == null) return null;
+                  final coord = LatLng(lat, lon);
+                  return (
+                    row: m,
+                    km: CoordenadasCiudades.distanciaKm(centroCiudad, coord),
+                  );
+                })
+                .whereType<({Map row, double km})>()
+                .toList(growable: false);
+      final row = rowsConDistancia.isEmpty
+          ? lista.first
+          : rowsConDistancia.reduce((a, b) => a.km <= b.km ? a : b).row;
       if (row is! Map) return null;
       final lat = double.tryParse(row['lat']?.toString() ?? '');
       final lon = double.tryParse(row['lon']?.toString() ?? '');

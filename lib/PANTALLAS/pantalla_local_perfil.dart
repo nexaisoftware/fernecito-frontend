@@ -1,6 +1,7 @@
 /// Pantalla perfil del local: avatar, nombre, calificaciones, ubicación, fotos, promos/eventos, lugares similares.
 library;
 
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -27,16 +28,59 @@ import '../widgets/fernecito_loader.dart';
 
 bool _avatarUrlEsAsset(String url) => url.startsWith('assets/');
 
+class _CartaLocalItem {
+  const _CartaLocalItem({
+    required this.categoria,
+    required this.nombre,
+    this.descripcion = '',
+    this.precio,
+    this.precioHasta,
+    this.moneda = 'ARS',
+    this.tipoPrecio = 'fijo',
+    this.destacado = false,
+  });
+
+  final String categoria;
+  final String nombre;
+  final String descripcion;
+  final double? precio;
+  final double? precioHasta;
+  final String moneda;
+  final String tipoPrecio;
+  final bool destacado;
+
+  factory _CartaLocalItem.fromMap(Map<String, dynamic> map) {
+    double? n(dynamic value) {
+      if (value is num) return value.toDouble();
+      return double.tryParse(value?.toString() ?? '');
+    }
+
+    return _CartaLocalItem(
+      categoria: (map['categoria'] ?? 'Otros').toString(),
+      nombre: (map['nombre'] ?? '').toString(),
+      descripcion: (map['descripcion'] ?? '').toString(),
+      precio: n(map['precio']),
+      precioHasta: n(map['precio_hasta']),
+      moneda: (map['moneda'] ?? 'ARS').toString(),
+      tipoPrecio: (map['tipo_precio'] ?? 'fijo').toString(),
+      destacado: map['destacado'] == true,
+    );
+  }
+}
+
 class PantallaLocalPerfil extends StatefulWidget {
   final String avatarUrl;
   final String nombreLocal;
   final String? idLocal; // nullable so existing call sites still work
+  /// Si true y hay carta, abre el sheet de carta al terminar de cargar.
+  final bool abrirCartaAlInicio;
 
   const PantallaLocalPerfil({
     super.key,
     required this.avatarUrl,
     required this.nombreLocal,
     this.idLocal,
+    this.abrirCartaAlInicio = false,
   });
 
   @override
@@ -78,11 +122,14 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   String? _bannerUrl;
   List<Map<String, dynamic>> _eventos = [];
   List<String> _fotosLocal = []; // URLs resueltas
+  List<_CartaLocalItem> _cartaItems = [];
   String _avatarEffective = '';
   List<Map<String, dynamic>> _lugaresPopulares = [];
   int _cantidadMegusta = 0;
   bool _yoMegusta = false;
   bool _toggleMegusta = false;
+
+  bool _visitaPerfilRegistrada = false;
 
   @override
   void initState() {
@@ -94,9 +141,18 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
     _cargarDatos();
   }
 
+  @override
+  void dispose() {
+    // Manda la visita sin esperar el timer de 30s (aditivo, no rompe cartelera).
+    unawaited(ServicioImpresiones.instancia.flush(respetarIntervalo: false));
+    super.dispose();
+  }
+
   void _registrarVistaPerfil() {
+    if (_visitaPerfilRegistrada) return;
     final id = widget.idLocal?.trim();
     if (id == null || id.isEmpty) return;
+    _visitaPerfilRegistrada = true;
     ServicioImpresiones.instancia.registrarVisitaPerfil(idLocal: id);
   }
 
@@ -294,6 +350,27 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                 .toList()
           : <String>[];
 
+      // 8) Carta/precios activos del local. Feature aditiva: si falla, no rompe el perfil.
+      List<_CartaLocalItem> cartaItems = [];
+      try {
+        final cartaRaw = await sb
+            .from('locales_carta_items')
+            .select(
+              'categoria, nombre, descripcion, precio, precio_hasta, moneda, tipo_precio, tags, destacado, orden',
+            )
+            .eq('id_local', widget.idLocal!)
+            .eq('activo', true)
+            .order('orden', ascending: true)
+            .limit(100);
+        cartaItems = (cartaRaw as List)
+            .whereType<Map>()
+            .map((e) => _CartaLocalItem.fromMap(Map<String, dynamic>.from(e)))
+            .where((e) => e.nombre.trim().isNotEmpty)
+            .toList();
+      } catch (e) {
+        debugPrint('[LocalPerfil] carta: $e');
+      }
+
       if (!mounted) return;
       setState(() {
         _descripcion = local['descripcion_local']?.toString();
@@ -317,12 +394,19 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
         _bannerUrl = bannerEff.isNotEmpty ? bannerEff : null;
         _eventos = eventos;
         _fotosLocal = fotos;
+        _cartaItems = cartaItems;
         _avatarEffective = avatarEff;
         _lugaresPopulares = populares;
         _bloqueado =
             (local['estado_cuenta']?.toString() ?? 'activa') != 'activa';
         _cargando = false;
       });
+      if (widget.abrirCartaAlInicio && cartaItems.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _mostrarCartaLocal(context);
+        });
+      }
       _cargarMegusta();
     } catch (e, st) {
       debugPrint('[LocalPerfil] _cargarDatos error: $e\n$st');
@@ -480,6 +564,14 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   String _labelWhatsappPublico() {
     final label = _whatsappLabel?.trim() ?? '';
     return label.isEmpty ? 'Consultar por WhatsApp' : label;
+  }
+
+  void _mostrarCartaLocal(BuildContext context) {
+    _mostrarCartaLocalSheet(
+      context: context,
+      nombreLocal: widget.nombreLocal,
+      items: _cartaItems,
+    );
   }
 
   /// Menú "3 puntitos" del local. Por ahora solo Reportar (oculto a la vista).
@@ -1047,6 +1139,13 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                               estado: estadoHorarioLocal(_horarios),
                               horarios: _horarios,
                             ),
+                            if (_cartaItems.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              _BotonVerCartaLocal(
+                                cantidad: _cartaItems.length,
+                                onTap: () => _mostrarCartaLocal(context),
+                              ),
+                            ],
                             if (_ubicacionTextoComputed.isNotEmpty ||
                                 (_direccion ?? '').isNotEmpty) ...[
                               const SizedBox(height: 12),
@@ -1783,6 +1882,260 @@ class _BotonWhatsappPublicoLocal extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BotonVerCartaLocal extends StatelessWidget {
+  const _BotonVerCartaLocal({required this.cantidad, required this.onTap});
+
+  final int cantidad;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B1B1E),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                CupertinoIcons.list_bullet,
+                size: 13,
+                color: Color(0xFFFFD166),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                'Ver carta',
+                style: GoogleFonts.baloo2(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFFFFD166),
+                  height: 1,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                '$cantidad',
+                style: GoogleFonts.baloo2(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  color: ColoresApp.textoSecundario,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void _mostrarCartaLocalSheet({
+  required BuildContext context,
+  required String nombreLocal,
+  required List<_CartaLocalItem> items,
+}) {
+  if (items.isEmpty) return;
+  final grupos = <String, List<_CartaLocalItem>>{};
+  for (final item in items) {
+    final key = item.categoria.trim().isEmpty ? 'Otros' : item.categoria.trim();
+    grupos.putIfAbsent(key, () => <_CartaLocalItem>[]).add(item);
+  }
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    useRootNavigator: true,
+    builder: (ctx) {
+      final media = MediaQuery.of(ctx);
+      return SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: media.size.height * 0.82),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF161618),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.only(
+                bottom: media.viewPadding.bottom > 0 ? 8 : 0,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFFFFD166,
+                          ).withValues(alpha: 0.14),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.list_bullet,
+                          size: 17,
+                          color: Color(0xFFFFD166),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Carta de $nombreLocal',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.baloo2(
+                                color: ColoresApp.textoPrincipal,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                height: 1.05,
+                              ),
+                            ),
+                            Text(
+                              'Precios orientativos cargados por el local',
+                              style: GoogleFonts.baloo2(
+                                color: ColoresApp.textoSecundario,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  for (final entry in grupos.entries) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 7),
+                      child: Text(
+                        entry.key,
+                        style: GoogleFonts.baloo2(
+                          color: const Color(0xFFFFD166),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    for (final item in entry.value)
+                      _CartaLocalItemTile(item: item),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _CartaLocalItemTile extends StatelessWidget {
+  const _CartaLocalItemTile({required this.item});
+
+  final _CartaLocalItem item;
+
+  String _precio() {
+    final precio = item.precio;
+    if (precio == null) return 'Consultar';
+    final p = precio.round().toString();
+    if (item.tipoPrecio == 'desde') return 'Desde \$$p';
+    if (item.tipoPrecio == 'rango' && item.precioHasta != null) {
+      return '\$$p - \$${item.precioHasta!.round()}';
+    }
+    if (item.tipoPrecio == 'aproximado') return '~\$$p';
+    return '\$$p';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF202024),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.nombre,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.baloo2(
+                          color: ColoresApp.textoPrincipal,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          height: 1.05,
+                        ),
+                      ),
+                    ),
+                    if (item.destacado) ...[
+                      const SizedBox(width: 5),
+                      const Icon(
+                        CupertinoIcons.star_fill,
+                        size: 12,
+                        color: Color(0xFFFFD166),
+                      ),
+                    ],
+                  ],
+                ),
+                if (item.descripcion.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    item.descripcion,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.baloo2(
+                      color: ColoresApp.textoSecundario,
+                      fontSize: 12,
+                      height: 1.15,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            _precio(),
+            style: GoogleFonts.baloo2(
+              color: const Color(0xFFFFD166),
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ),
     );
   }

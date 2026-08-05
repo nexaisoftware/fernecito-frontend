@@ -171,7 +171,8 @@ class ServicioImpresiones {
       _ultimoEnvio = DateTime.now();
     } on FunctionException catch (e) {
       debugPrint('⚠️ registrar_impresiones ${e.status}: ${e.details}');
-      if (e.status != 429) _reintegrar(snapshot);
+      // Reintegrar siempre (incluye 429): el timer reintentará; no perder visitas.
+      _reintegrar(snapshot);
     } catch (e) {
       debugPrint('⚠️ registrar_impresiones: $e');
       _reintegrar(snapshot);

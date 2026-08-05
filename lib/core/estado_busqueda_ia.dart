@@ -72,11 +72,19 @@ class EstadoBusquedaIaCache {
   /// Contexto compacto para la edge (follow-up).
   List<Map<String, dynamic>> historialParaEdge() {
     final out = <Map<String, dynamic>>[];
-    for (final m in mensajes) {
+    for (var i = 0; i < mensajes.length; i++) {
+      final m = mensajes[i];
       if (m.rol == RolMensajeIa.escribiendo) continue;
       if (m.rol == RolMensajeIa.usuario) {
+        // Un intento fallido no debe convertirse en contexto semántico para la
+        // próxima búsqueda. Sí conservamos la pregunta que está en curso.
+        final siguiente = i + 1 < mensajes.length ? mensajes[i + 1] : null;
+        if (siguiente?.rol == RolMensajeIa.asistente && siguiente!.esError) {
+          continue;
+        }
         out.add({'rol': 'user', 'texto': m.texto});
       } else {
+        if (m.esError) continue;
         out.add({
           'rol': 'assistant',
           'texto': m.texto,

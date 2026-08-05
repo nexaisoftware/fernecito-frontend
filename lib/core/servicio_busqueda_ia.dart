@@ -26,9 +26,14 @@ class RecomendacionIa {
     this.esPionero = false,
     this.calificacionPromedio,
     this.calificacionCantidad,
+    this.categoria,
+    this.precio,
+    this.precioHasta,
+    this.tipoPrecio,
+    this.precioTxt,
   });
 
-  /// `evento` | `local`
+  /// `evento` | `local` | `carta`
   final String tipo;
   final String id;
   final String titulo;
@@ -48,12 +53,48 @@ class RecomendacionIa {
   final double? calificacionPromedio;
   final int? calificacionCantidad;
 
+  /// Campos de ítem de carta (tipo == carta).
+  final String? categoria;
+  final double? precio;
+  final double? precioHasta;
+  final String? tipoPrecio;
+  final String? precioTxt;
+
   bool get esEvento => tipo == 'evento';
   bool get esLocal => tipo == 'local';
+  bool get esCarta => tipo == 'carta';
+
+  String get precioMostrar {
+    final t = precioTxt?.trim();
+    if (t != null && t.isNotEmpty) return t;
+    final p = precio;
+    if (p == null) return 'Consultar';
+    final base = p.round().toString();
+    switch (tipoPrecio) {
+      case 'desde':
+        return 'desde \$$base';
+      case 'aproximado':
+        return '~\$$base';
+      case 'rango':
+        if (precioHasta != null) {
+          return '\$$base - \$${precioHasta!.round()}';
+        }
+        return '\$$base';
+      case 'consultar':
+        return 'Consultar';
+      default:
+        return '\$$base';
+    }
+  }
 
   factory RecomendacionIa.fromJson(Map<String, dynamic> j) {
     final tagsRaw = j['tags'];
     final promoBadgesRaw = j['promo_badges'];
+    double? n(dynamic v) {
+      if (v is num) return v.toDouble();
+      return double.tryParse(v?.toString() ?? '');
+    }
+
     double? cal;
     final calRaw = j['calificacion_promedio'];
     if (calRaw is num) {
@@ -95,6 +136,11 @@ class RecomendacionIa {
       esPionero: j['es_pionero'] == true,
       calificacionPromedio: cal,
       calificacionCantidad: cant,
+      categoria: j['categoria']?.toString(),
+      precio: n(j['precio']),
+      precioHasta: n(j['precio_hasta']),
+      tipoPrecio: j['tipo_precio']?.toString(),
+      precioTxt: j['precio_txt']?.toString(),
     );
   }
 }
@@ -154,7 +200,7 @@ class ServicioBusquedaIa {
   ServicioBusquedaIa._();
   static final instancia = ServicioBusquedaIa._();
 
-  static const maxPregunta = 900;
+  static const maxPregunta = 1500;
 
   SupabaseClient get _sb => ServicioSupabase().cliente;
 
@@ -175,7 +221,7 @@ class ServicioBusquedaIa {
     if (q.length > maxPregunta) {
       return const ResultadoBusquedaIa(
         ok: false,
-        error: 'Máximo 900 caracteres ✂️',
+        error: 'Máximo 1500 caracteres ✂️',
         code: 'pregunta_larga',
       );
     }

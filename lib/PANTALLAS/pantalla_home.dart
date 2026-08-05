@@ -28,6 +28,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/app_navigator.dart';
 import '../core/bootstrap_cartelera.dart';
+import '../core/busqueda_natural.dart';
 import '../core/constants.dart';
 import '../core/servicio_resena_post_visita.dart';
 import '../core/jerarquias_data.dart';
@@ -1097,6 +1098,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
               'descripcion': row['descripcion_evento'] ?? '',
               'flyer': row['url_flyer'] ?? '',
               'nombreLocal': nombreFallback,
+              'rubroLocal': perfil?['rubro'],
               'avatarLocal': avatarPath != null && avatarPath.isNotEmpty
                   ? _resolverAvatarLocal(sb, avatarPath)
                   : '',
@@ -1370,12 +1372,16 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   // ==========================================================================
 
   bool _coincideQuery(Map<String, dynamic> e) {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return true;
-    final t = (e['titulo']?.toString().toLowerCase() ?? '');
-    final n = (e['nombreLocal']?.toString().toLowerCase() ?? '');
-    final d = (e['descripcion']?.toString().toLowerCase() ?? '');
-    return t.contains(q) || n.contains(q) || d.contains(q);
+    return BusquedaNatural.coincide(_query, [
+      e['titulo'],
+      e['nombreLocal'],
+      e['descripcion'],
+      e['tipoEvento'],
+      e['rubroLocal'],
+      e['ciudadEvento'],
+      e['diaSemana'],
+      e['tienePromo'] == true ? 'promo promocion descuento' : null,
+    ]);
   }
 
   bool _coincideTipoEvento(Map<String, dynamic> e) {

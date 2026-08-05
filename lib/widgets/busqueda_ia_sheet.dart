@@ -32,8 +32,9 @@ String? _distanciaHastaCiudad(LatLng? ref, String? ciudad) {
   final metros = const Distance()(ref, dest);
   if (metros < 1000) return 'A ${metros.round()} m de ti';
   final km = metros / 1000;
-  if (km < 10)
+  if (km < 10) {
     return 'A ${km.toStringAsFixed(1).replaceAll('.', ',')} km de ti';
+  }
   return 'A ${km.round()} km de ti';
 }
 
@@ -257,7 +258,8 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
 
     setState(() {
       _cargando = false;
-      if (seguir) _cache.seguimientosUsados++;
+      // Los errores de red/proveedor no gastan un seguimiento del usuario.
+      if (seguir && res.ok) _cache.seguimientosUsados++;
       _cache.agregarAsistente(
         texto: res.textoMostrar,
         recomendados: res.ok ? res.recomendados : const [],
@@ -303,13 +305,16 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
     );
   }
 
-  void _abrirLocal(RecomendacionIa r) {
+  void _abrirLocal(RecomendacionIa r, {bool abrirCarta = false}) {
+    final idLocal = r.esCarta ? (r.idLocal ?? '') : r.id;
+    final nombre = r.esCarta ? (r.nombreLocal ?? r.titulo) : r.titulo;
     Navigator.of(context).push(
       CupertinoPageRoute(
         builder: (_) => PantallaLocalPerfil(
           avatarUrl: r.avatarUrl ?? r.imagenUrl ?? '',
-          nombreLocal: r.titulo,
-          idLocal: r.id,
+          nombreLocal: nombre,
+          idLocal: idLocal.isEmpty ? null : idLocal,
+          abrirCartaAlInicio: abrirCarta && idLocal.isNotEmpty,
         ),
       ),
     );
@@ -384,7 +389,7 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
                           ),
                         ),
                         Text(
-                          'Planes con onda, a tu medida',
+                          'Salidas, precios y planes a tu ritmo',
                           style: GoogleFonts.baloo2(
                             color: Colors.white54,
                             fontSize: 12,
@@ -428,7 +433,9 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
                           mensaje: m,
                           refUsuario: _refUsuario,
                           onVerEvento: _abrirEvento,
-                          onVerLocal: _abrirLocal,
+                          onVerLocal: (r) => _abrirLocal(r),
+                          onVerLocalYCarta: (r) =>
+                              _abrirLocal(r, abrirCarta: true),
                         );
                       },
                     )
@@ -496,7 +503,7 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
                                 ? (puedeSeguir
                                       ? 'Seguí preguntando…'
                                       : 'Tu próxima pregunta abre una nueva…')
-                                : '¿Qué querés hacer?',
+                                : 'Hoy, finde, presupuesto, vibe…',
                             hintStyle: GoogleFonts.baloo2(
                               color: Colors.white38,
                               fontSize: 14,
@@ -568,16 +575,52 @@ class _EmptyHint extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Text(
-          n.isEmpty
-              ? 'Contame qué plan buscás ✨\nEj: ver el partido, cena con mamá, fiesta el sábado…'
-              : 'Hola, $n! ✨ Contame qué plan buscás y te armo ideas cerca tuyo.',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.baloo2(
-            color: Colors.white54,
-            fontSize: 15,
-            height: 1.4,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [
+                    _kDorado.withValues(alpha: 0.35),
+                    _kVioleta.withValues(alpha: 0.25),
+                  ],
+                ),
+                border: Border.all(color: _kDorado.withValues(alpha: 0.35)),
+              ),
+              child: const Icon(
+                CupertinoIcons.sparkles,
+                color: _kDorado,
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              n.isEmpty ? '¿Qué salida buscás?' : 'Hola, $n!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.baloo2(
+                color: Colors.white.withValues(alpha: 0.92),
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              n.isEmpty
+                  ? 'Hoy, el finde, un presupuesto o una vibe.\nEj: abierto ahora · cita romántica · menú por 15mil'
+                  : 'Contame el plan: hoy, el finde, presupuesto o estilo.\nTambién: abierto ahora, cumple, rock, carta…',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.baloo2(
+                color: Colors.white54,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -749,11 +792,15 @@ class _ChipsSugerencias extends StatelessWidget {
 
   static const _items = <(String, String)>[
     ('🌙', '¿Qué hago esta noche?'),
+    ('🗓️', 'Planes para el finde'),
+    ('🟢', '¿Qué hay abierto ahora?'),
+    ('🍽️', 'Merendar por menos de 15mil'),
+    ('💘', 'Lugar romántico para una cita'),
     ('🎉', 'Quiero una fiesta este finde'),
+    ('🎂', 'Dónde festejo mi cumple'),
+    ('💰', 'Cenas por menos de 25mil'),
     ('🍺', 'Un lugar para tomar algo'),
-    ('🍔', '¿Dónde puedo comer rico?'),
-    ('☕', 'Un café tranqui'),
-    ('🎶', '¿Hay música en vivo?'),
+    ('🎸', 'Algo con música en vivo'),
   ];
 
   @override
@@ -911,27 +958,31 @@ class _BloqueAsistente extends StatelessWidget {
     required this.mensaje,
     required this.onVerEvento,
     required this.onVerLocal,
+    required this.onVerLocalYCarta,
     this.refUsuario,
   });
 
   final MensajeChatIa mensaje;
   final ValueChanged<RecomendacionIa> onVerEvento;
   final ValueChanged<RecomendacionIa> onVerLocal;
+  final ValueChanged<RecomendacionIa> onVerLocalYCarta;
   final LatLng? refUsuario;
 
   @override
   Widget build(BuildContext context) {
+    final cartas = mensaje.recomendados.where((r) => r.esCarta).toList();
+    final otros = mensaje.recomendados.where((r) => !r.esCarta).toList();
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            margin: const EdgeInsets.only(right: 36),
+            margin: const EdgeInsets.only(right: 28),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1C1C1F),
-              borderRadius: const BorderRadius.only(
+            decoration: const BoxDecoration(
+              color: Color(0xFF1C1C1F),
+              borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(18),
                 topRight: Radius.circular(18),
                 bottomLeft: Radius.circular(6),
@@ -945,14 +996,47 @@ class _BloqueAsistente extends StatelessWidget {
                     ? Colors.white70
                     : Colors.white.withValues(alpha: 0.92),
                 fontSize: 14.5,
-                height: 1.35,
+                height: 1.4,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ),
-          if (mensaje.recomendados.isNotEmpty) ...[
+          if (cartas.isNotEmpty) ...[
             const SizedBox(height: 12),
-            for (final r in mensaje.recomendados) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 6),
+              child: Text(
+                'De la carta',
+                style: GoogleFonts.baloo2(
+                  color: _kDorado.withValues(alpha: 0.95),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ),
+            for (final r in cartas) ...[
+              _CardCartaIa(item: r, onVer: () => onVerLocalYCarta(r)),
+              const SizedBox(height: 8),
+            ],
+          ],
+          if (otros.isNotEmpty) ...[
+            if (cartas.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 6),
+                child: Text(
+                  'También te puede cerrar',
+                  style: GoogleFonts.baloo2(
+                    color: Colors.white54,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ] else
+              const SizedBox(height: 12),
+            for (final r in otros) ...[
               if (r.esEvento)
                 _CardEventoIa(
                   item: r,
@@ -968,6 +1052,144 @@ class _BloqueAsistente extends StatelessWidget {
               const SizedBox(height: 10),
             ],
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CardCartaIa extends StatelessWidget {
+  const _CardCartaIa({required this.item, required this.onVer});
+
+  final RecomendacionIa item;
+  final VoidCallback onVer;
+
+  @override
+  Widget build(BuildContext context) {
+    final cat = (item.categoria ?? item.rubro ?? '').trim();
+    final local = (item.nombreLocal ?? '').trim();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1D),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kDorado.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AvatarLocal(
+                imageUrl: item.avatarUrl ?? item.imagenUrl,
+                size: 44,
+                esPionero: item.esPionero,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.titulo,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.baloo2(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                      ),
+                    ),
+                    if (local.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        local,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.baloo2(
+                          color: Colors.white70,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    if (cat.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        cat,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.baloo2(
+                          color: Colors.white38,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: _kDorado.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _kDorado.withValues(alpha: 0.45)),
+                ),
+                child: Text(
+                  item.precioMostrar,
+                  style: GoogleFonts.baloo2(
+                    color: _kDorado,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (item.porQue.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              item.porQue,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.baloo2(
+                color: Colors.white.withValues(alpha: 0.75),
+                fontSize: 12.5,
+                height: 1.3,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onVer,
+              style: FilledButton.styleFrom(
+                backgroundColor: _kDorado,
+                foregroundColor: _kVioletaOscuro,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Ver local y carta',
+                style: GoogleFonts.baloo2(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: _kVioletaOscuro,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
