@@ -122,6 +122,11 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   List<MatchCard> _mazo = [];
   Offset _arrastre = Offset.zero;
   bool _swipeando = false;
+
+  /// Paginación del mazo: ids ya traídos y si queda universo por delante.
+  final Set<String> _idsVistos = {};
+  bool _hayMasCards = true;
+  bool _cargandoMas = false;
   /// Activa duración en el transform (vuelo al soltar / snap al centro).
   bool _animarArrastre = false;
   static const _duracionVuelo = Duration(milliseconds: 280);
@@ -213,7 +218,6 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   Future<void> _cargarMazo() async {
     try {
-      // Hereda la ubicación global (cartelera/explorar): GPS o manual.
       final ciudades = PreferenciasCartelera.instancia.ciudadesActivas.toList();
       final mazo = await _srv.feed(
         tipo: _modo,
@@ -223,10 +227,41 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       if (!mounted) return;
       setState(() {
         _mazo = mazo;
+        _idsVistos
+          ..clear()
+          ..addAll(mazo.map((c) => c.idPlan));
+        // Tanda incompleta = no hay más universo por delante.
+        _hayMasCards = mazo.length >= 30;
         _cargando = false;
       });
     } catch (_) {
       if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  /// Trae la siguiente tanda y la agrega al final, sin reiniciar el mazo.
+  Future<void> _cargarMasCards() async {
+    if (_cargandoMas || !_hayMasCards || _sinPlan) return;
+    _cargandoMas = true;
+    try {
+      final ciudades = PreferenciasCartelera.instancia.ciudadesActivas.toList();
+      final mas = await _srv.feed(
+        tipo: _modo,
+        idGrupo: _squad?.idGrupo,
+        ciudades: ciudades,
+        excluir: _idsVistos.toList(),
+      );
+      if (!mounted) return;
+      final nuevas = mas.where((c) => !_idsVistos.contains(c.idPlan)).toList();
+      setState(() {
+        _mazo = [..._mazo, ...nuevas];
+        _idsVistos.addAll(nuevas.map((c) => c.idPlan));
+        _hayMasCards = mas.length >= 30;
+      });
+    } catch (_) {
+      // Si falla, reintentamos en el próximo swipe.
+    } finally {
+      _cargandoMas = false;
     }
   }
 
@@ -395,6 +430,10 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       _animarArrastre = false;
       _mazo = _mazo.sublist(1);
       _arrastre = Offset.zero;
+    });
+    // Scroll infinito: cuando quedan pocas, se pide la siguiente tanda.
+    if (_mazo.length <= 5) unawaited(_cargarMasCards());
+    setState(() {
       // Brindis 🥂 → overlay "¡ME RE PINTA!" que se va solo a los 3 seg.
       if (decision == 'recopa') {
         _rePintaDetalle =
@@ -849,12 +888,14 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
           if (_pendientes.isNotEmpty) _tiraPendientes(),
           _barraActivo(),
           Expanded(
-            child: _mensajeCentral(
-              '🔭',
-              'No hay más planes por ahora',
-              'Cambiá tus filtros desde "Preferencias", o volvé a revisar los planes que pasaste.',
-              boton: ('Volver a revisar 🔁', _volverARevisar),
-            ),
+            child: _cargandoMas
+                ? const Center(child: CupertinoActivityIndicator(radius: 13))
+                : _mensajeCentral(
+                    '🔭',
+                    'Viste todos los planes de tu zona',
+                    'Podés volver a revisar los que pasaste, ampliar tu ubicación o cambiar los filtros desde "Filtros y planes".',
+                    boton: ('Volver a revisar 🔁', _volverARevisar),
+                  ),
           ),
         ],
       );
@@ -1057,7 +1098,11 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   /// Recicla los "paso" y rearma el mazo (los "me pinta" no vuelven).
   Future<void> _volverARevisar() async {
-    setState(() => _cargando = true);
+    setState(() {
+      _cargando = true;
+      _idsVistos.clear();
+      _hayMasCards = true;
+    });
     await _srv.reciclarPasados(
       tipo: _modo,
       idGrupo: _modo == 'squad' ? _squad?.idGrupo : null,

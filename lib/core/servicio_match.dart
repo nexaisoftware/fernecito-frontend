@@ -344,14 +344,20 @@ class ServicioMatch {
     required String tipo,
     String? idGrupo,
     List<String>? ciudades,
+
+    /// Planes que el cliente ya tiene en pantalla: la próxima tanda sigue
+    /// desde ahí, sin repetir ni saltear.
+    List<String>? excluir,
+    int limite = 30,
   }) async {
     final res = await _c.rpc(
       'match_feed',
       params: {
         'p_tipo': tipo,
         if (idGrupo != null) 'p_id_grupo': idGrupo,
-        'p_limite': 20,
+        'p_limite': limite,
         if (ciudades != null && ciudades.isNotEmpty) 'p_ciudades': ciudades,
+        if (excluir != null && excluir.isNotEmpty) 'p_excluir': excluir,
       },
     );
     if (res is! List) return const [];
