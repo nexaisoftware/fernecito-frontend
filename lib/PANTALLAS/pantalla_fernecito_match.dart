@@ -14,6 +14,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/constants.dart';
 import '../core/preferencias_cartelera.dart';
 import '../core/servicio_match.dart';
+import '../core/supabase_client.dart';
 import '../core/servicio_squads.dart';
 import '../core/servicio_ubicacion_global.dart';
 import '../core/ubicaciones_data.dart';
@@ -173,10 +174,20 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       _tieneFoto = estado['tiene_foto'] == true;
       _activo = estado['activo'] == true;
       if (!tiene) {
-        setState(() {
-          _sinPlan = true;
-          _cargando = false;
-        });
+        setState(() => _sinPlan = true);
+        // Puede MIRAR sin plan si ya tiene perfil público y foto.
+        if (_modo == 'usuario' && _perfilPublico && _tieneFoto) {
+          final preview = await _srv.feedPreview(
+            ciudades: PreferenciasCartelera.instancia.ciudadesActivas.toList(),
+          );
+          if (!mounted) return;
+          setState(() {
+            _mazo = preview;
+            _cargando = false;
+          });
+          return;
+        }
+        setState(() => _cargando = false);
         return;
       }
       setState(() => _sinPlan = false);
@@ -355,6 +366,12 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   Future<void> _swipe(String decision) async {
     if (_mazo.isEmpty || _swipeando) return;
+    // Modo mirar: sin plan no se puede deslizar; lo invitamos a armarlo.
+    if (_sinPlan) {
+      setState(() => _arrastre = Offset.zero);
+      await _abrirConfiguracion();
+      return;
+    }
     final card = _mazo.first;
 
     // 1) Empujón: la card activa sale por el costado/arriba.
@@ -804,6 +821,15 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       );
     }
     if (_sinPlan) {
+      // Modo mirar: ve el mazo pero no puede deslizar hasta armar su plan.
+      if (_mazo.isNotEmpty) {
+        return Column(
+          children: [
+            _bannerArmaTuPlan(),
+            Expanded(child: _deck()),
+          ],
+        );
+      }
       return _armarPlanCta();
     }
     if (_mazo.isEmpty) {
@@ -921,6 +947,58 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
                 fontWeight: FontWeight.w800,
                 fontSize: 11.5,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Banner del modo mirar: ve el mazo pero todavía no participa.
+  Widget _bannerArmaTuPlan() {
+    return GestureDetector(
+      onTap: _abrirConfiguracion,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: ColoresApp.principalMarca.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: ColoresApp.principalMarca.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Text('👀', style: TextStyle(fontSize: 18)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Estás mirando nomás',
+                    style: GoogleFonts.baloo2(
+                      color: ColoresApp.textoPrincipal,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13.5,
+                    ),
+                  ),
+                  Text(
+                    'Armá tu plan para deslizar y que te vean',
+                    style: GoogleFonts.baloo2(
+                      color: ColoresApp.textoSecundario,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 16,
+              color: ColoresApp.principalMarca,
             ),
           ],
         ),
@@ -1435,25 +1513,9 @@ class _MatchCardVisual extends StatelessWidget {
                 // El lugar, más chico. Con avatar solo si es un local.
                 Row(
                   children: [
-                    if (card.lugarTipo == 'local' &&
-                        card.lugarFotoUrl != null) ...[
-                      Container(
-                        width: 20,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: const Color(0xFFEDEDF2),
-                          image: DecorationImage(
-                            image: NetworkImage(card.lugarFotoUrl!),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    Expanded(
+                    Flexible(
                       child: Text(
-                        '${card.lugarTexto} · ${card.cuandoEtiqueta}',
+                        card.lugarTexto,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.baloo2(
@@ -1461,6 +1523,19 @@ class _MatchCardVisual extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),
+                      ),
+                    ),
+                    // Avatar del local al final del nombre del lugar.
+                    if (card.lugarTipo == 'local') ...[
+                      const SizedBox(width: 5),
+                      _AvatarLocal(url: card.lugarFotoUrl, size: 19),
+                    ],
+                    Text(
+                      ' · ${card.cuandoEtiqueta}',
+                      style: GoogleFonts.baloo2(
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
                       ),
                     ),
                   ],
@@ -1845,14 +1920,33 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                               color: ColoresApp.fondoSuperficie,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Text(
-                              _lugarTipo == 'local'
-                                  ? '🍸 ${r['nombre_local']}${(r['ciudad'] ?? '').toString().isNotEmpty ? ' · ${r['ciudad']}' : ''}'
-                                  : '🎟️ ${r['titulo_evento']}',
-                              style: GoogleFonts.baloo2(
-                                color: ColoresApp.textoPrincipal,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            child: Row(
+                              children: [
+                                // Avatar real del local (la copa queda solo
+                                // como respaldo si todavía no tiene foto).
+                                if (_lugarTipo == 'local')
+                                  _AvatarLocal(
+                                    url: ServicioSupabase().urlAvatar(
+                                      r['foto_perfil_url']?.toString(),
+                                    ),
+                                    size: 26,
+                                  ),
+                                if (_lugarTipo == 'local')
+                                  const SizedBox(width: 9),
+                                Expanded(
+                                  child: Text(
+                                    _lugarTipo == 'local'
+                                        ? '${r['nombre_local']}${(r['ciudad'] ?? '').toString().isNotEmpty ? ' · ${r['ciudad']}' : ''}'
+                                        : '🎟️ ${r['titulo_evento']}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.baloo2(
+                                      color: ColoresApp.textoPrincipal,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -2237,4 +2331,33 @@ class _TarjetaPendiente extends StatelessWidget {
       style: const TextStyle(fontSize: 64),
     ),
   );
+}
+
+/// Avatar del local. Si todavía no tiene foto, muestra la copita como
+/// respaldo (antes se veía siempre el emoji aunque el local tuviera avatar).
+class _AvatarLocal extends StatelessWidget {
+  const _AvatarLocal({required this.url, this.size = 20});
+
+  final String? url;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final tiene = url != null && url!.isNotEmpty;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFFEDEDF2),
+        image: tiene
+            ? DecorationImage(image: NetworkImage(url!), fit: BoxFit.cover)
+            : null,
+      ),
+      alignment: Alignment.center,
+      child: tiene
+          ? null
+          : Text('🍸', style: TextStyle(fontSize: size * 0.55)),
+    );
+  }
 }

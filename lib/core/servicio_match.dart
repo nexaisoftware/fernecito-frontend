@@ -314,6 +314,29 @@ class ServicioMatch {
     }
   }
 
+  /// Vistazo al mazo SIN plan propio (solo lectura). Requiere perfil público
+  /// y foto: sirve para que el usuario nuevo vea de qué se trata antes de
+  /// armar su plan.
+  Future<List<MatchCard>> feedPreview({List<String>? ciudades}) async {
+    try {
+      final res = await _c.rpc(
+        'match_feed_preview',
+        params: {
+          if (ciudades != null && ciudades.isNotEmpty) 'p_ciudades': ciudades,
+          'p_limite': 20,
+        },
+      );
+      if (res is! List) return const [];
+      return res
+          .map((e) => MatchCard.fromMap(Map<String, dynamic>.from(e as Map)))
+          .where((c) => c.idPlan.isNotEmpty)
+          .toList();
+    } catch (e) {
+      debugPrint('⚠️ match_feed_preview: $e');
+      return const [];
+    }
+  }
+
   /// El mazo de cards para deslizar. [ciudades] = las ciudades activas del
   /// selector global de ubicación (cartelera/explorar); si va vacío el
   /// backend usa la ciudad del plan (permisivo).
