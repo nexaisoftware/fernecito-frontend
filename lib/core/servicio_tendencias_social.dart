@@ -40,7 +40,10 @@ class ServicioTendenciasSocial {
           )
           .where((item) => item.idLocal.isNotEmpty)
           .toList(growable: false);
-      if (lista.isNotEmpty) _ultimoBueno = lista;
+      // Si el backend devolvió vacío (cache en refresh, glitch puntual),
+      // conservamos el último ranking bueno para no vaciar Social.
+      if (lista.isEmpty) return _ultimoBueno;
+      _ultimoBueno = lista;
       return lista;
     } catch (error) {
       // La UI degrada silenciosamente si el RPC todavía no fue desplegado.

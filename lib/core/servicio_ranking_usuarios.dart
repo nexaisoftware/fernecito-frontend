@@ -1,6 +1,6 @@
 /// Ranking semanal de usuarios (Explorar) — mismo motor que el de locales:
 /// puntaje base por perfil completo + interacciones de los últimos 7 días,
-/// servido desde un cache de 15 minutos en el backend.
+/// servido desde un cache de ~6 horas en el backend.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -89,7 +89,9 @@ class ServicioRankingUsuarios {
           .map((e) => UsuarioRanking.fromMap(Map<String, dynamic>.from(e as Map)))
           .where((u) => u.idUsuario.isNotEmpty)
           .toList(growable: false);
-      if (lista.isNotEmpty) _ultimoBueno = lista;
+      // Respuesta vacía puntual: no borramos el podio si ya teníamos datos.
+      if (lista.isEmpty) return _ultimoBueno;
+      _ultimoBueno = lista;
       return lista;
     } catch (e) {
       debugPrint('⚠️ social_usuarios_ranking_semanal: $e');
