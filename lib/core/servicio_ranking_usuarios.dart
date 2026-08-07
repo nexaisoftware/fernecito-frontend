@@ -5,6 +5,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 
+import 'rpc_resiliente.dart';
 import 'supabase_client.dart';
 
 class UsuarioRanking {
@@ -62,28 +63,38 @@ class UsuarioRanking {
 }
 
 class ServicioRankingUsuarios {
+  /// Último ranking bueno: ante un fallo puntual (red, sesión vencida) la
+  /// sección conserva lo anterior en vez de desaparecer.
+  static List<UsuarioRanking> _ultimoBueno = const [];
+
   Future<List<UsuarioRanking>> listar({
     Set<String> ciudades = const {},
     String? provincia,
     int limite = 6,
   }) async {
     try {
-      final res = await ServicioSupabase().cliente.rpc(
+      final res = await rpcConReintento(
+        () => ServicioSupabase().cliente.rpc(
         'social_usuarios_ranking_semanal',
         params: {
           'p_ciudades': ciudades.isEmpty ? null : ciudades.toList(),
           'p_provincia': provincia,
           'p_limite': limite,
         },
+      ),
+        etiqueta: 'ranking_usuarios',
       );
-      if (res is! List) return const [];
-      return res
+      if (res is! List) return _ultimoBueno;
+      final lista = res
           .map((e) => UsuarioRanking.fromMap(Map<String, dynamic>.from(e as Map)))
           .where((u) => u.idUsuario.isNotEmpty)
           .toList(growable: false);
+      if (lista.isNotEmpty) _ultimoBueno = lista;
+      return lista;
     } catch (e) {
       debugPrint('⚠️ social_usuarios_ranking_semanal: $e');
-      return const [];
+      // No vaciamos la sección por un fallo puntual.
+      return _ultimoBueno;
     }
   }
 }
