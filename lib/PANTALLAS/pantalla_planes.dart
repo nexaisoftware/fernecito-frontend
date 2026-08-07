@@ -6,27 +6,13 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
 
+/// Hub de Planes (comunidad).
+///
+/// Backend listo: `planes_*` RPCs + chat realtime `planes_mensajes` + edge
+/// `asistente_plan_comunidad`. UI completa (scroll hub + chatbot crear + chat
+/// grupal) se cablea en el siguiente paso sobre `ServicioPlanes`.
 class PantallaPlanes extends StatelessWidget {
   const PantallaPlanes({super.key});
-
-  @override
-  Widget build(BuildContext context) => _PantallaProximamenteSocial(
-    titulo: 'Planes',
-    icono: CupertinoIcons.calendar_badge_plus,
-    mensaje: 'Juntadas, planes de la comunidad y nuevos grupos para salir.',
-  );
-}
-
-class _PantallaProximamenteSocial extends StatelessWidget {
-  const _PantallaProximamenteSocial({
-    required this.titulo,
-    required this.icono,
-    required this.mensaje,
-  });
-
-  final String titulo;
-  final IconData icono;
-  final String mensaje;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +26,7 @@ class _PantallaProximamenteSocial extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
         middle: Text(
-          titulo,
+          'Planes',
           style: GoogleFonts.baloo2(
             fontWeight: FontWeight.w800,
             color: ColoresApp.textoPrincipal,
@@ -62,14 +48,14 @@ class _PantallaProximamenteSocial extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    icono,
+                    CupertinoIcons.calendar_badge_plus,
                     size: 36,
                     color: ColoresApp.principalMarca,
                   ),
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Próximamente',
+                  'Arquitectura lista',
                   style: GoogleFonts.baloo2(
                     fontSize: 26,
                     fontWeight: FontWeight.w900,
@@ -78,7 +64,8 @@ class _PantallaProximamenteSocial extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  mensaje,
+                  'Juntadas en un local de Fernecito: te sumás, chateás en grupo '
+                  'y te conocés antes de salir. Próximo paso: hub + chatbot de creación.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.baloo2(
                     fontSize: 15,
