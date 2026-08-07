@@ -5,6 +5,8 @@
 /// suscribe por Supabase Realtime; los envíos van por RPC.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -475,11 +477,15 @@ class ServicioMatch {
   }
 
   /// Suscripción realtime a mensajes nuevos del match.
+  ///
+  /// `postgres_changes` filtrado por `id_match`. RLS + JWT: solo
+  /// participantes ven filas. Si el canal falla, refresca la sesión para
+  /// que el client Realtime tome un JWT fresco.
   RealtimeChannel suscribirMensajes(
     String idMatch,
     void Function(MatchMensaje) onMensaje,
   ) {
-    final canal = _c
+    return _c
         .channel('match_chat_$idMatch')
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
@@ -495,8 +501,18 @@ class ServicioMatch {
             onMensaje(MatchMensaje.fromMap(Map<String, dynamic>.from(data)));
           },
         )
-        .subscribe();
-    return canal;
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.channelError ||
+              status == RealtimeSubscribeStatus.timedOut) {
+            debugPrint('⚠️ match realtime: $status $error');
+            unawaited(
+              Supabase.instance.client.auth.refreshSession().then(
+                (_) {},
+                onError: (_) {},
+              ),
+            );
+          }
+        });
   }
 
   Future<void> cerrarCanal(RealtimeChannel canal) async {
