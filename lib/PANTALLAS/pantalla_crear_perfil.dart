@@ -86,7 +86,8 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
   DateTime? _fechaNacimientoSeleccionada; // Obligatorio
   String? _sexoSeleccionado; // Obligatorio — hombre | mujer | otro
   Uint8List? _imagenBytes;
-  bool _perfilPublico = false;
+  // Nace publico: ocultarse es una decision que vive en Mi perfil, no en el alta.
+  bool _perfilPublico = true;
   bool _validandoUsername = false;
   bool _usernameDisponible = false;
   bool _usernameValidado = false;
@@ -682,32 +683,28 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                       const SizedBox(height: 8),
                       _card([_filaSexo()]),
                       const SizedBox(height: 18),
-                      _label('Privacidad'),
+                      _label('Tus redes (opcional)'),
                       const SizedBox(height: 8),
                       _card([
-                        _filaSwitchPublico(),
-                        if (_perfilPublico) ...[
-                          _hairline(),
-                          _campoTexto(
-                            controller: _controladorInstagram,
-                            placeholder: 'Instagram (link o usuario)',
-                            icono: const FaIcon(
-                              FontAwesomeIcons.instagram,
-                              size: 18,
-                              color: Color(0xFFE1306C),
-                            ),
+                        _campoTexto(
+                          controller: _controladorInstagram,
+                          placeholder: 'Instagram (link o usuario)',
+                          icono: const FaIcon(
+                            FontAwesomeIcons.instagram,
+                            size: 18,
+                            color: Color(0xFFE1306C),
                           ),
-                          _hairline(),
-                          _campoTexto(
-                            controller: _controladorTikTok,
-                            placeholder: 'TikTok (link o usuario)',
-                            icono: const FaIcon(
-                              FontAwesomeIcons.tiktok,
-                              size: 18,
-                              color: Color(0xFF00F2EA),
-                            ),
+                        ),
+                        _hairline(),
+                        _campoTexto(
+                          controller: _controladorTikTok,
+                          placeholder: 'TikTok (link o usuario)',
+                          icono: const FaIcon(
+                            FontAwesomeIcons.tiktok,
+                            size: 18,
+                            color: Color(0xFF00F2EA),
                           ),
-                        ],
+                        ),
                       ]),
                     ],
                   ),
@@ -1443,52 +1440,4 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
   }
 
   // ── Switch perfil público ──
-  Widget _filaSwitchPublico() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 24,
-            child: Center(
-              child: Icon(
-                CupertinoIcons.globe,
-                size: 18,
-                color: ColoresApp.principalMarca,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Perfil público',
-                  style: GoogleFonts.baloo2(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: ColoresApp.textoPrincipal,
-                  ),
-                ),
-                Text(
-                  'Otros pueden verte y sumarte. Si no, solo te encuentran por @username.',
-                  style: GoogleFonts.baloo2(
-                    fontSize: 12,
-                    color: ColoresApp.textoSecundario,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          CupertinoSwitch(
-            value: _perfilPublico,
-            activeTrackColor: ColoresApp.principalMarca,
-            onChanged: (v) => setState(() => _perfilPublico = v),
-          ),
-        ],
-      ),
-    );
-  }
 }
