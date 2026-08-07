@@ -1508,48 +1508,39 @@ class _MatchCardVisual extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // El PLAN manda: grande y en negrita.
-                Text(
-                  card.planEtiqueta,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.baloo2(
-                    color: const Color(0xFF16161A),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 19,
-                    height: 1.12,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                // El lugar, más chico. Con avatar solo si es un local.
+                // Una sola frase: "Charlar y tomar algo en Patio Güemes"
+                // (mismo tipo y peso de letra) + avatar del local al final.
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Flexible(
                       child: Text(
-                        card.lugarTexto,
-                        maxLines: 1,
+                        '${card.planEtiqueta} en ${card.lugarTexto}',
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.baloo2(
-                          color: Colors.black54,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
+                          color: const Color(0xFF16161A),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                          height: 1.15,
                         ),
                       ),
                     ),
-                    // Avatar del local al final del nombre del lugar.
                     if (card.lugarTipo == 'local') ...[
-                      const SizedBox(width: 5),
-                      _AvatarLocal(url: card.lugarFotoUrl, size: 19),
+                      const SizedBox(width: 6),
+                      _AvatarLocal(url: card.lugarFotoUrl, size: 22),
                     ],
-                    Text(
-                      ' · ${card.cuandoEtiqueta}',
-                      style: GoogleFonts.baloo2(
-                        color: Colors.black54,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
                   ],
+                ),
+                const SizedBox(height: 3),
+                // El cuándo, debajo y más chico.
+                Text(
+                  card.cuandoEtiqueta,
+                  style: GoogleFonts.baloo2(
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -1637,6 +1628,7 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
   List<Map<String, dynamic>> _resultados = const [];
   bool _buscando = false;
   bool _guardando = false;
+  bool _aplicandoFiltros = false;
   String? _error;
 
   bool get _esSquad => widget.modo == 'squad';
@@ -1717,17 +1709,55 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
     _ => (null, null),
   };
 
-  /// Los filtros ORDENAN el mazo y se aplican al toque (sin confirmar).
-  Future<void> _aplicarFiltrosYa() async {
+  /// Guarda los filtros (ordenan el mazo), refresca y cierra el sheet.
+  Future<void> _aplicarFiltros() async {
+    if (_aplicandoFiltros) return;
+    setState(() => _aplicandoFiltros = true);
     final (eMin, eMax) = _edades;
-    await _srv.setFiltros(
+    final ok = await _srv.setFiltros(
       interesGenero: _esSquad ? null : _interes,
       edadMin: eMin,
       edadMax: eMax,
       tipo: widget.modo,
       idGrupo: widget.squad?.idGrupo,
     );
+    if (!mounted) return;
+    if (!ok) {
+      setState(() {
+        _aplicandoFiltros = false;
+        _error = 'No pude guardar los filtros. Probá de nuevo.';
+      });
+      return;
+    }
     widget.onFiltrosCambiados?.call();
+    if (mounted) Navigator.pop(context, true);
+  }
+
+  /// Botón de confirmación de cada sección.
+  Widget _botonAplicar({
+    required String texto,
+    required VoidCallback onTap,
+    bool cargando = false,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoButton(
+        color: ColoresApp.principalMarca,
+        disabledColor: ColoresApp.principalMarca.withValues(alpha: 0.38),
+        borderRadius: BorderRadius.circular(999),
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        minimumSize: const Size(0, 44),
+        onPressed: cargando ? null : onTap,
+        child: Text(
+          cargando ? 'Guardando...' : texto,
+          style: GoogleFonts.baloo2(
+            fontWeight: FontWeight.w900,
+            fontSize: 15,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
   }
 
   (int?, int?) get _miembros => switch (_rangoMiembros) {
@@ -1879,10 +1909,7 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                             ('mujeres', 'Mujeres'),
                           ],
                           valor: _interes,
-                          onTap: (v) {
-                            setState(() => _interes = v);
-                            _aplicarFiltrosYa();
-                          },
+                          onTap: (v) => setState(() => _interes = v),
                           destacada: 'todos',
                         ),
                         const SizedBox(height: 14),
@@ -1898,10 +1925,7 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                           ('50_mas', '50+'),
                         ],
                         valor: _rangoEdad,
-                        onTap: (v) {
-                          setState(() => _rangoEdad = v);
-                          _aplicarFiltrosYa();
-                        },
+                        onTap: (v) => setState(() => _rangoEdad = v),
                         destacada: 'todos',
                       ),
                       if (_esSquad) ...[
@@ -1918,6 +1942,12 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                           destacada: 'todos',
                         ),
                       ],
+                      const SizedBox(height: 14),
+                      _botonAplicar(
+                        texto: 'Aplicar filtros',
+                        cargando: _aplicandoFiltros,
+                        onTap: _aplicarFiltros,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -2078,6 +2108,21 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                         valor: _cuando,
                         onTap: (v) => setState(() => _cuando = v),
                       ),
+                      const SizedBox(height: 14),
+                      _botonAplicar(
+                        texto: _guardando
+                            ? 'Guardando...'
+                            : 'Aplicar plan y empezar',
+                        cargando: _guardando,
+                        onTap: () {
+                          final falta = _queFalta;
+                          if (falta != null) {
+                            setState(() => _error = falta);
+                            return;
+                          }
+                          _guardar();
+                        },
+                      ),
                     ],
                   ),
                   if (_error != null)
@@ -2091,37 +2136,6 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                         ),
                       ),
                     ),
-                  const SizedBox(height: 22),
-                  CupertinoButton(
-                    color: ColoresApp.principalMarca,
-                    disabledColor: ColoresApp.principalMarca.withValues(
-                      alpha: 0.38,
-                    ),
-                    borderRadius: BorderRadius.circular(999),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 26,
-                      vertical: 11,
-                    ),
-                    minimumSize: const Size(0, 42),
-                    onPressed: _guardando
-                        ? null
-                        : () {
-                            final falta = _queFalta;
-                            if (falta != null) {
-                              setState(() => _error = falta);
-                              return;
-                            }
-                            _guardar();
-                          },
-                    child: Text(
-                      _guardando ? 'Guardando...' : '¡Empezar a deslizar!',
-                      style: GoogleFonts.baloo2(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -2413,47 +2427,35 @@ class _TarjetaPendiente extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
-                    Text(
-                      card.planEtiqueta,
-                      style: GoogleFonts.baloo2(
-                        color: const Color(0xFF16161A),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
-                        height: 1.15,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
                     Row(
                       children: [
-                        if (card.lugarTipo == 'local' &&
-                            card.lugarFotoUrl != null) ...[
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: const Color(0xFFEDEDF2),
-                              image: DecorationImage(
-                                image: NetworkImage(card.lugarFotoUrl!),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        Expanded(
+                        Flexible(
                           child: Text(
-                            '${card.lugarTexto} · ${card.cuandoEtiqueta}',
-                            maxLines: 1,
+                            '${card.planEtiqueta} en ${card.lugarTexto}',
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.baloo2(
-                              color: Colors.black54,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
+                              color: const Color(0xFF16161A),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 18,
+                              height: 1.15,
                             ),
                           ),
                         ),
+                        if (card.lugarTipo == 'local') ...[
+                          const SizedBox(width: 6),
+                          _AvatarLocal(url: card.lugarFotoUrl, size: 22),
+                        ],
                       ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      card.cuandoEtiqueta,
+                      style: GoogleFonts.baloo2(
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
