@@ -111,6 +111,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   bool _sexoCargado = true;
   int _cantMatches = 0;
 
+  /// Plan guardado (para reabrir el sheet con lo que ya elegiste).
+  Map<String, dynamic>? _planActual;
+
   /// Requisitos para aparecer en las cards (los informa match_mi_estado).
   bool _perfilPublico = true;
   bool _tieneFoto = true;
@@ -173,6 +176,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       _perfilPublico = estado['perfil_publico'] == true;
       _tieneFoto = estado['tiene_foto'] == true;
       _activo = estado['activo'] == true;
+      _planActual = estado['plan'] is Map
+          ? Map<String, dynamic>.from(estado['plan'] as Map)
+          : null;
       if (!tiene) {
         setState(() => _sinPlan = true);
         // Puede MIRAR sin plan si ya tiene perfil público y foto.
@@ -450,6 +456,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       modo: _modo,
       squad: _squad,
       pedirSexo: _modo == 'usuario' && !_sexoCargado,
+      planActual: _planActual,
       // Los filtros ordenan el mazo al instante: lo recargamos al vuelo.
       onFiltrosCambiados: () {
         if (!_sinPlan) _cargarMazo();
@@ -1572,6 +1579,7 @@ Future<bool?> mostrarSheetConfigMatch(
   SquadResumen? squad,
   bool pedirSexo = false,
   VoidCallback? onFiltrosCambiados,
+  Map<String, dynamic>? planActual,
 }) {
   return showModalBottomSheet<bool>(
     context: context,
@@ -1583,6 +1591,7 @@ Future<bool?> mostrarSheetConfigMatch(
       squad: squad,
       pedirSexo: pedirSexo,
       onFiltrosCambiados: onFiltrosCambiados,
+      planActual: planActual,
     ),
   );
 }
@@ -1593,6 +1602,7 @@ class _SheetConfigMatch extends StatefulWidget {
     this.squad,
     required this.pedirSexo,
     this.onFiltrosCambiados,
+    this.planActual,
   });
 
   final String modo;
@@ -1601,6 +1611,9 @@ class _SheetConfigMatch extends StatefulWidget {
 
   /// Se dispara al tocar un filtro (se aplican al instante, sin confirmar).
   final VoidCallback? onFiltrosCambiados;
+
+  /// Plan ya guardado: el sheet abre con esa configuración, no con defaults.
+  final Map<String, dynamic>? planActual;
 
   @override
   State<_SheetConfigMatch> createState() => _SheetConfigMatchState();
@@ -1627,6 +1640,53 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
   String? _error;
 
   bool get _esSquad => widget.modo == 'squad';
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.planActual;
+    if (p == null) return;
+    // Reabrir el sheet con lo que el usuario ya venía usando.
+    _interes = (p['interes_genero'] ?? 'todos').toString();
+    _planKey = (p['plan_key'] ?? 'lo_que_surja').toString();
+    _cuando = (p['cuando_key'] ?? 'finde').toString();
+    final lt = p['lugar_tipo']?.toString();
+    if (lt != null && lt.isNotEmpty) _lugarTipo = lt;
+    _idLocal = p['id_local']?.toString();
+    _idEvento = p['id_evento']?.toString();
+    final lugar = p['lugar_texto']?.toString();
+    if (lugar != null && lugar.isNotEmpty) {
+      if (_lugarTipo == 'custom') {
+        _customCtrl.text = lugar;
+      } else {
+        _lugarNombre = lugar;
+      }
+    }
+    _rangoEdad = _rangoDesde(p['edad_min'], p['edad_max']);
+    _rangoMiembros = _miembrosDesde(p['miembros_min'], p['miembros_max']);
+  }
+
+  /// Mapea el rango guardado (min/max) de vuelta al chip correspondiente.
+  String _rangoDesde(dynamic min, dynamic max) {
+    final a = min is num ? min.toInt() : int.tryParse('${min ?? ''}');
+    final b = max is num ? max.toInt() : int.tryParse('${max ?? ''}');
+    if (a == null && b == null) return 'todos';
+    if (a == 18 && b == 24) return '18_24';
+    if (a == 25 && b == 29) return '25_29';
+    if (a == 30 && b == 39) return '30_39';
+    if (a == 40 && b == 49) return '40_49';
+    if (a == 50) return '50_mas';
+    return 'todos';
+  }
+
+  String _miembrosDesde(dynamic min, dynamic max) {
+    final a = min is num ? min.toInt() : int.tryParse('${min ?? ''}');
+    final b = max is num ? max.toInt() : int.tryParse('${max ?? ''}');
+    if (a == null && b == null) return 'todos';
+    if (a == 2 && b == 4) return '2_4';
+    if (a == 5) return '5_mas';
+    return 'todos';
+  }
 
   @override
   void dispose() {
