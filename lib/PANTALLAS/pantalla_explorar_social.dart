@@ -47,7 +47,7 @@ class _PantallaExplorarSocialState extends State<PantallaExplorarSocial> {
   final ServicioSquads _squads = ServicioSquads();
   final ServicioRankingUsuarios _rankingSrv = ServicioRankingUsuarios();
 
-  /// Podio semanal de personas (cache de 15 min en el backend).
+  /// Podio semanal de personas (cache ~6h en el backend).
   List<UsuarioRanking> _ranking = const [];
   bool _cargandoRanking = true;
 
