@@ -108,6 +108,7 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
       ),
     );
     if (confirmar != true) return;
+    // Backend: bloqueo + borrado limpio del match/mensajes/notifs.
     final ok = await _srv.bloquear(
       idUsuario: m.otro.esSquad ? null : m.otro.idUsuario,
       idGrupo: m.otro.esSquad ? m.otro.idGrupo : null,
