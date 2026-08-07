@@ -450,6 +450,10 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       modo: _modo,
       squad: _squad,
       pedirSexo: _modo == 'usuario' && !_sexoCargado,
+      // Los filtros ordenan el mazo al instante: lo recargamos al vuelo.
+      onFiltrosCambiados: () {
+        if (!_sinPlan) _cargarMazo();
+      },
     );
     if (ok == true) {
       await _cargarEstado();
@@ -529,7 +533,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
             if (!_sinPlan) ...[
               _pillNavbar(
                 icono: CupertinoIcons.slider_horizontal_3,
-                texto: 'Preferencias',
+                texto: 'Filtros y planes',
                 onTap: _abrirConfiguracion,
               ),
               const SizedBox(width: 8),
@@ -1567,14 +1571,19 @@ Future<bool?> mostrarSheetConfigMatch(
   required String modo,
   SquadResumen? squad,
   bool pedirSexo = false,
+  VoidCallback? onFiltrosCambiados,
 }) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useRootNavigator: true,
     backgroundColor: Colors.transparent,
-    builder: (_) =>
-        _SheetConfigMatch(modo: modo, squad: squad, pedirSexo: pedirSexo),
+    builder: (_) => _SheetConfigMatch(
+      modo: modo,
+      squad: squad,
+      pedirSexo: pedirSexo,
+      onFiltrosCambiados: onFiltrosCambiados,
+    ),
   );
 }
 
@@ -1583,11 +1592,15 @@ class _SheetConfigMatch extends StatefulWidget {
     required this.modo,
     this.squad,
     required this.pedirSexo,
+    this.onFiltrosCambiados,
   });
 
   final String modo;
   final SquadResumen? squad;
   final bool pedirSexo;
+
+  /// Se dispara al tocar un filtro (se aplican al instante, sin confirmar).
+  final VoidCallback? onFiltrosCambiados;
 
   @override
   State<_SheetConfigMatch> createState() => _SheetConfigMatchState();
@@ -1606,7 +1619,7 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
   String? _idEvento;
   String? _lugarNombre;
   String _cuando = 'finde';
-  String _rangoEdad = 'todos'; // todos | 18_25 | 25_35 | 35_mas
+  String _rangoEdad = 'todos'; // ordena, no excluye
   String _rangoMiembros = 'todos'; // todos | 2_4 | 5_mas
   List<Map<String, dynamic>> _resultados = const [];
   bool _buscando = false;
@@ -1636,11 +1649,26 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
   }
 
   (int?, int?) get _edades => switch (_rangoEdad) {
-    '18_25' => (18, 25),
-    '25_35' => (25, 35),
-    '35_mas' => (35, 99),
+    '18_24' => (18, 24),
+    '25_29' => (25, 29),
+    '30_39' => (30, 39),
+    '40_49' => (40, 49),
+    '50_mas' => (50, 99),
     _ => (null, null),
   };
+
+  /// Los filtros ORDENAN el mazo y se aplican al toque (sin confirmar).
+  Future<void> _aplicarFiltrosYa() async {
+    final (eMin, eMax) = _edades;
+    await _srv.setFiltros(
+      interesGenero: _esSquad ? null : _interes,
+      edadMin: eMin,
+      edadMax: eMax,
+      tipo: widget.modo,
+      idGrupo: widget.squad?.idGrupo,
+    );
+    widget.onFiltrosCambiados?.call();
+  }
 
   (int?, int?) get _miembros => switch (_rangoMiembros) {
     '2_4' => (2, 4),
@@ -1688,14 +1716,22 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
         idLocal: _lugarTipo == 'local' ? _idLocal : null,
         idEvento: _lugarTipo == 'evento' ? _idEvento : null,
         lugarTexto: _lugarTipo == 'custom' ? _customCtrl.text.trim() : null,
-        edadMin: _esSquad ? edadMin : null,
-        edadMax: _esSquad ? edadMax : null,
+        edadMin: edadMin,
+        edadMax: edadMax,
         miembrosMin: _esSquad ? miembrosMin : null,
         miembrosMax: _esSquad ? miembrosMax : null,
         sexo: _sexo,
       );
       if (!mounted) return;
       if (ok) {
+        // Plan completo => empieza a aparecer en las cards (se puede apagar
+        // despues a mano desde el switch).
+        await _srv.setActivo(
+          activo: true,
+          tipo: widget.modo,
+          idGrupo: widget.squad?.idGrupo,
+        );
+        if (!mounted) return;
         Navigator.pop(context, true);
       } else {
         setState(() {
@@ -1768,47 +1804,69 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                     ),
                     const SizedBox(height: 18),
                   ],
-                  if (!_esSquad) ...[
-                    _titulo('Me interesan'),
-                    _chips(
-                      opciones: const [
-                        ('todos', '✨ Todos'),
-                        ('hombres', 'Hombres'),
-                        ('mujeres', 'Mujeres'),
+                  // ── Card 1: FILTROS (aplican al instante) ──
+                  _subCard(
+                    titulo: 'Filtros',
+                    detalle:
+                        'Ordenan tu mazo: primero quienes más coinciden con vos.',
+                    hijos: [
+                      if (!_esSquad) ...[
+                        _titulo('Género que te interesa'),
+                        _chips(
+                          opciones: const [
+                            ('todos', '✨ Todos'),
+                            ('hombres', 'Hombres'),
+                            ('mujeres', 'Mujeres'),
+                          ],
+                          valor: _interes,
+                          onTap: (v) {
+                            setState(() => _interes = v);
+                            _aplicarFiltrosYa();
+                          },
+                          destacada: 'todos',
+                        ),
+                        const SizedBox(height: 14),
                       ],
-                      valor: _interes,
-                      onTap: (v) => setState(() => _interes = v),
-                      destacada: 'todos',
-                    ),
-                    const SizedBox(height: 18),
-                  ],
-                  if (_esSquad) ...[
-                    _titulo('Edad del otro squad'),
-                    _chips(
-                      opciones: const [
-                        ('todos', '✨ Todas'),
-                        ('18_25', '18-25'),
-                        ('25_35', '25-35'),
-                        ('35_mas', '35+'),
+                      _titulo(_esSquad ? 'Edad del otro squad' : 'Edad'),
+                      _chips(
+                        opciones: const [
+                          ('todos', '✨ Todas'),
+                          ('18_24', '18-24'),
+                          ('25_29', '25-29'),
+                          ('30_39', '30-39'),
+                          ('40_49', '40-49'),
+                          ('50_mas', '50+'),
+                        ],
+                        valor: _rangoEdad,
+                        onTap: (v) {
+                          setState(() => _rangoEdad = v);
+                          _aplicarFiltrosYa();
+                        },
+                        destacada: 'todos',
+                      ),
+                      if (_esSquad) ...[
+                        const SizedBox(height: 14),
+                        _titulo('Tamaño del otro squad'),
+                        _chips(
+                          opciones: const [
+                            ('todos', '✨ Cualquiera'),
+                            ('2_4', '2-4'),
+                            ('5_mas', '5+'),
+                          ],
+                          valor: _rangoMiembros,
+                          onTap: (v) => setState(() => _rangoMiembros = v),
+                          destacada: 'todos',
+                        ),
                       ],
-                      valor: _rangoEdad,
-                      onTap: (v) => setState(() => _rangoEdad = v),
-                      destacada: 'todos',
-                    ),
-                    const SizedBox(height: 18),
-                    _titulo('Tamaño del otro squad'),
-                    _chips(
-                      opciones: const [
-                        ('todos', '✨ Cualquiera'),
-                        ('2_4', '2-4'),
-                        ('5_mas', '5+'),
-                      ],
-                      valor: _rangoMiembros,
-                      onTap: (v) => setState(() => _rangoMiembros = v),
-                      destacada: 'todos',
-                    ),
-                    const SizedBox(height: 18),
-                  ],
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // ── Card 2: MI PLAN (se guarda con el botón) ──
+                  _subCard(
+                    titulo: 'Mis planes y preferencias',
+                    detalle:
+                        'Indicá tu plan y tu lugar para que puedan coincidir mejor con vos.',
+                    hijos: [
                   _titulo('El plan'),
                   _chips(
                     opciones: _kPlanes
@@ -1953,12 +2011,14 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                       ),
                     ],
                   ],
-                  const SizedBox(height: 18),
-                  _titulo('¿Cuándo?'),
-                  _chips(
-                    opciones: _kCuando.map((c) => (c.$1, c.$2)).toList(),
-                    valor: _cuando,
-                    onTap: (v) => setState(() => _cuando = v),
+                      const SizedBox(height: 14),
+                      _titulo('¿Cuándo?'),
+                      _chips(
+                        opciones: _kCuando.map((c) => (c.$1, c.$2)).toList(),
+                        valor: _cuando,
+                        onTap: (v) => setState(() => _cuando = v),
+                      ),
+                    ],
                   ),
                   if (_error != null)
                     Padding(
@@ -2007,6 +2067,47 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Contenedor de sección dentro del sheet.
+  Widget _subCard({
+    required String titulo,
+    required String detalle,
+    required List<Widget> hijos,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 15),
+      decoration: BoxDecoration(
+        color: ColoresApp.fondoSuperficie,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            titulo,
+            style: GoogleFonts.baloo2(
+              color: ColoresApp.textoPrincipal,
+              fontWeight: FontWeight.w900,
+              fontSize: 16.5,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            detalle,
+            style: GoogleFonts.baloo2(
+              color: ColoresApp.textoSecundario,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              height: 1.25,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...hijos,
+        ],
       ),
     );
   }

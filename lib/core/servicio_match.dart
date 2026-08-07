@@ -497,6 +497,33 @@ class ServicioMatch {
     await _c.removeChannel(canal);
   }
 
+  /// Filtros que ORDENAN el mazo (género/edad). Se aplican al instante: no
+  /// tocan el plan ni esperan confirmación.
+  Future<bool> setFiltros({
+    String? interesGenero,
+    int? edadMin,
+    int? edadMax,
+    String tipo = 'usuario',
+    String? idGrupo,
+  }) async {
+    try {
+      final res = await _c.rpc(
+        'match_set_filtros',
+        params: {
+          if (interesGenero != null) 'p_interes_genero': interesGenero,
+          'p_edad_min': edadMin,
+          'p_edad_max': edadMax,
+          'p_tipo': tipo,
+          if (idGrupo != null) 'p_id_grupo': idGrupo,
+        },
+      );
+      return res is Map && res['ok'] == true;
+    } catch (e) {
+      debugPrint('⚠️ match_set_filtros: $e');
+      return false;
+    }
+  }
+
   /// Enciende/apaga la visibilidad en las cards (sin borrar el plan).
   Future<bool> setActivo({
     required bool activo,
