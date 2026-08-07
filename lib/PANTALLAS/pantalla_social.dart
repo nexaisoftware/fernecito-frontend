@@ -10,10 +10,17 @@ import '../core/privacidad_perfil.dart';
 import '../core/servicio_amigos.dart';
 import '../core/servicio_perfil_usuario.dart';
 import '../core/servicio_squads.dart';
+import '../core/servicio_tendencias_social.dart';
+import '../core/preferencias_cartelera.dart';
 import '../models/rompehielo.dart';
 import '../models/social.dart';
+import '../models/tendencia_social.dart';
 import 'pantalla_crear_squad.dart';
+import 'pantalla_explorar_social.dart';
+import 'pantalla_fernecito_match.dart';
+import 'pantalla_local_perfil.dart';
 import 'pantalla_mis_squads.dart';
+import 'pantalla_planes.dart';
 import 'pantalla_perfil_squads.dart';
 import 'pantalla_perfil_usuarios.dart';
 import '../widgets/busqueda_social_expandible.dart';
@@ -124,10 +131,684 @@ class PantallaSocial extends StatefulWidget {
   final int initialTabIndex;
 
   @override
-  State<PantallaSocial> createState() => _PantallaSocialState();
+  State<PantallaSocial> createState() => _PantallaSocialHubState();
 }
 
-class _PantallaSocialState extends State<PantallaSocial> {
+class _PantallaSocialHubState extends State<PantallaSocial>
+    with SingleTickerProviderStateMixin {
+  final ServicioAmigos _amigos = ServicioAmigos();
+  final ServicioSquads _squads = ServicioSquads();
+  final ServicioTendenciasSocial _tendencias = ServicioTendenciasSocial();
+
+  late final AnimationController _fuegoController;
+  List<LocalTendenciaSocial> _locales = const [];
+  int _novedadesSociales = 0;
+  bool _cargandoTendencias = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fuegoController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1050),
+    )..repeat(reverse: true);
+    if (widget.vista == SocialVista.explorar && !widget.mostrarVolver) {
+      _cargarHub();
+    }
+  }
+
+  @override
+  void dispose() {
+    _fuegoController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarHub() async {
+    await PreferenciasCartelera.instancia.cargar();
+    final prefs = PreferenciasCartelera.instancia;
+    final resultados = await Future.wait<dynamic>([
+      _amigos.listar(),
+      _squads.invitaciones(),
+      _tendencias.listarLocales(
+        ciudades: prefs.ciudadesActivas,
+        provincia: prefs.provinciaActiva,
+        dias: 7,
+        limite: 6,
+      ),
+    ]);
+    if (!mounted) return;
+    final amistades = resultados[0] as AmistadesData;
+    final invitaciones = resultados[1] as List<SquadResumen>;
+    setState(() {
+      _novedadesSociales =
+          amistades.recibidas.length +
+          invitaciones
+              .where((item) => item.origenPendiente != 'solicitud')
+              .length;
+      _locales = resultados[2] as List<LocalTendenciaSocial>;
+      _cargandoTendencias = false;
+    });
+  }
+
+  void _abrir(Widget pantalla) {
+    Navigator.of(context)
+        .push(CupertinoPageRoute(builder: (_) => pantalla))
+        .then((_) => _cargarHub());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Conserva los deep-links existentes de notificaciones y perfiles.
+    if (widget.vista == SocialVista.explorar && widget.mostrarVolver) {
+      return PantallaExplorarSocial(
+        provinciaInicial: widget.provinciaInicial,
+        ciudadesIniciales: widget.ciudadesIniciales,
+        carteleraInteligenteInicial: widget.carteleraInteligenteInicial,
+      );
+    }
+    if (widget.vista != SocialVista.explorar) {
+      return PantallaSocialLegacy(
+        vista: widget.vista,
+        mostrarVolver: widget.mostrarVolver,
+        provinciaInicial: widget.provinciaInicial,
+        ciudadesIniciales: widget.ciudadesIniciales,
+        carteleraInteligenteInicial: widget.carteleraInteligenteInicial,
+      );
+    }
+
+    final bottom = reservaInferiorSocialEmbebido(context);
+    return CupertinoPageScaffold(
+      backgroundColor: ColoresApp.fondoPrincipal,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                MediaQuery.paddingOf(context).top + 14,
+                16,
+                bottom,
+              ),
+              sliver: SliverList.list(
+                children: [
+                  _encabezadoHub(),
+                  const SizedBox(height: 12),
+                  _seccionTendencias(),
+                  const SizedBox(height: 14),
+                  _CardDestinoSocial(
+                    titulo: 'Explora 🧭',
+                    descripcion: 'Personas, rompehielos y squads cerca tuyo.',
+                    asset: 'assets/imagenes/social_hub/explora.webp',
+                    onTap: () => _abrir(
+                      PantallaExplorarSocial(
+                        provinciaInicial: widget.provinciaInicial,
+                        ciudadesIniciales: widget.ciudadesIniciales,
+                        carteleraInteligenteInicial:
+                            widget.carteleraInteligenteInicial,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _CardDestinoSocial(
+                    titulo: 'Planes 🍸',
+                    descripcion: 'Juntadas de la comunidad para conocer gente.',
+                    asset: 'assets/imagenes/social_hub/planes.webp',
+                    etiqueta: 'Nuevo',
+                    onTap: () => _abrir(const PantallaPlanes()),
+                  ),
+                  const SizedBox(height: 12),
+                  _CardDestinoSocial(
+                    titulo: 'Fernecito Match 💜',
+                    descripcion: 'Conectá con personas o squads para salir.',
+                    asset: 'assets/imagenes/social_hub/match.webp',
+                    etiqueta: 'Nuevo',
+                    // Root navigator: escapa del shell de tabs para que la
+                    // glass tab bar no tape el deck de cards.
+                    onTap: () => Navigator.of(context, rootNavigator: true)
+                        .push(
+                          CupertinoPageRoute(
+                            builder: (_) => const PantallaFernecitoMatch(),
+                          ),
+                        )
+                        .then((_) => _cargarHub()),
+                  ),
+                  const SizedBox(height: 12),
+                  _CardDestinoSocial(
+                    titulo: 'Mis amigos & squads 👥',
+                    descripcion: 'Tus amistades, invitaciones y squads.',
+                    asset: 'assets/imagenes/social_hub/amigos_squads.webp',
+                    novedades: _novedadesSociales,
+                    onTap: () => _abrir(const PantallaAmigosSquads()),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _encabezadoHub() {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Social',
+                style: GoogleFonts.baloo2(
+                  fontSize: 30,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                  color: ColoresApp.textoPrincipal,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Conectá, armá planes y salí.',
+                style: GoogleFonts.baloo2(
+                  fontSize: 14,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _seccionTendencias() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Tendencias',
+              style: GoogleFonts.baloo2(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: ColoresApp.textoPrincipal,
+              ),
+            ),
+            const SizedBox(width: 7),
+            AnimatedBuilder(
+              animation: _fuegoController,
+              builder: (_, child) => Transform.scale(
+                scale: 0.94 + (_fuegoController.value * 0.12),
+                child: Opacity(
+                  opacity: 0.76 + (_fuegoController.value * 0.24),
+                  child: child,
+                ),
+              ),
+              child: const Text('🔥', style: TextStyle(fontSize: 20)),
+            ),
+          ],
+        ),
+        Text(
+          'Los locales más populares de los últimos 7 días',
+          style: GoogleFonts.baloo2(
+            fontSize: 13,
+            color: ColoresApp.textoSecundario,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 78,
+          child: _cargandoTendencias
+              ? const Center(child: FernecitoLoader.inline(size: 22))
+              : _locales.isEmpty
+              ? _TendenciasVacias(onReintentar: _cargarHub)
+              : ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.only(left: 2, right: 8),
+                  itemCount: _locales.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 14),
+                  itemBuilder: (_, index) => _LocalTendenciaItem(
+                    posicion: index + 1,
+                    local: _locales[index],
+                    onTap: () => _abrir(
+                      PantallaLocalPerfil(
+                        idLocal: _locales[index].idLocal,
+                        nombreLocal: _locales[index].nombre,
+                        avatarUrl: _locales[index].fotoUrl ?? '',
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class PantallaAmigosSquads extends StatefulWidget {
+  const PantallaAmigosSquads({super.key});
+
+  @override
+  State<PantallaAmigosSquads> createState() => _PantallaAmigosSquadsState();
+}
+
+class _PantallaAmigosSquadsState extends State<PantallaAmigosSquads> {
+  int _indice = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: ColoresApp.fondoPrincipal,
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: ColoresApp.fondoPrincipal.withValues(alpha: 0.92),
+        border: null,
+        leading: CupertinoNavigationBarBackButton(
+          color: ColoresApp.principalMarca,
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        middle: Text(
+          'Amigos & squads',
+          style: GoogleFonts.baloo2(
+            fontWeight: FontWeight.w800,
+            color: ColoresApp.textoPrincipal,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          children: [
+            SizedBox(height: MediaQuery.paddingOf(context).top + 46),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 2),
+              child: ToggleSegmentadoSocial(
+                opciones: const ['Amigos', 'Squads'],
+                indice: _indice,
+                onChanged: (value) => setState(() => _indice = value),
+                anchoMaximo: 340,
+                paddingVertical: 8,
+                fontSize: 13.5,
+                sinBorde: true,
+                sinGlowActivo: true,
+              ),
+            ),
+            Expanded(
+              child: IndexedStack(
+                index: _indice,
+                children: const [
+                  PantallaSocialLegacy(
+                    vista: SocialVista.amigos,
+                    ocultarCabeceraEmbebida: true,
+                  ),
+                  PantallaSocialLegacy(
+                    vista: SocialVista.squads,
+                    ocultarCabeceraEmbebida: true,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CardDestinoSocial extends StatelessWidget {
+  const _CardDestinoSocial({
+    required this.titulo,
+    required this.descripcion,
+    required this.asset,
+    required this.onTap,
+    this.novedades = 0,
+    this.etiqueta,
+  });
+
+  final String titulo;
+  final String descripcion;
+  final String asset;
+  final VoidCallback onTap;
+  final int novedades;
+  final String? etiqueta;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '$titulo. $descripcion',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          height: 104,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: ColoresApp.fondoSuperficie,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: ColoresApp.principalMarca.withValues(alpha: 0.13),
+                blurRadius: 11,
+                spreadRadius: 0.2,
+              ),
+            ],
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset(
+                asset,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+              ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withValues(alpha: 0.88),
+                      Colors.black.withValues(alpha: 0.58),
+                      Colors.black.withValues(alpha: 0.12),
+                    ],
+                    stops: const [0, 0.54, 1],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 14, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (etiqueta != null) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: ColoresApp.principalMarca.withValues(
+                                  alpha: 0.88,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                etiqueta!,
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 10.5,
+                                  height: 1.1,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                          Text(
+                            titulo,
+                            maxLines: 1,
+                            overflow: TextOverflow.visible,
+                            style: GoogleFonts.baloo2(
+                              fontSize: 18.5,
+                              height: 1,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            descripcion,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.baloo2(
+                              fontSize: 12,
+                              height: 1.12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.84),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.42),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            CupertinoIcons.chevron_right,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                        if (novedades > 0)
+                          Positioned(
+                            right: -6,
+                            top: -8,
+                            child: Container(
+                              constraints: const BoxConstraints(minWidth: 23),
+                              height: 23,
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFFF4D5D),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                novedades > 99 ? '99+' : '$novedades',
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LocalTendenciaItem extends StatelessWidget {
+  const _LocalTendenciaItem({
+    required this.posicion,
+    required this.local,
+    required this.onTap,
+  });
+
+  static const _oro = Color(0xFFFFD54A);
+  static const _plata = Color(0xFFC9CED6);
+  static const _bronce = Color(0xFFD08A45);
+
+  final int posicion;
+  final LocalTendenciaSocial local;
+  final VoidCallback onTap;
+
+  Color get _acentoMedalla {
+    switch (posicion) {
+      case 1:
+        return _oro;
+      case 2:
+        return _plata;
+      case 3:
+        return _bronce;
+      default:
+        return ColoresApp.principalMarca;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final foto = local.fotoUrl;
+    final acento = _acentoMedalla;
+    final esPodio = posicion <= 3;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 68,
+        child: Column(
+          children: [
+            SizedBox(
+              height: 53,
+              width: 65,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(
+                    left: 13,
+                    top: 1,
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      padding: EdgeInsets.all(esPodio ? 2.5 : 2),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: acento,
+                        boxShadow: [
+                          BoxShadow(
+                            color: acento.withValues(alpha: esPodio ? 0.36 : 0.24),
+                            blurRadius: esPodio ? 9 : 7,
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: Container(
+                          color: ColoresApp.fondoSuperficie,
+                          child: foto != null && foto.isNotEmpty
+                              ? CachedNetworkImage(
+                                  imageUrl: foto,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (_, _, _) => _iconoLocal(),
+                                  placeholder: (_, _) => _iconoLocal(),
+                                )
+                              : _iconoLocal(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    bottom: 0,
+                    child: Text(
+                      '$posicion',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 28,
+                        height: 0.9,
+                        fontWeight: FontWeight.w900,
+                        color: esPodio ? acento : Colors.white,
+                        shadows: const [
+                          Shadow(color: Colors.black, blurRadius: 7),
+                          Shadow(color: Colors.black, blurRadius: 2),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              local.nombre,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.baloo2(
+                fontSize: 10.5,
+                height: 1,
+                fontWeight: FontWeight.w800,
+                color: ColoresApp.textoPrincipal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _iconoLocal() => Icon(
+    CupertinoIcons.building_2_fill,
+    size: 28,
+    color: ColoresApp.textoSecundario,
+  );
+}
+
+class _TendenciasVacias extends StatelessWidget {
+  const _TendenciasVacias({required this.onReintentar});
+
+  final VoidCallback onReintentar;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onReintentar,
+    child: Container(
+      width: double.infinity,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: ColoresApp.fondoSuperficie,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Text(
+        'Las tendencias aparecerán cuando haya actividad esta semana.',
+        textAlign: TextAlign.center,
+        style: GoogleFonts.baloo2(
+          fontSize: 13,
+          color: ColoresApp.textoSecundario,
+        ),
+      ),
+    ),
+  );
+}
+
+class PantallaSocialLegacy extends StatefulWidget {
+  final SocialVista vista;
+  final bool mostrarVolver;
+  final bool ocultarCabeceraEmbebida;
+  final String? provinciaInicial;
+  final Set<String>? ciudadesIniciales;
+  final bool? carteleraInteligenteInicial;
+
+  const PantallaSocialLegacy({
+    super.key,
+    this.vista = SocialVista.explorar,
+    this.mostrarVolver = false,
+    this.ocultarCabeceraEmbebida = false,
+    this.provinciaInicial,
+    this.ciudadesIniciales,
+    this.carteleraInteligenteInicial,
+    @Deprecated('Usar vista') this.initialTabIndex = 0,
+  });
+
+  final int initialTabIndex;
+
+  @override
+  State<PantallaSocialLegacy> createState() => _PantallaSocialLegacyState();
+}
+
+class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
   late SocialVista _vista;
   int _explorarIndice = 0;
 
@@ -579,7 +1260,7 @@ class _PantallaSocialState extends State<PantallaSocial> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!widget.mostrarVolver)
+              if (!widget.mostrarVolver && !widget.ocultarCabeceraEmbebida)
                 _barraVolverEmbebida(titulo: 'Mis amigos'),
               Expanded(
                 child: _TabAmigos(
@@ -639,7 +1320,7 @@ class _PantallaSocialState extends State<PantallaSocial> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!widget.mostrarVolver)
+              if (!widget.mostrarVolver && !widget.ocultarCabeceraEmbebida)
                 _barraVolverEmbebida(titulo: 'Mis squads'),
               Expanded(
                 child: _TabSquads(
@@ -1658,7 +2339,7 @@ class _StackAvataresMiembros extends StatelessWidget {
                   child: CachedNetworkImage(
                     imageUrl: avatares[i],
                     fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) => Icon(
+                    errorWidget: (context, url, error) => Icon(
                       CupertinoIcons.person_fill,
                       size: 14,
                       color: ColoresApp.textoSecundario,

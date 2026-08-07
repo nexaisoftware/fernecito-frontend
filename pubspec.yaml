@@ -133,6 +133,7 @@ flutter:
   # Assets de la aplicación
   assets:
     - assets/imagenes/
+    - assets/imagenes/social_hub/
     - assets/videos/
     # .env (solo config PÚBLICA del cliente: URL + anon key + URL share).
     # Permite que flutter_dotenv lo cargue en debug sin pasar flags.

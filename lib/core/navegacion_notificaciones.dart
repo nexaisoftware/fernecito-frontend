@@ -1,9 +1,13 @@
 /// Navegación desde notificaciones in-app (usa navigator raíz).
 library;
 
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 
 import '../PANTALLAS/pantalla_actividad.dart';
+import '../PANTALLAS/pantalla_fernecito_match.dart';
+import '../PANTALLAS/pantalla_match_chats.dart';
 import '../PANTALLAS/pantalla_mis_squads.dart';
 import '../PANTALLAS/pantalla_perfil_squads.dart';
 import '../PANTALLAS/pantalla_perfil_usuarios.dart';
@@ -278,6 +282,45 @@ Future<bool> navegarDesdeNotificacion(
         onIrATab: onIrATab,
         socialVista: SocialVista.squads,
       );
+    case 'match_plan':
+      // ¡Match! → Match (pantalla completa) + la lista de chats encima, así
+      // el "atrás" deja al usuario en el mazo y no lo saca de la sección.
+      // OJO: _push se resuelve recién al cerrarse la pantalla → no se awaitea
+      // el primero, si no el segundo nunca se apilaría.
+      final navMatch = _nav;
+      if (navMatch == null) return false;
+      unawaited(
+        _push(
+          CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
+        ),
+      );
+      unawaited(
+        _push(CupertinoPageRoute(builder: (_) => const PantallaMatchChats())),
+      );
+      return true;
+    case 'match_mensaje':
+      // Mensaje nuevo en un match → Match + bandeja de chats.
+      final navMsj = _nav;
+      if (navMsj == null) return false;
+      unawaited(
+        _push(
+          CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
+        ),
+      );
+      unawaited(
+        _push(CupertinoPageRoute(builder: (_) => const PantallaMatchChats())),
+      );
+      return true;
+    case 'match_recopa':
+      // "Le re pintó tu plan" → a Mis matches (pendientes).
+      final navRecopa = _nav;
+      if (navRecopa == null) return false;
+      unawaited(
+        _push(
+          CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
+        ),
+      );
+      return true;
     case 'rompehielo_recibido':
     case 'rompehielo_respondido':
     case 'rompehielo_replicado':
@@ -306,6 +349,31 @@ Future<bool> navegarDesdeNotificacion(
           final abierta = await abrirRompehieloDesdeNotificacionUsuario(n);
           if (abierta) return true;
           return _irATabOFallback(1, onIrATab: onIrATab);
+        case '/match_chats':
+          if (_nav == null) return false;
+          unawaited(
+            _push(
+              CupertinoPageRoute(
+                builder: (_) => const PantallaFernecitoMatch(),
+              ),
+            ),
+          );
+          unawaited(
+            _push(
+              CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
+            ),
+          );
+          return true;
+        case '/match':
+          if (_nav == null) return false;
+          unawaited(
+            _push(
+              CupertinoPageRoute(
+                builder: (_) => const PantallaFernecitoMatch(),
+              ),
+            ),
+          );
+          return true;
         case '/social':
           return _irATabOFallback(
             1,
