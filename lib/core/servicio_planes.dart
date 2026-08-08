@@ -59,6 +59,13 @@ class PlanComunidad {
   final String? nombreSquad;
   final String miEstado; // ninguno | pendiente | aceptado | …
 
+  String? get fotoLocalUrl => ServicioSupabase().urlAvatar(fotoLocal);
+  String? get fotoOrganizadorUrl => ServicioSupabase().urlAvatar(fotoOrganizador);
+
+  bool get soyMiembro => miEstado == 'aceptado';
+  bool get soyPendiente => miEstado == 'pendiente';
+  bool get cupoLleno => cupoMax != null && cupoUsados >= cupoMax!;
+
   factory PlanComunidad.fromMap(Map<String, dynamic> m) {
     DateTime? dt(dynamic v) {
       if (v == null) return null;
@@ -125,7 +132,7 @@ class ServicioPlanes {
   SupabaseClient get _c => ServicioSupabase().cliente;
   String? get miUid => _c.auth.currentUser?.id;
 
-  Future<List<PlanComunidad>> hub({
+  Future<({List<PlanComunidad> items, bool hayMas})> hub({
     Set<String> ciudades = const {},
     String? provincia,
     int limit = 20,
@@ -141,16 +148,17 @@ class ServicioPlanes {
           'p_offset': offset,
         },
       );
-      if (res is! Map) return const [];
-      final items = res['items'];
-      if (items is! List) return const [];
-      return items
+      if (res is! Map) return (items: const <PlanComunidad>[], hayMas: false);
+      final raw = res['items'];
+      if (raw is! List) return (items: const <PlanComunidad>[], hayMas: false);
+      final items = raw
           .map((e) => PlanComunidad.fromMap(Map<String, dynamic>.from(e as Map)))
           .where((p) => p.id.isNotEmpty)
           .toList(growable: false);
+      return (items: items, hayMas: res['hay_mas'] == true);
     } catch (e) {
       debugPrint('⚠️ planes_hub: $e');
-      return const [];
+      return (items: const <PlanComunidad>[], hayMas: false);
     }
   }
 
