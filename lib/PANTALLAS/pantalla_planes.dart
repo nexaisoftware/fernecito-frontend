@@ -69,12 +69,31 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
     final prefs = PreferenciasCartelera.instancia;
     final offset = reset ? 0 : _planes.length;
 
-    final res = await _srv.hub(
+    var res = await _srv.hub(
       ciudades: prefs.ciudadesActivas,
       provincia: prefs.provinciaActiva,
       limit: _pageSize,
       offset: offset,
     );
+
+    // Si en la zona exacta no hay nada, ampliamos a provincia / general
+    // para que el hub no quede vacío por un mismatch de nombre de ciudad.
+    if (reset && res.items.isEmpty && prefs.ciudadesActivas.isNotEmpty) {
+      res = await _srv.hub(
+        ciudades: const {},
+        provincia: prefs.provinciaActiva,
+        limit: _pageSize,
+        offset: 0,
+      );
+      if (res.items.isEmpty) {
+        res = await _srv.hub(
+          ciudades: const {},
+          provincia: null,
+          limit: _pageSize,
+          offset: 0,
+        );
+      }
+    }
 
     if (!mounted) return;
     setState(() {
