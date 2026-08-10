@@ -42,11 +42,13 @@ class PlanComunidad {
     this.contactoAnfitrion,
     this.beneficioLocal,
     this.beneficioEstado = 'ninguno',
+    this.beneficioContraoferta,
     this.pedidoBeneficio,
     this.pedidoVotos = 0,
     this.soyModerador = false,
     this.esPlanLocal = false,
     this.personasAceptadas = 0,
+    this.ingresoAbierto = true,
   });
 
   final String id;
@@ -72,7 +74,7 @@ class PlanComunidad {
   final String? idSquad;
   final String? nombreSquad;
   final String miEstado; // ninguno | pendiente | aceptado | local | cancelado
-  final String estado; // abierto | cerrado | cancelado | finalizado
+  final String estado; // abierto | cancelado | finalizado | eliminado
   final String? portadaPath;
   final String colorHex;
   final bool permiteSquads;
@@ -80,11 +82,13 @@ class PlanComunidad {
   final String? contactoAnfitrion;
   final String? beneficioLocal;
   final String beneficioEstado;
+  final String? beneficioContraoferta;
   final String? pedidoBeneficio;
   final int pedidoVotos;
   final bool soyModerador;
   final bool esPlanLocal;
   final int personasAceptadas;
+  final bool ingresoAbierto;
 
   String? get fotoLocalUrl => ServicioSupabase().urlAvatar(fotoLocal);
   String? get fotoOrganizadorUrl =>
@@ -93,15 +97,30 @@ class PlanComunidad {
 
   bool get soyMiembro => miEstado == 'aceptado' || miEstado == 'local';
   bool get soyPendiente => miEstado == 'pendiente';
-  bool get estaAbierto => estado == 'abierto' || estado == 'publicado';
+  bool get estaAbierto => estado == 'abierto';
   bool get estaFinalizado =>
-      estado == 'finalizado' || estado == 'cancelado' || estado == 'cerrado';
+      estado == 'cancelado' ||
+      estado == 'finalizado' ||
+      estado == 'eliminado';
   bool get cupoLleno => cupoMax != null && cupoUsados >= cupoMax!;
   bool get puedeUnirse =>
-      estaAbierto && !soyMiembro && !soyPendiente && !cupoLleno;
+      estaAbierto &&
+      ingresoAbierto &&
+      !soyMiembro &&
+      !soyPendiente &&
+      !cupoLleno;
   bool get chatDisponible => soyMiembro && estaAbierto;
 
-  PlanComunidad copyWith({String? miEstado, int? cupoUsados, String? estado}) =>
+  PlanComunidad copyWith({
+    String? miEstado,
+    int? cupoUsados,
+    String? estado,
+    bool? ingresoAbierto,
+    String? beneficioContraoferta,
+    String? beneficioEstado,
+    String? pedidoBeneficio,
+    int? pedidoVotos,
+  }) =>
       PlanComunidad(
         id: id,
         titulo: titulo,
@@ -133,12 +152,15 @@ class PlanComunidad {
         edadMinima: edadMinima,
         contactoAnfitrion: contactoAnfitrion,
         beneficioLocal: beneficioLocal,
-        beneficioEstado: beneficioEstado,
-        pedidoBeneficio: pedidoBeneficio,
-        pedidoVotos: pedidoVotos,
+        beneficioEstado: beneficioEstado ?? this.beneficioEstado,
+        beneficioContraoferta:
+            beneficioContraoferta ?? this.beneficioContraoferta,
+        pedidoBeneficio: pedidoBeneficio ?? this.pedidoBeneficio,
+        pedidoVotos: pedidoVotos ?? this.pedidoVotos,
         soyModerador: soyModerador,
         esPlanLocal: esPlanLocal,
         personasAceptadas: personasAceptadas,
+        ingresoAbierto: ingresoAbierto ?? this.ingresoAbierto,
       );
 
   factory PlanComunidad.fromMap(Map<String, dynamic> m) {
@@ -182,13 +204,44 @@ class PlanComunidad {
       contactoAnfitrion: m['contacto_anfitrion']?.toString(),
       beneficioLocal: m['beneficio_local']?.toString(),
       beneficioEstado: m['beneficio_estado']?.toString() ?? 'ninguno',
+      beneficioContraoferta: m['beneficio_contraoferta']?.toString(),
       pedidoBeneficio: m['pedido_beneficio']?.toString(),
       pedidoVotos: n(m['pedido_votos']) ?? 0,
       soyModerador: m['soy_moderador'] == true,
       esPlanLocal: m['es_plan_local'] == true || m['creador_tipo'] == 'local',
       personasAceptadas: n(m['personas_aceptadas']) ?? n(m['cupo_usados']) ?? 0,
+      ingresoAbierto: m['ingreso_abierto'] != false,
     );
   }
+}
+
+class PlanSquadGrupo {
+  const PlanSquadGrupo({
+    required this.idSquad,
+    required this.nombreSquad,
+    required this.estado,
+    this.portadaPath,
+    this.cantidadMiembros = 0,
+  });
+
+  final String idSquad;
+  final String nombreSquad;
+  final String? portadaPath;
+  final String estado;
+  final int cantidadMiembros;
+
+  String? get portadaUrl =>
+      ServicioSupabase().urlPortadaSquadDisplay(portadaPath);
+
+  factory PlanSquadGrupo.fromMap(Map<String, dynamic> m) => PlanSquadGrupo(
+    idSquad: m['id_squad']?.toString() ?? '',
+    nombreSquad: m['nombre_squad']?.toString() ?? 'Squad',
+    portadaPath: m['url_portada']?.toString() ?? m['portada_path']?.toString(),
+    estado: m['estado']?.toString() ?? 'aceptado',
+    cantidadMiembros: m['cantidad_miembros'] is num
+        ? (m['cantidad_miembros'] as num).toInt()
+        : int.tryParse(m['cantidad_miembros']?.toString() ?? '') ?? 0,
+  );
 }
 
 class PlanMiembro {
@@ -227,9 +280,16 @@ class PlanMiembro {
 }
 
 class PlanDetalle {
-  const PlanDetalle({required this.plan, required this.miembros});
+  const PlanDetalle({
+    required this.plan,
+    required this.miembros,
+    this.squads = const [],
+    this.yaVotePedido = false,
+  });
   final PlanComunidad plan;
   final List<PlanMiembro> miembros;
+  final List<PlanSquadGrupo> squads;
+  final bool yaVotePedido;
 }
 
 class PlanMensaje {
@@ -365,6 +425,7 @@ class ServicioPlanes {
         return (detalle: null, error: 'Este plan ya no está disponible.');
       }
       final miembrosRaw = res['miembros'] as List? ?? const [];
+      final squadsRaw = res['squads'] as List? ?? const [];
       return (
         detalle: PlanDetalle(
           plan: PlanComunidad.fromMap(Map<String, dynamic>.from(planRaw)),
@@ -373,6 +434,14 @@ class ServicioPlanes {
                 (e) => PlanMiembro.fromMap(Map<String, dynamic>.from(e as Map)),
               )
               .toList(growable: false),
+          squads: squadsRaw
+              .map(
+                (e) =>
+                    PlanSquadGrupo.fromMap(Map<String, dynamic>.from(e as Map)),
+              )
+              .where((s) => s.idSquad.isNotEmpty)
+              .toList(growable: false),
+          yaVotePedido: res['ya_vote_pedido'] == true,
         ),
         error: null,
       );
@@ -424,13 +493,22 @@ class ServicioPlanes {
     return null;
   }
 
-  Future<String?> solicitarUnirse(String idPlan, {String? idSquad}) async {
+  Future<({String estado, int cantidad})?> solicitarUnirse(
+    String idPlan, {
+    String? idSquad,
+  }) async {
     final res = await _c.rpc(
       'planes_solicitar_unirse',
       params: {'p_id_plan': idPlan, 'p_id_squad': idSquad},
     );
-    if (res is Map) return res['estado']?.toString();
-    return null;
+    if (res is! Map) return null;
+    final estado = res['estado']?.toString();
+    if (estado == null || estado.isEmpty) return null;
+    final cantidadRaw = res['cantidad'];
+    final cantidad = cantidadRaw is num
+        ? cantidadRaw.toInt()
+        : int.tryParse(cantidadRaw?.toString() ?? '') ?? 0;
+    return (estado: estado, cantidad: cantidad);
   }
 
   String mensajeError(Object error, {String accion = 'procesar el plan'}) {
@@ -442,6 +520,24 @@ class ServicioPlanes {
       return 'Estás haciendo muchas acciones seguidas. Esperá un ratito y probá de nuevo.';
     }
     if (msg.contains('cupo_lleno')) return 'Se llenó el cupo.';
+    if (msg.contains('ingreso_cerrado')) {
+      return 'Este plan ya no acepta más gente.';
+    }
+    if (msg.contains('nadie_elegible')) {
+      return 'No hay nadie elegible del squad para sumarse.';
+    }
+    if (msg.contains('pedido_invalido')) {
+      return 'El pedido al local tiene que tener entre 3 y 120 caracteres.';
+    }
+    if (msg.contains('beneficio_ya_aceptado')) {
+      return 'El local ya aceptó un beneficio para este plan.';
+    }
+    if (msg.contains('organizador_no_sale')) {
+      return 'El organizador no puede salir del plan. Cancelalo o transferí.';
+    }
+    if (msg.contains('plan_eliminado')) {
+      return 'Este plan fue eliminado.';
+    }
     if (msg.contains('squads_no_permitidos')) {
       return 'Este plan no acepta squads.';
     }
@@ -517,6 +613,65 @@ class ServicioPlanes {
   Future<bool> cancelar(String idPlan) async {
     final res = await _c.rpc('planes_cancelar', params: {'p_id_plan': idPlan});
     return res is Map && res['ok'] == true;
+  }
+
+  Future<bool> eliminar(String idPlan) async {
+    final res = await _c.rpc('planes_eliminar', params: {'p_id_plan': idPlan});
+    return res is Map && res['ok'] == true;
+  }
+
+  Future<bool> salir(String idPlan) async {
+    final res = await _c.rpc('planes_salir', params: {'p_id_plan': idPlan});
+    return res is Map && res['ok'] == true;
+  }
+
+  Future<bool> localQuitarse(String idPlan) async {
+    final res = await _c.rpc(
+      'planes_local_quitarse',
+      params: {'p_id_plan': idPlan},
+    );
+    return res is Map && res['ok'] == true;
+  }
+
+  Future<bool> pedidoLocal(String idPlan, String pedido) async {
+    final res = await _c.rpc(
+      'planes_pedido_local',
+      params: {'p_id_plan': idPlan, 'p_pedido': pedido},
+    );
+    return res is Map && res['ok'] == true;
+  }
+
+  Future<bool> pedidoResponder({
+    required String idPlan,
+    required String accion,
+    String? contraoferta,
+  }) async {
+    final res = await _c.rpc(
+      'planes_pedido_responder',
+      params: {
+        'p_id_plan': idPlan,
+        'p_accion': accion,
+        'p_contraoferta': contraoferta,
+      },
+    );
+    return res is Map && res['ok'] == true;
+  }
+
+  Future<({bool ok, int votos, bool yaVote})> pedidoVotar(String idPlan) async {
+    final res = await _c.rpc(
+      'planes_pedido_votar',
+      params: {'p_id_plan': idPlan},
+    );
+    if (res is! Map) return (ok: false, votos: 0, yaVote: false);
+    final votosRaw = res['votos'];
+    final votos = votosRaw is num
+        ? votosRaw.toInt()
+        : int.tryParse(votosRaw?.toString() ?? '') ?? 0;
+    return (
+      ok: res['ok'] == true,
+      votos: votos,
+      yaVote: res['ya_vote'] == true,
+    );
   }
 
   Future<List<PlanMensaje>> historial(String idPlan) async {

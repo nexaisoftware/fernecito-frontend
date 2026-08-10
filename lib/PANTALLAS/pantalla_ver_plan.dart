@@ -62,18 +62,18 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     }
     setState(() => _uniendo = true);
     try {
-      final estado = await _srv.solicitarUnirse(
+      final res = await _srv.solicitarUnirse(
         plan.id,
         idSquad: idSquad?.isEmpty == true ? null : idSquad,
       );
       _changed = true;
       if (!mounted) return;
-      if (estado == null) {
+      if (res == null) {
         _toast('No se pudo sumarte. Probá de nuevo.');
       } else {
         await _cargar();
         _toast(
-          estado == 'aceptado'
+          res.estado == 'aceptado'
               ? '¡Adentro! Ya podés chatear.'
               : 'Pedido enviado.',
         );

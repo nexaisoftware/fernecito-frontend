@@ -179,15 +179,16 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
     }
     setState(() => _uniendoId = plan.id);
     try {
-      final estado = await _srv.solicitarUnirse(
+      final res = await _srv.solicitarUnirse(
         plan.id,
         idSquad: idSquad?.isEmpty == true ? null : idSquad,
       );
       if (!mounted) return;
-      if (estado == null) {
+      if (res == null) {
         _toast('No se pudo sumar. Probá de nuevo.');
         return;
       }
+      final estado = res.estado;
       setState(() {
         _planes = _planes
             .map(
@@ -195,7 +196,7 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
                   ? p.copyWith(
                       miEstado: estado,
                       cupoUsados: estado == 'aceptado'
-                          ? p.cupoUsados + 1
+                          ? p.cupoUsados + res.cantidad
                           : p.cupoUsados,
                     )
                   : p,
