@@ -244,8 +244,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
     if (_procesando || _botEscribiendo) return;
     _usuarioTexto('Está bien');
     await _bot([
-      'Ahora elegí el local donde pasa. Esto es clave: el plan aparece según la ciudad del local 📍',
-      'No tenés que elegir ubicación aparte; Fernecito la toma directo del local.',
+      'Ahora elegí el local. El plan aparece según la ciudad de ese local 📍',
+      'No hace falta elegir ubicación aparte: Fernecito la toma del local.',
     ]);
     _irA(_PasoPlan.local);
   }
