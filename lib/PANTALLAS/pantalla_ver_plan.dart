@@ -798,27 +798,6 @@ class _Badge extends StatelessWidget {
   );
 }
 
-class _PromoLocal extends StatelessWidget {
-  const _PromoLocal({required this.texto});
-  final String texto;
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: ColoresApp.principalMarca.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(18),
-    ),
-    child: Text(
-      'El local se puso la 10 con: $texto',
-      style: GoogleFonts.baloo2(
-        fontSize: 15,
-        fontWeight: FontWeight.w900,
-        color: Colors.white,
-      ),
-    ),
-  );
-}
-
 class _ContactoChip extends StatelessWidget {
   const _ContactoChip({required this.texto, this.modo = 'contactar'});
   final String texto;
