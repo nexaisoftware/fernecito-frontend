@@ -223,20 +223,33 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
               ),
             ),
             Container(
-              margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: ColoresApp.principalMarca.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(18),
+                color: Colors.white.withValues(alpha: 0.045),
+                borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(
-                'Chat del plan · ${widget.plan.nombreLocal}. El local aparece destacado cuando participa.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.baloo2(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    CupertinoIcons.info_circle,
+                    size: 14,
+                    color: ColoresApp.principalMarca.withValues(alpha: 0.85),
+                  ),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      'Chat del plan · ${widget.plan.nombreLocal} aparece destacado cuando participa.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.baloo2(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white.withValues(alpha: 0.72),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             Expanded(
@@ -316,6 +329,30 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
   }
 }
 
+/// Paleta estilo WhatsApp: colores fuertes y de buen contraste sobre fondo
+/// oscuro, para diferenciar autores del chat de forma estable (client-only).
+const List<Color> _paletteAutores = [
+  Color(0xFFEF6C6C),
+  Color(0xFF4FC3F7),
+  Color(0xFFFFB86B),
+  Color(0xFF7ED9A8),
+  Color(0xFFC792EA),
+  Color(0xFFF2A65A),
+  Color(0xFF64D8CB),
+  Color(0xFFFF8FB1),
+];
+
+int _hashUid(String value) {
+  var hash = 0;
+  for (final unit in value.codeUnits) {
+    hash = (hash * 31 + unit) & 0x7fffffff;
+  }
+  return hash;
+}
+
+Color _colorAutor(String uid) =>
+    _paletteAutores[_hashUid(uid) % _paletteAutores.length];
+
 class _BurbujaMensaje extends StatelessWidget {
   const _BurbujaMensaje({
     required this.m,
@@ -335,9 +372,9 @@ class _BurbujaMensaje extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Center(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: Colors.white.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
@@ -356,6 +393,10 @@ class _BurbujaMensaje extends StatelessWidget {
 
     final local = m.esLocal;
     final admin = esAdmin && !local;
+    final colorAutor = (!esMio && !local && m.idAutor != null)
+        ? _colorAutor(m.idAutor!)
+        : null;
+
     return Align(
       alignment: esMio ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -363,28 +404,26 @@ class _BurbujaMensaje extends StatelessWidget {
           maxWidth: MediaQuery.sizeOf(context).width * 0.78,
         ),
         margin: const EdgeInsets.symmetric(vertical: 5),
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 9),
+        padding: const EdgeInsets.fromLTRB(13, 9, 13, 10),
         decoration: BoxDecoration(
           color: local
-              ? const Color(0xFF14B8A6).withValues(alpha: 0.22)
+              ? const Color(0xFF14B8A6).withValues(alpha: 0.18)
               : esMio
-              ? ColoresApp.principalMarca.withValues(alpha: 0.24)
-              : Colors.white.withValues(alpha: 0.08),
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.065),
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(esMio ? 18 : 6),
-            bottomRight: Radius.circular(esMio ? 6 : 18),
+            topLeft: const Radius.circular(22),
+            topRight: const Radius.circular(22),
+            bottomLeft: Radius.circular(esMio ? 22 : 8),
+            bottomRight: Radius.circular(esMio ? 8 : 22),
           ),
-          border: local || admin
+          border: local
               ? Border.all(
-                  color:
-                      (local
-                              ? const Color(0xFF14B8A6)
-                              : ColoresApp.principalMarca)
-                          .withValues(alpha: 0.48),
+                  color: const Color(0xFF14B8A6).withValues(alpha: 0.4),
                 )
-              : null,
+              : (colorAutor != null
+                    ? Border.all(color: colorAutor.withValues(alpha: 0.38))
+                    : null),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -399,19 +438,27 @@ class _BurbujaMensaje extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.baloo2(
-                        fontSize: 11,
+                        fontSize: 11.5,
                         fontWeight: FontWeight.w900,
-                        color: Colors.white.withValues(alpha: 0.68),
+                        color: local
+                            ? const Color(0xFF5EEAD4)
+                            : (colorAutor ??
+                                  Colors.white.withValues(alpha: 0.62)),
                       ),
                     ),
                   ),
                   if (local || admin) ...[
                     const SizedBox(width: 6),
-                    _BadgeChat(texto: local ? 'LOCAL' : 'ADMIN', local: local),
+                    _BadgeChat(
+                      texto: local ? 'LOCAL' : 'ADMIN',
+                      color: local
+                          ? const Color(0xFF14B8A6)
+                          : (colorAutor ?? ColoresApp.principalMarca),
+                    ),
                   ],
                 ],
               ),
-            if (nombreAutor != null) const SizedBox(height: 2),
+            if (nombreAutor != null) const SizedBox(height: 3),
             Text(
               m.cuerpo,
               style: GoogleFonts.baloo2(
@@ -429,16 +476,15 @@ class _BurbujaMensaje extends StatelessWidget {
 }
 
 class _BadgeChat extends StatelessWidget {
-  const _BadgeChat({required this.texto, required this.local});
+  const _BadgeChat({required this.texto, required this.color});
   final String texto;
-  final bool local;
+  final Color color;
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
     decoration: BoxDecoration(
-      color: (local ? const Color(0xFF14B8A6) : ColoresApp.principalMarca)
-          .withValues(alpha: 0.28),
+      color: color.withValues(alpha: 0.24),
       borderRadius: BorderRadius.circular(999),
     ),
     child: Text(
@@ -447,7 +493,7 @@ class _BadgeChat extends StatelessWidget {
         fontSize: 9,
         height: 1,
         fontWeight: FontWeight.w900,
-        color: local ? const Color(0xFF5EEAD4) : Colors.white,
+        color: Colors.white,
       ),
     ),
   );

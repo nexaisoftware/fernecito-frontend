@@ -2,6 +2,7 @@ library;
 
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/constants.dart';
 import '../core/servicio_planes.dart';
 import '../widgets/fernecito_loader.dart';
+import 'pantalla_perfil_usuarios.dart';
 
 class PantallaAdministrarPlanes extends StatefulWidget {
   const PantallaAdministrarPlanes({super.key});
@@ -53,6 +55,17 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
     final res = await _srv.detalle(id);
     if (!mounted) return;
     setState(() => _detalle = res.detalle);
+  }
+
+  void _seleccionar(String id) {
+    if (_seleccionadoId == id) {
+      setState(() {
+        _seleccionadoId = null;
+        _detalle = null;
+      });
+      return;
+    }
+    unawaited(_abrir(id));
   }
 
   Future<void> _editarTitulo(PlanComunidad p) async {
@@ -194,26 +207,171 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
     }
   }
 
-  Future<void> _gestionar(PlanMiembro m, String accion) async {
+  Future<bool> _gestionar(PlanMiembro m, String accion) async {
     final plan = _detalle?.plan;
-    if (plan == null) return;
+    if (plan == null) return false;
     try {
       final ok = await _srv.gestionarMiembro(
         idPlan: plan.id,
         idUsuario: m.idUsuario,
         accion: accion,
       );
-      if (!mounted) return;
+      if (!mounted) return ok;
       if (!ok) {
         _toast('No se pudo actualizar la solicitud.');
+        return false;
+      }
+      _changed = true;
+      unawaited(_abrir(plan.id));
+      unawaited(_cargar());
+      return true;
+    } catch (e) {
+      if (mounted) _toast(_srv.mensajeError(e, accion: 'gestionar solicitud'));
+      return false;
+    }
+  }
+
+  Future<void> _pedirAlLocal(PlanComunidad p) async {
+    final ctrl = TextEditingController();
+    final pedido = await showCupertinoDialog<String>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Pedirle algo al local'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: CupertinoTextField(
+            controller: ctrl,
+            maxLength: 120,
+            maxLines: 3,
+            placeholder: 'Ej: 2x1 en tragos para el grupo',
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (pedido == null || pedido.trim().length < 3) return;
+    setState(() => _guardando = true);
+    try {
+      final ok = await _srv.pedidoLocal(p.id, pedido.trim());
+      if (!mounted) return;
+      if (!ok) {
+        _toast('No se pudo enviar el pedido.');
+        return;
+      }
+      await _abrir(p.id);
+      _toast('Pedido enviado al local.');
+    } catch (e) {
+      if (mounted) _toast(_srv.mensajeError(e, accion: 'enviar el pedido'));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Future<void> _borrarPlan(PlanComunidad p) async {
+    final ok = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Borrar plan'),
+        content: const Text(
+          'Esta acción no se puede deshacer. El plan se elimina para todos.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Borrar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _guardando = true);
+    try {
+      final borrado = await _srv.eliminar(p.id);
+      if (!mounted) return;
+      if (!borrado) {
+        _toast('No se pudo borrar el plan.');
         return;
       }
       _changed = true;
-      await _abrir(plan.id);
+      if (_seleccionadoId == p.id) {
+        _seleccionadoId = null;
+        _detalle = null;
+      }
       await _cargar();
     } catch (e) {
-      if (mounted) _toast(_srv.mensajeError(e, accion: 'gestionar solicitud'));
+      if (mounted) _toast(_srv.mensajeError(e, accion: 'borrar el plan'));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
     }
+  }
+
+  Future<void> _cancelarPlan(PlanComunidad p) async {
+    final ok = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Cancelar plan'),
+        content: const Text(
+          'Se va a mostrar como cancelado y se avisa en el chat.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('No'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cancelar plan'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _guardando = true);
+    try {
+      final cancelado = await _srv.cancelar(p.id);
+      if (!mounted) return;
+      if (!cancelado) {
+        _toast('No se pudo cancelar el plan.');
+        return;
+      }
+      _changed = true;
+      await _cargar();
+      if (_seleccionadoId != null) await _abrir(_seleccionadoId!);
+    } catch (e) {
+      if (mounted) _toast(_srv.mensajeError(e, accion: 'cancelar el plan'));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Future<void> _abrirSolicitudes(PlanDetalle detalle) async {
+    final pendientes = detalle.miembros
+        .where((m) => m.estado == 'pendiente')
+        .toList(growable: false);
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => _SolicitudesSheet(
+        pendientes: pendientes,
+        onAceptar: (m) => _gestionar(m, 'aceptar'),
+        onRechazar: (m) => _gestionar(m, 'rechazar'),
+      ),
+    );
   }
 
   void _toast(String msg) {
@@ -233,6 +391,7 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
 
   @override
   Widget build(BuildContext context) {
+    final seleccionado = _detalle?.plan;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -245,7 +404,7 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 6, 16, 10),
+                padding: const EdgeInsets.fromLTRB(12, 6, 16, 8),
                 child: Row(
                   children: [
                     CupertinoButton(
@@ -258,18 +417,18 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
                         size: 30,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         'Administrar planes',
                         style: GoogleFonts.baloo2(
-                          fontSize: 20,
+                          fontSize: 19,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
                         ),
                       ),
                     ),
-                    if (_guardando) const CupertinoActivityIndicator(),
+                    if (_guardando) const CupertinoActivityIndicator(radius: 9),
                   ],
                 ),
               ),
@@ -280,33 +439,62 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
                         padding: const EdgeInsets.fromLTRB(14, 0, 14, 28),
                         children: [
                           if (_planes.isEmpty)
-                            _InfoBox(
+                            const _InfoBox(
                               titulo: 'No tenés planes para administrar',
                               texto:
                                   'Cuando crees un plan, vas a poder editarlo y aceptar solicitudes desde acá.',
                             )
                           else
                             for (final p in _planes)
-                              _AdminPlanCard(
-                                plan: p,
-                                selected: p.id == _seleccionadoId,
-                                onTap: () => _abrir(p.id),
-                                onTitulo: () => _editarTitulo(p),
-                                onInicio: () => _editarFecha(p, inicio: true),
-                                onFin: () => _editarFecha(p, inicio: false),
-                                onCupo: () => _editarCupo(p),
-                                onIngreso: () => _actualizar(
-                                  p,
-                                  ingresoAbierto: p.estado == 'cerrado',
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _AdminPlanCard(
+                                  plan: p,
+                                  selected: p.id == _seleccionadoId,
+                                  onTap: () => _seleccionar(p.id),
                                 ),
                               ),
-                          if (_detalle != null) ...[
-                            const SizedBox(height: 18),
-                            _SolicitudesBox(
-                              detalle: _detalle!,
-                              onAceptar: (m) => _gestionar(m, 'aceptar'),
-                              onRechazar: (m) => _gestionar(m, 'rechazar'),
+                          if (_seleccionadoId != null) ...[
+                            const SizedBox(height: 6),
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 4,
+                                bottom: 10,
+                              ),
+                              child: Text(
+                                'Editar',
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w900,
+                                  color: ColoresApp.principalMarca,
+                                ),
+                              ),
                             ),
+                            if (seleccionado == null)
+                              const Center(
+                                child: FernecitoLoader.inline(size: 22),
+                              )
+                            else
+                              _PanelEditar(
+                                plan: seleccionado,
+                                detalle: _detalle!,
+                                onNombre: () => _editarTitulo(seleccionado),
+                                onInicio: () =>
+                                    _editarFecha(seleccionado, inicio: true),
+                                onFin: () =>
+                                    _editarFecha(seleccionado, inicio: false),
+                                onCupo: () => _editarCupo(seleccionado),
+                                onIngreso: () => _actualizar(
+                                  seleccionado,
+                                  ingresoAbierto: !seleccionado.ingresoAbierto,
+                                ),
+                                onSolicitudes: () =>
+                                    _abrirSolicitudes(_detalle!),
+                                onPedirAlLocal: () =>
+                                    _pedirAlLocal(seleccionado),
+                                onCancelar: () => _cancelarPlan(seleccionado),
+                                onBorrar: () => _borrarPlan(seleccionado),
+                              ),
                           ],
                         ],
                       ),
@@ -324,78 +512,289 @@ class _AdminPlanCard extends StatelessWidget {
     required this.plan,
     required this.selected,
     required this.onTap,
-    required this.onTitulo,
-    required this.onInicio,
-    required this.onFin,
-    required this.onCupo,
-    required this.onIngreso,
   });
 
   final PlanComunidad plan;
   final bool selected;
   final VoidCallback onTap;
-  final VoidCallback onTitulo;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: selected
+            ? ColoresApp.principalMarca.withValues(alpha: 0.16)
+            : Colors.white.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  plan.titulo,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${plan.nombreLocal} · ${plan.ciudad}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: ColoresApp.textoSecundario,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _EstadoDot(abierto: plan.ingresoAbierto),
+        ],
+      ),
+    ),
+  );
+}
+
+class _EstadoDot extends StatelessWidget {
+  const _EstadoDot({required this.abierto});
+  final bool abierto;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(
+      color: (abierto ? const Color(0xFF34D399) : const Color(0xFFF87171))
+          .withValues(alpha: 0.16),
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: abierto ? const Color(0xFF34D399) : const Color(0xFFF87171),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          abierto ? 'abierto' : 'cerrado',
+          style: GoogleFonts.baloo2(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w900,
+            color: abierto ? const Color(0xFF34D399) : const Color(0xFFF87171),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _PanelEditar extends StatelessWidget {
+  const _PanelEditar({
+    required this.plan,
+    required this.detalle,
+    required this.onNombre,
+    required this.onInicio,
+    required this.onFin,
+    required this.onCupo,
+    required this.onIngreso,
+    required this.onSolicitudes,
+    required this.onPedirAlLocal,
+    required this.onCancelar,
+    required this.onBorrar,
+  });
+
+  final PlanComunidad plan;
+  final PlanDetalle detalle;
+  final VoidCallback onNombre;
   final VoidCallback onInicio;
   final VoidCallback onFin;
   final VoidCallback onCupo;
   final VoidCallback onIngreso;
+  final VoidCallback onSolicitudes;
+  final VoidCallback onPedirAlLocal;
+  final VoidCallback onCancelar;
+  final VoidCallback onBorrar;
+
+  @override
+  Widget build(BuildContext context) {
+    final pendientes = detalle.miembros
+        .where((m) => m.estado == 'pendiente')
+        .length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _EditRow(
+          icono: CupertinoIcons.textformat,
+          label: 'Nombre',
+          valor: plan.titulo,
+          onTap: onNombre,
+        ),
+        const SizedBox(height: 8),
+        _EditRow(
+          icono: CupertinoIcons.calendar,
+          label: 'Fecha inicio',
+          valor: _fmtFecha(plan.fechaInicio),
+          onTap: onInicio,
+        ),
+        const SizedBox(height: 8),
+        _EditRow(
+          icono: CupertinoIcons.calendar_badge_plus,
+          label: 'Fecha fin',
+          valor: plan.fechaFin != null
+              ? _fmtFecha(plan.fechaFin!)
+              : 'Sin definir',
+          onTap: onFin,
+        ),
+        const SizedBox(height: 8),
+        _EditRow(
+          icono: CupertinoIcons.person_2,
+          label: 'Cupo',
+          valor: plan.cupoMax != null
+              ? '${plan.cupoUsados}/${plan.cupoMax} personas'
+              : 'Sin límite',
+          onTap: onCupo,
+        ),
+        const SizedBox(height: 8),
+        _EditRow(
+          icono: plan.ingresoAbierto
+              ? CupertinoIcons.lock_open
+              : CupertinoIcons.lock,
+          label: 'Ingreso',
+          valor: plan.ingresoAbierto
+              ? 'Abierto · tocá para cerrar'
+              : 'Cerrado · tocá para abrir',
+          onTap: onIngreso,
+          destacado: plan.ingresoAbierto,
+        ),
+        const SizedBox(height: 14),
+        _EditRow(
+          icono: CupertinoIcons.tray_full,
+          label: 'Solicitudes',
+          valor: pendientes == 0
+              ? 'Sin pendientes'
+              : '$pendientes ${pendientes == 1 ? "pendiente" : "pendientes"}',
+          onTap: onSolicitudes,
+          destacado: pendientes > 0,
+        ),
+        const SizedBox(height: 14),
+        if (plan.beneficioEstado == 'ninguno')
+          _EditRow(
+            icono: CupertinoIcons.gift,
+            label: 'Pedirle al local',
+            valor: 'Pedir un beneficio para el grupo',
+            onTap: onPedirAlLocal,
+          )
+        else
+          _PedidoBox(plan: plan),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: _BotonAncho(
+                texto: 'Cancelar plan',
+                secundario: true,
+                onTap: onCancelar,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _BotonAncho(
+                texto: 'Borrar plan',
+                danger: true,
+                onTap: onBorrar,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _EditRow extends StatelessWidget {
+  const _EditRow({
+    required this.icono,
+    required this.label,
+    required this.valor,
+    required this.onTap,
+    this.destacado = false,
+  });
+
+  final IconData icono;
+  final String label;
+  final String valor;
+  final VoidCallback onTap;
+  final bool destacado;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(13),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: selected
-            ? ColoresApp.principalMarca.withValues(alpha: 0.16)
-            : Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(20),
+        color: destacado
+            ? ColoresApp.principalMarca.withValues(alpha: 0.14)
+            : Colors.white.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  plan.titulo,
-                  maxLines: 2,
+          Icon(
+            icono,
+            size: 18,
+            color: destacado
+                ? ColoresApp.principalMarca
+                : Colors.white.withValues(alpha: 0.72),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  valor,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.baloo2(
-                    fontSize: 18,
-                    height: 1,
+                    fontSize: 14,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
                   ),
                 ),
-              ),
-              _Pill(plan.estado == 'cerrado' ? 'cerrado' : 'abierto'),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${plan.nombreLocal} · ${plan.ciudad}',
-            style: GoogleFonts.baloo2(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: ColoresApp.textoSecundario,
+              ],
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [
-              _MiniAction('Nombre', onTitulo),
-              _MiniAction('Inicio', onInicio),
-              _MiniAction('Fin', onFin),
-              _MiniAction('Cupo', onCupo),
-              _MiniAction(
-                plan.estado == 'cerrado' ? 'Abrir ingreso' : 'Cerrar ingreso',
-                onIngreso,
-              ),
-            ],
+          const SizedBox(width: 6),
+          Icon(
+            CupertinoIcons.chevron_right,
+            size: 14,
+            color: Colors.white.withValues(alpha: 0.32),
           ),
         ],
       ),
@@ -403,71 +802,156 @@ class _AdminPlanCard extends StatelessWidget {
   );
 }
 
-class _SolicitudesBox extends StatelessWidget {
-  const _SolicitudesBox({
-    required this.detalle,
-    required this.onAceptar,
-    required this.onRechazar,
-  });
-
-  final PlanDetalle detalle;
-  final ValueChanged<PlanMiembro> onAceptar;
-  final ValueChanged<PlanMiembro> onRechazar;
+class _PedidoBox extends StatelessWidget {
+  const _PedidoBox({required this.plan});
+  final PlanComunidad plan;
 
   @override
   Widget build(BuildContext context) {
-    final pendientes = detalle.miembros
-        .where((m) => m.estado == 'pendiente')
-        .toList(growable: false);
+    final estado = plan.beneficioEstado;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Solicitudes · ${detalle.plan.titulo}',
-            style: GoogleFonts.baloo2(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (pendientes.isEmpty)
-            Text(
-              'No hay solicitudes pendientes.',
-              style: GoogleFonts.baloo2(color: ColoresApp.textoSecundario),
-            )
-          else
-            for (final m in pendientes)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        m.nombre,
-                        style: GoogleFonts.baloo2(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    _MiniAction('Aceptar', () => onAceptar(m), primary: true),
-                    const SizedBox(width: 6),
-                    _MiniAction('Rechazar', () => onRechazar(m)),
-                  ],
+          Row(
+            children: [
+              Icon(
+                CupertinoIcons.gift_fill,
+                size: 16,
+                color: ColoresApp.principalMarca,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'Pedido al local',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
                 ),
               ),
+              _BadgeEstadoPedido(estado: estado),
+            ],
+          ),
+          if ((plan.pedidoBeneficio ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              plan.pedidoBeneficio!.trim(),
+              style: GoogleFonts.baloo2(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
+          ],
+          if (estado == 'contraoferta' &&
+              (plan.beneficioContraoferta ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Contraoferta: ${plan.beneficioContraoferta!.trim()}',
+              style: GoogleFonts.baloo2(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: ColoresApp.textoSecundario,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                CupertinoIcons.hand_thumbsup_fill,
+                size: 13,
+                color: ColoresApp.textoSecundario,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                '${plan.pedidoVotos} ${plan.pedidoVotos == 1 ? "voto" : "votos"} del grupo',
+                style: GoogleFonts.baloo2(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
+}
+
+class _BadgeEstadoPedido extends StatelessWidget {
+  const _BadgeEstadoPedido({required this.estado});
+  final String estado;
+
+  @override
+  Widget build(BuildContext context) {
+    final (texto, color) = switch (estado) {
+      'aceptado' => ('Aceptado', const Color(0xFF34D399)),
+      'rechazado' => ('Rechazado', const Color(0xFFF87171)),
+      'contraoferta' => ('Contraoferta', const Color(0xFF60A5FA)),
+      _ => ('Pendiente', const Color(0xFFF5A623)),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        texto,
+        style: GoogleFonts.baloo2(
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _BotonAncho extends StatelessWidget {
+  const _BotonAncho({
+    required this.texto,
+    required this.onTap,
+    this.secundario = false,
+    this.danger = false,
+  });
+
+  final String texto;
+  final VoidCallback onTap;
+  final bool secundario;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: danger
+            ? const Color(0xFFF87171).withValues(alpha: 0.16)
+            : Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        texto,
+        style: GoogleFonts.baloo2(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w900,
+          color: danger ? const Color(0xFFF87171) : Colors.white,
+        ),
+      ),
+    ),
+  );
 }
 
 class _InfoBox extends StatelessWidget {
@@ -479,8 +963,8 @@ class _InfoBox extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.06),
-      borderRadius: BorderRadius.circular(22),
+      color: Colors.white.withValues(alpha: 0.055),
+      borderRadius: BorderRadius.circular(20),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -488,7 +972,7 @@ class _InfoBox extends StatelessWidget {
         Text(
           titulo,
           style: GoogleFonts.baloo2(
-            fontSize: 19,
+            fontSize: 18,
             fontWeight: FontWeight.w900,
             color: Colors.white,
           ),
@@ -503,53 +987,308 @@ class _InfoBox extends StatelessWidget {
   );
 }
 
-class _MiniAction extends StatelessWidget {
-  const _MiniAction(this.texto, this.onTap, {this.primary = false});
+class _SolicitudesSheet extends StatefulWidget {
+  const _SolicitudesSheet({
+    required this.pendientes,
+    required this.onAceptar,
+    required this.onRechazar,
+  });
+
+  final List<PlanMiembro> pendientes;
+  final Future<bool> Function(PlanMiembro) onAceptar;
+  final Future<bool> Function(PlanMiembro) onRechazar;
+
+  @override
+  State<_SolicitudesSheet> createState() => _SolicitudesSheetState();
+}
+
+class _SolicitudesSheetState extends State<_SolicitudesSheet> {
+  late List<PlanMiembro> _items;
+  String? _procesando;
+
+  @override
+  void initState() {
+    super.initState();
+    _items = [...widget.pendientes];
+  }
+
+  Future<void> _accion(
+    PlanMiembro m,
+    Future<bool> Function(PlanMiembro) fn,
+  ) async {
+    setState(() => _procesando = m.idUsuario);
+    final ok = await fn(m);
+    if (!mounted) return;
+    setState(() {
+      _procesando = null;
+      if (ok) _items.removeWhere((x) => x.idUsuario == m.idUsuario);
+    });
+  }
+
+  void _verPerfil(PlanMiembro m) {
+    Navigator.of(context, rootNavigator: true).push(
+      CupertinoPageRoute(
+        builder: (_) => PantallaPerfilUsuarios(
+          usuario: {
+            'id_usuario': m.idUsuario,
+            'nombre': m.nombre,
+            'username': m.username ?? '',
+            'avatar': m.fotoUrl ?? '',
+          },
+          estadoRelacion: EstadoRelacionUsuario.ninguno,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.sizeOf(context).height * 0.72,
+      decoration: const BoxDecoration(
+        color: Color(0xFF1B1B1B),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Solicitudes',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${_items.length}',
+                    style: GoogleFonts.baloo2(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: ColoresApp.textoSecundario,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _items.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No hay solicitudes pendientes.',
+                        style: GoogleFonts.baloo2(
+                          color: ColoresApp.textoSecundario,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      itemCount: _items.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) {
+                        final m = _items[i];
+                        final procesando = _procesando == m.idUsuario;
+                        return _FilaSolicitud(
+                          miembro: m,
+                          procesando: procesando,
+                          onVerPerfil: () => _verPerfil(m),
+                          onAceptar: () => _accion(m, widget.onAceptar),
+                          onRechazar: () => _accion(m, widget.onRechazar),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilaSolicitud extends StatelessWidget {
+  const _FilaSolicitud({
+    required this.miembro,
+    required this.procesando,
+    required this.onVerPerfil,
+    required this.onAceptar,
+    required this.onRechazar,
+  });
+
+  final PlanMiembro miembro;
+  final bool procesando;
+  final VoidCallback onVerPerfil;
+  final VoidCallback onAceptar;
+  final VoidCallback onRechazar;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(18),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _MiniAvatar(url: miembro.fotoUrl, fallback: miembro.nombre),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    miembro.nombre,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.baloo2(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: onVerPerfil,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'Ver perfil',
+                        style: GoogleFonts.baloo2(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: ColoresApp.principalMarca,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (procesando) const CupertinoActivityIndicator(radius: 9),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _BotonChico(
+                texto: 'Aceptar',
+                color: ColoresApp.principalMarca,
+                onTap: procesando ? null : onAceptar,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _BotonChico(
+                texto: 'Rechazar',
+                color: Colors.white.withValues(alpha: 0.09),
+                textColor: Colors.white.withValues(alpha: 0.85),
+                onTap: procesando ? null : onRechazar,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _BotonChico extends StatelessWidget {
+  const _BotonChico({
+    required this.texto,
+    required this.color,
+    required this.onTap,
+    this.textColor = Colors.white,
+  });
+
   final String texto;
-  final VoidCallback onTap;
-  final bool primary;
+  final Color color;
+  final Color textColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      height: 34,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: primary
-            ? ColoresApp.principalMarca
-            : const Color(0xFFE5E7EB).withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
+        color: color,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
         texto,
         style: GoogleFonts.baloo2(
-          fontSize: 11.5,
+          fontSize: 12.5,
           fontWeight: FontWeight.w900,
-          color: Colors.white,
+          color: textColor,
         ),
       ),
     ),
   );
 }
 
-class _Pill extends StatelessWidget {
-  const _Pill(this.texto);
-  final String texto;
+class _MiniAvatar extends StatelessWidget {
+  const _MiniAvatar({required this.url, required this.fallback});
+  final String? url;
+  final String fallback;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: const Color(0xFFE5E7EB).withValues(alpha: 0.16),
-      borderRadius: BorderRadius.circular(999),
-    ),
+  Widget build(BuildContext context) {
+    final ini = fallback.trim().isEmpty
+        ? '?'
+        : fallback.trim().substring(0, 1).toUpperCase();
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: Color(0xFF2B2B2B),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: url != null && url!.isNotEmpty
+          ? CachedNetworkImage(
+              imageUrl: url!,
+              fit: BoxFit.cover,
+              errorWidget: (_, _, _) => _fallback(ini),
+            )
+          : _fallback(ini),
+    );
+  }
+
+  Widget _fallback(String ini) => Center(
     child: Text(
-      texto,
+      ini,
       style: GoogleFonts.baloo2(
-        fontSize: 10.5,
         fontWeight: FontWeight.w900,
         color: Colors.white,
       ),
     ),
   );
+}
+
+String _fmtFecha(DateTime d) {
+  final local = d.toLocal();
+  final dd = local.day.toString().padLeft(2, '0');
+  final mm = local.month.toString().padLeft(2, '0');
+  final hh = local.hour.toString().padLeft(2, '0');
+  final mi = local.minute.toString().padLeft(2, '0');
+  return '$dd/$mm · $hh:$mi';
 }

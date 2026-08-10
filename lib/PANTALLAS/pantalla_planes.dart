@@ -719,13 +719,13 @@ class _CardPlan extends StatelessWidget {
         child: Container(
           height: 190,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(26),
             color: color,
             boxShadow: [
               BoxShadow(
-                color: color.withValues(alpha: desactivada ? 0.08 : 0.22),
-                blurRadius: 28,
-                offset: const Offset(0, 10),
+                color: color.withValues(alpha: desactivada ? 0.06 : 0.16),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
@@ -878,13 +878,13 @@ class _BotonPlan extends StatelessWidget {
     return GestureDetector(
       onTap: plan.puedeUnirse && !uniendo ? onTap : null,
       child: Container(
-        height: 34,
+        height: 30,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: plan.puedeUnirse
               ? ColoresApp.principalMarca
-              : Colors.white.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(999),
+              : Colors.white.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: uniendo
             ? const CupertinoActivityIndicator(radius: 7, color: Colors.white)
@@ -911,11 +911,11 @@ class _BotonGlass extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 34,
+        height: 30,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(999),
+          color: Colors.white.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Text(
           texto,
