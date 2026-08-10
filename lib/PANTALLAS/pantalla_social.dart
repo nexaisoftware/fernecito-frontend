@@ -166,28 +166,33 @@ class _PantallaSocialHubState extends State<PantallaSocial>
   Future<void> _cargarHub() async {
     await PreferenciasCartelera.instancia.cargar();
     final prefs = PreferenciasCartelera.instancia;
-    final resultados = await Future.wait<dynamic>([
-      _amigos.listar(),
-      _squads.invitaciones(),
-      _tendencias.listarLocales(
-        ciudades: prefs.ciudadesActivas,
-        provincia: prefs.provinciaActiva,
-        dias: 7,
-        limite: 6,
-      ),
-    ]);
-    if (!mounted) return;
-    final amistades = resultados[0] as AmistadesData;
-    final invitaciones = resultados[1] as List<SquadResumen>;
-    setState(() {
-      _novedadesSociales =
-          amistades.recibidas.length +
-          invitaciones
-              .where((item) => item.origenPendiente != 'solicitud')
-              .length;
-      _locales = resultados[2] as List<LocalTendenciaSocial>;
-      _cargandoTendencias = false;
-    });
+    try {
+      final resultados = await Future.wait<dynamic>([
+        _amigos.listar(),
+        _squads.invitaciones(),
+        _tendencias.listarLocales(
+          ciudades: prefs.ciudadesActivas,
+          provincia: prefs.provinciaActiva,
+          dias: 7,
+          limite: 6,
+        ),
+      ]);
+      if (!mounted) return;
+      final amistades = resultados[0] as AmistadesData;
+      final invitaciones = resultados[1] as List<SquadResumen>;
+      setState(() {
+        _novedadesSociales =
+            amistades.recibidas.length +
+            invitaciones
+                .where((item) => item.origenPendiente != 'solicitud')
+                .length;
+        _locales = resultados[2] as List<LocalTendenciaSocial>;
+        _cargandoTendencias = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _cargandoTendencias = false);
+    }
   }
 
   void _abrir(Widget pantalla) {
@@ -257,7 +262,14 @@ class _PantallaSocialHubState extends State<PantallaSocial>
                     descripcion: 'Juntadas de la comunidad para conocer gente.',
                     asset: 'assets/imagenes/social_hub/planes.webp',
                     etiqueta: 'Nuevo',
-                    onTap: () => _abrir(const PantallaPlanes()),
+                    onTap: () => Navigator.of(context, rootNavigator: true)
+                        .push(
+                          CupertinoPageRoute(
+                            fullscreenDialog: true,
+                            builder: (_) => const PantallaPlanes(),
+                          ),
+                        )
+                        .then((_) => _cargarHub()),
                   ),
                   const SizedBox(height: 12),
                   _CardDestinoSocial(
@@ -690,7 +702,9 @@ class _LocalTendenciaItem extends StatelessWidget {
                         color: acento,
                         boxShadow: [
                           BoxShadow(
-                            color: acento.withValues(alpha: esPodio ? 0.36 : 0.24),
+                            color: acento.withValues(
+                              alpha: esPodio ? 0.36 : 0.24,
+                            ),
                             blurRadius: esPodio ? 9 : 7,
                           ),
                         ],

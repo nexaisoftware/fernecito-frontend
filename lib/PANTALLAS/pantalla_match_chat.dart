@@ -127,6 +127,63 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
     });
   }
 
+  Future<void> _bloquear() async {
+    final otro = widget.match.otro;
+    final confirmar = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('¿Bloquear a ${otro.nombre}?'),
+        content: const Text(
+          'No van a volver a cruzarse en Match y este chat se cierra. Podés desbloquear más adelante desde soporte.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Bloquear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    final ok = await _srv.bloquear(
+      idUsuario: otro.esSquad ? null : otro.idUsuario,
+      idGrupo: otro.esSquad ? otro.idGrupo : null,
+    );
+    if (ok && mounted) Navigator.of(context).pop(true);
+  }
+
+  void _menuChat() {
+    final otro = widget.match.otro;
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text(
+          'Chat con ${otro.nombre}',
+          style: GoogleFonts.baloo2(fontWeight: FontWeight.w800),
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _bloquear();
+            },
+            child: const Text('🚫 Bloquear'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+  }
+
   Future<void> _enviar() async {
     final texto = _input.text.trim();
     if (texto.isEmpty || _enviando) return;
@@ -272,6 +329,16 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
               ),
             ),
           ],
+        ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(30, 30),
+          onPressed: _menuChat,
+          child: const Icon(
+            CupertinoIcons.ellipsis,
+            size: 20,
+            color: Colors.white54,
+          ),
         ),
       ),
       child: SafeArea(

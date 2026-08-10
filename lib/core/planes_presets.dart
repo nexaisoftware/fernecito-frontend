@@ -78,4 +78,6 @@ const fondosPlanesPreset = <PlanFondoPreset>[
 ];
 
 bool esAssetPlanPreset(String? path) =>
-    path != null && path.startsWith('assets/imagenes/planes_presets/');
+    path != null &&
+    (path.startsWith('predeterminadas/') ||
+        path.startsWith('assets/imagenes/planes_presets/'));

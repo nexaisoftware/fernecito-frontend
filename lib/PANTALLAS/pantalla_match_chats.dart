@@ -38,16 +38,21 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
   }
 
   Future<void> _cargar() async {
-    final resultados = await Future.wait([
-      _srv.misMatches(),
-      _srv.pendientes(),
-    ]);
-    if (!mounted) return;
-    setState(() {
-      _matches = resultados[0] as List<MatchItem>;
-      _pendientes = resultados[1] as List<MatchPendiente>;
-      _cargando = false;
-    });
+    try {
+      final resultados = await Future.wait([
+        _srv.misMatches(),
+        _srv.pendientes(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _matches = resultados[0] as List<MatchItem>;
+        _pendientes = resultados[1] as List<MatchPendiente>;
+        _cargando = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _cargando = false);
+    }
   }
 
   Future<void> _verPerfil(MatchItem m) async {
@@ -726,7 +731,7 @@ class _PantallaChatBienvenida extends StatelessWidget {
     '¡Hola! 👋 Bienvenido a Matchs 💜\n\nAcá van a aparecer las personas y squads con los que matcheás para salir.',
     '¿Cómo funciona?\n\n1) Armás tu plan (qué querés hacer, cuándo y dónde).\n2) Deslizás planes de otros.\n3) Si a alguien le pintó TU plan, te aparece arriba como pendiente.',
     'Cuando te llega un pendiente, tocás el avatar, ves su card y si te cierra: "Matchear y chatear" 💜\n\nSi le re pintó tu plan, el avatar viene en azul 🥂',
-    'Un consejito de seguridad 🛡️\n\nJuntate siempre en lugares públicos, avisale a alguien de confianza a dónde vas, y si algo no te cierra, confiá en tu instinto. Podés bloquear a cualquiera desde el chat.',
+    'Un consejito de seguridad 🛡️\n\nJuntate siempre en lugares públicos, avisale a alguien de confianza a dónde vas, y si algo no te cierra, confiá en tu instinto. Podés bloquear a cualquiera desde el menú del chat (⋮ arriba a la derecha).',
     '¡Eso es todo! Armá tu plan y a deslizar 🔥',
   ];
 

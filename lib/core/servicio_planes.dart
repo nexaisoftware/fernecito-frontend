@@ -308,7 +308,7 @@ class ServicioPlanes {
   SupabaseClient get _c => ServicioSupabase().cliente;
   String? get miUid => _c.auth.currentUser?.id;
 
-  Future<({List<PlanComunidad> items, bool hayMas})> hub({
+  Future<({List<PlanComunidad> items, bool hayMas, String? error})> hub({
     Set<String> ciudades = const {},
     String? provincia,
     int limit = 20,
@@ -326,40 +326,62 @@ class ServicioPlanes {
           'p_modo': modo,
         },
       );
-      if (res is! Map) return (items: const <PlanComunidad>[], hayMas: false);
+      if (res is! Map) {
+        return (
+          items: const <PlanComunidad>[],
+          hayMas: false,
+          error: 'No se pudo cargar la cartelera.',
+        );
+      }
       final raw = res['items'];
-      if (raw is! List) return (items: const <PlanComunidad>[], hayMas: false);
+      if (raw is! List) {
+        return (items: const <PlanComunidad>[], hayMas: false, error: null);
+      }
       final items = raw
           .map(
             (e) => PlanComunidad.fromMap(Map<String, dynamic>.from(e as Map)),
           )
           .where((p) => p.id.isNotEmpty)
           .toList(growable: false);
-      return (items: items, hayMas: res['hay_mas'] == true);
+      return (items: items, hayMas: res['hay_mas'] == true, error: null);
     } catch (e) {
       debugPrint('⚠️ planes_hub: $e');
-      return (items: const <PlanComunidad>[], hayMas: false);
+      return (
+        items: const <PlanComunidad>[],
+        hayMas: false,
+        error: mensajeError(e, accion: 'cargar los planes'),
+      );
     }
   }
 
-  Future<PlanDetalle?> detalle(String idPlan) async {
+  Future<({PlanDetalle? detalle, String? error})> detalle(String idPlan) async {
     try {
       final res = await _c.rpc('planes_detalle', params: {'p_id_plan': idPlan});
-      if (res is! Map) return null;
+      if (res is! Map) {
+        return (detalle: null, error: 'No se pudo abrir el plan.');
+      }
       final planRaw = res['plan'];
-      if (planRaw is! Map) return null;
+      if (planRaw is! Map) {
+        return (detalle: null, error: 'Este plan ya no está disponible.');
+      }
       final miembrosRaw = res['miembros'] as List? ?? const [];
-      return PlanDetalle(
-        plan: PlanComunidad.fromMap(Map<String, dynamic>.from(planRaw)),
-        miembros: miembrosRaw
-            .map(
-              (e) => PlanMiembro.fromMap(Map<String, dynamic>.from(e as Map)),
-            )
-            .toList(growable: false),
+      return (
+        detalle: PlanDetalle(
+          plan: PlanComunidad.fromMap(Map<String, dynamic>.from(planRaw)),
+          miembros: miembrosRaw
+              .map(
+                (e) => PlanMiembro.fromMap(Map<String, dynamic>.from(e as Map)),
+              )
+              .toList(growable: false),
+        ),
+        error: null,
       );
     } catch (e) {
       debugPrint('⚠️ planes_detalle: $e');
-      return null;
+      return (
+        detalle: null,
+        error: mensajeError(e, accion: 'abrir el plan'),
+      );
     }
   }
 
