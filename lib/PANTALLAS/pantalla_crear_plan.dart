@@ -61,6 +61,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
   int? _edadMinima;
   bool _permiteSquads = true;
   String? _contacto;
+  String _contactoModo = 'contactar';
   String _presetAsset = fondosPlanesPreset.first.asset;
   XFile? _imagen;
   String _tipoOrganizador = 'usuario';
@@ -418,8 +419,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
     );
     await _bot([
       'Último detalle opcional 📲',
-      'Podés dejar Instagram o WhatsApp para quien se sume, por si necesitan coordinar.',
-      'Si no hace falta, saltealo.',
+      'Elegí **contactar organizador** (WhatsApp/IG) o **colaborar** (link o alias).',
+      'Solo una opción. Si no hace falta, saltealo.',
     ]);
     _irA(_PasoPlan.contacto);
     _focus.requestFocus();
@@ -491,6 +492,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         tipoOrganizador: _tipoOrganizador,
         idSquad: _tipoOrganizador == 'squad' ? _idSquad : null,
         contactoAnfitrion: _contacto,
+        contactoModo: _contactoModo,
         portadaPath: portada,
         colorHex: '#111111',
         permiteSquads: _permiteSquads,
@@ -932,10 +934,34 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _OpcionBarraPlan(
+                    texto: 'Contactar',
+                    icono: CupertinoIcons.chat_bubble_2,
+                    primario: _contactoModo == 'contactar',
+                    onTap: () => setState(() => _contactoModo = 'contactar'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _OpcionBarraPlan(
+                    texto: 'Colaborar',
+                    icono: CupertinoIcons.link,
+                    primario: _contactoModo == 'colaborar',
+                    onTap: () => setState(() => _contactoModo = 'colaborar'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             _InputTextoPlan(
               controller: _input,
               focus: _focus,
-              hint: 'IG o WhatsApp opcional',
+              hint: _contactoModo == 'colaborar'
+                  ? 'ej: link o alias'
+                  : 'ej un whatsapp o instagram',
               onSend: _onTexto,
             ),
             const SizedBox(height: 8),

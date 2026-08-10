@@ -360,6 +360,104 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
     }
   }
 
+  Future<void> _expulsar(PlanMiembro m) async {
+    final ok = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('¿Expulsar a ${m.nombre}?'),
+        content: const Text('Va a salir del plan y del chat del grupo.'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Expulsar'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _gestionar(m, 'expulsar');
+  }
+
+  Future<void> _editarContacto(PlanComunidad p) async {
+    var modo = p.contactoModo == 'colaborar' ? 'colaborar' : 'contactar';
+    final ctrl = TextEditingController(text: p.contactoAnfitrion ?? '');
+    final guardado = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => CupertinoAlertDialog(
+          title: const Text('Contacto del organizador'),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Column(
+              children: [
+                CupertinoSegmentedControl<String>(
+                  groupValue: modo,
+                  children: const {
+                    'contactar': Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text('Contactar', style: TextStyle(fontSize: 12)),
+                    ),
+                    'colaborar': Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text('Colaborar', style: TextStyle(fontSize: 12)),
+                    ),
+                  },
+                  onValueChanged: (v) => setLocal(() => modo = v),
+                ),
+                const SizedBox(height: 10),
+                CupertinoTextField(
+                  controller: ctrl,
+                  maxLength: 80,
+                  placeholder: modo == 'colaborar'
+                      ? 'ej: link o alias'
+                      : 'ej un whatsapp o instagram',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final texto = ctrl.text.trim();
+    ctrl.dispose();
+    if (guardado != true) return;
+    setState(() => _guardando = true);
+    try {
+      final ok = await _srv.actualizarBasico(
+        idPlan: p.id,
+        contactoAnfitrion: texto.isEmpty ? null : texto,
+        contactoModo: modo,
+        limpiarContacto: texto.isEmpty,
+      );
+      if (!mounted) return;
+      if (!ok) {
+        _toast('No se pudo guardar el contacto.');
+        return;
+      }
+      _changed = true;
+      await _abrir(p.id);
+    } catch (e) {
+      if (mounted) _toast(_srv.mensajeError(e, accion: 'guardar contacto'));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
   Future<void> _abrirSolicitudes(PlanDetalle detalle) async {
     final pendientes = detalle.miembros
         .where((m) => m.estado == 'pendiente')
@@ -490,8 +588,10 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
                                 ),
                                 onSolicitudes: () =>
                                     _abrirSolicitudes(_detalle!),
+                                onContacto: () => _editarContacto(seleccionado),
                                 onPedirAlLocal: () =>
                                     _pedirAlLocal(seleccionado),
+                                onExpulsar: (m) => _expulsar(m),
                                 onCancelar: () => _cancelarPlan(seleccionado),
                                 onBorrar: () => _borrarPlan(seleccionado),
                               ),
@@ -615,7 +715,9 @@ class _PanelEditar extends StatelessWidget {
     required this.onCupo,
     required this.onIngreso,
     required this.onSolicitudes,
+    required this.onContacto,
     required this.onPedirAlLocal,
+    required this.onExpulsar,
     required this.onCancelar,
     required this.onBorrar,
   });
@@ -628,7 +730,9 @@ class _PanelEditar extends StatelessWidget {
   final VoidCallback onCupo;
   final VoidCallback onIngreso;
   final VoidCallback onSolicitudes;
+  final VoidCallback onContacto;
   final VoidCallback onPedirAlLocal;
+  final ValueChanged<PlanMiembro> onExpulsar;
   final VoidCallback onCancelar;
   final VoidCallback onBorrar;
 
@@ -637,6 +741,12 @@ class _PanelEditar extends StatelessWidget {
     final pendientes = detalle.miembros
         .where((m) => m.estado == 'pendiente')
         .length;
+    final miembros = detalle.miembros
+        .where((m) => m.estado == 'aceptado' && m.rol != 'organizador')
+        .toList(growable: false);
+    final contactoLabel = plan.contactoModo == 'colaborar'
+        ? 'Colaborar'
+        : 'Contactar';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -683,6 +793,15 @@ class _PanelEditar extends StatelessWidget {
           onTap: onIngreso,
           destacado: plan.ingresoAbierto,
         ),
+        const SizedBox(height: 8),
+        _EditRow(
+          icono: CupertinoIcons.chat_bubble_2,
+          label: contactoLabel,
+          valor: (plan.contactoAnfitrion ?? '').trim().isEmpty
+              ? 'Sin dato · tocá para editar'
+              : plan.contactoAnfitrion!,
+          onTap: onContacto,
+        ),
         const SizedBox(height: 14),
         _EditRow(
           icono: CupertinoIcons.tray_full,
@@ -703,6 +822,80 @@ class _PanelEditar extends StatelessWidget {
           )
         else
           _PedidoBox(plan: plan),
+        if (miembros.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          Text(
+            'Miembros',
+            style: GoogleFonts.baloo2(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              color: ColoresApp.principalMarca,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final m in miembros)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            m.nombre,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.baloo2(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                          if ((m.nombreSquad ?? '').isNotEmpty)
+                            Text(
+                              'via ${m.nombreSquad}',
+                              style: GoogleFonts.baloo2(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: ColoresApp.textoSecundario,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => onExpulsar(m),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626).withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'Expulsar',
+                          style: GoogleFonts.baloo2(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFFF87171),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
         const SizedBox(height: 20),
         Row(
           children: [

@@ -29,6 +29,7 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
   List<PlanMensaje> _mensajes = const [];
   bool _cargando = true;
   bool _enviando = false;
+  bool _bannerCerrado = false;
   RealtimeChannel? _canal;
   final Map<String, String> _nombresAutores = {};
 
@@ -222,6 +223,44 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                 ],
               ),
             ),
+            if (!_bannerCerrado &&
+                (widget.plan.beneficioEstado == 'aceptado' ||
+                    widget.plan.beneficioEstado == 'contraoferta') &&
+                ((widget.plan.beneficioLocal ??
+                            widget.plan.beneficioContraoferta ??
+                            '')
+                        .trim()
+                        .isNotEmpty))
+              Container(
+                margin: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+                padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                decoration: BoxDecoration(
+                  color: ColoresApp.principalMarca.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'El local se puso la 10 con: ${(widget.plan.beneficioLocal ?? widget.plan.beneficioContraoferta)!.trim()}',
+                        style: GoogleFonts.baloo2(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _bannerCerrado = true),
+                      child: const Icon(
+                        CupertinoIcons.xmark,
+                        size: 16,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             Container(
               margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -240,7 +279,7 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                   const SizedBox(width: 7),
                   Flexible(
                     child: Text(
-                      'Chat del plan · ${widget.plan.nombreLocal} aparece destacado cuando participa.',
+                      'Chat del plan · el admin y el local aparecen destacados. Solo texto.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.baloo2(
                         fontSize: 12.5,

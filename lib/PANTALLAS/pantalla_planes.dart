@@ -27,6 +27,8 @@ class PantallaPlanes extends StatefulWidget {
 class _PantallaPlanesState extends State<PantallaPlanes> {
   final _srv = ServicioPlanes();
   final _scroll = ScrollController();
+  final _busquedaCtrl = TextEditingController();
+  final _busquedaFocus = FocusNode();
 
   List<PlanComunidad> _planes = const [];
   bool _cargando = true;
@@ -35,6 +37,7 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
   String _tab = 'explorar';
   String? _uniendoId;
   String? _error;
+  String _q = '';
 
   static const _pageSize = 20;
 
@@ -43,14 +46,29 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
     super.initState();
     PreferenciasCartelera.instancia.cambios.addListener(_onUbicacion);
     _scroll.addListener(_onScroll);
+    _busquedaCtrl.addListener(_onBusquedaChanged);
     _cargar(reset: true);
   }
 
   @override
   void dispose() {
     PreferenciasCartelera.instancia.cambios.removeListener(_onUbicacion);
+    _busquedaCtrl.removeListener(_onBusquedaChanged);
+    _busquedaCtrl.dispose();
+    _busquedaFocus.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  void _onBusquedaChanged() {
+    final next = _busquedaCtrl.text.trim();
+    if (next == _q) return;
+    Future<void>.delayed(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      if (_busquedaCtrl.text.trim() != next) return;
+      setState(() => _q = next);
+      if (_tab == 'explorar') _cargar(reset: true);
+    });
   }
 
   void _onUbicacion() {
@@ -85,6 +103,7 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
       limit: _pageSize,
       offset: offset,
       modo: _tab == 'mis' ? 'mis' : 'explorar',
+      q: _tab == 'explorar' ? _q : null,
     );
 
     // Si en la zona exacta no hay nada, ampliamos a provincia / general
@@ -93,13 +112,15 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
         _tab == 'explorar' &&
         res.error == null &&
         res.items.isEmpty &&
-        prefs.ciudadesActivas.isNotEmpty) {
+        prefs.ciudadesActivas.isNotEmpty &&
+        _q.isEmpty) {
       res = await _srv.hub(
         ciudades: const {},
         provincia: prefs.provinciaActiva,
         limit: _pageSize,
         offset: 0,
         modo: 'explorar',
+        q: _q,
       );
       if (res.error == null && res.items.isEmpty) {
         res = await _srv.hub(
@@ -108,6 +129,7 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
           limit: _pageSize,
           offset: 0,
           modo: 'explorar',
+          q: _q,
         );
       }
     }
@@ -400,7 +422,7 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
                           ),
                           const SizedBox(height: 14),
                           Text(
-                            'Juntadas para salir',
+                            zona,
                             style: GoogleFonts.baloo2(
                               fontSize: 24,
                               height: 1.05,
@@ -408,21 +430,64 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
                               color: ColoresApp.textoPrincipal,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _tab == 'mis'
-                                ? 'Tus planes activos, pendientes e historial.'
-                                : 'Sumate y conocé gente antes de salir.',
-                            style: GoogleFonts.baloo2(
-                              fontSize: 13,
-                              color: ColoresApp.textoSecundario,
-                            ),
-                          ),
                           const SizedBox(height: 10),
                           _UbicacionPlanesBadge(
-                            texto: zona,
+                            texto: prefs.inteligenteActiva
+                                ? 'Ubicación inteligente'
+                                : (prefs.ciudadesActivas.length == 1
+                                      ? prefs.ciudadesActivas.first
+                                      : 'Elegir zona'),
                             onTap: _elegirUbicacion,
                           ),
+                          if (_tab == 'explorar') ...[
+                            const SizedBox(height: 10),
+                            CupertinoTextField(
+                              controller: _busquedaCtrl,
+                              focusNode: _busquedaFocus,
+                              placeholder: 'Buscar plan, local, persona…',
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 11,
+                              ),
+                              prefix: const Padding(
+                                padding: EdgeInsets.only(left: 12),
+                                child: Icon(
+                                  CupertinoIcons.search,
+                                  size: 18,
+                                  color: ColoresApp.textoSecundario,
+                                ),
+                              ),
+                              suffix: _q.isEmpty
+                                  ? null
+                                  : Padding(
+                                      padding: const EdgeInsets.only(right: 4),
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          _busquedaCtrl.clear();
+                                          setState(() => _q = '');
+                                          _cargar(reset: true);
+                                        },
+                                        child: const Icon(
+                                          CupertinoIcons.clear_circled_solid,
+                                          size: 18,
+                                          color: ColoresApp.textoSecundario,
+                                        ),
+                                      ),
+                                    ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              style: GoogleFonts.baloo2(
+                                fontSize: 14,
+                                color: ColoresApp.textoPrincipal,
+                              ),
+                              placeholderStyle: GoogleFonts.baloo2(
+                                fontSize: 14,
+                                color: ColoresApp.textoSecundario,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 12),
                           _TabsPlanes(tab: _tab, onChanged: _cambiarTab),
                           if (_tab == 'mis') ...[
@@ -741,9 +806,9 @@ class _CardPlan extends StatelessWidget {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withValues(alpha: 0.18),
-                      Colors.black.withValues(alpha: 0.54),
-                      Colors.black.withValues(alpha: 0.78),
+                      Colors.black.withValues(alpha: 0.36),
+                      Colors.black.withValues(alpha: 0.70),
+                      Colors.black.withValues(alpha: 0.90),
                     ],
                   ),
                 ),
@@ -757,9 +822,26 @@ class _CardPlan extends StatelessWidget {
                       children: [
                         Expanded(child: _AutoresPlanLine(plan: plan)),
                         const SizedBox(width: 8),
-                        _EstadoBadge(plan: plan),
+                        if (plan.soyModerador)
+                          const _MiniBadge('Sos admin')
+                        else
+                          _EstadoBadge(plan: plan),
                       ],
                     ),
+                    if (plan.soyMiembro) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Estoy adentro',
+                        style: GoogleFonts.baloo2(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          shadows: const [
+                            Shadow(blurRadius: 6, color: Colors.black54),
+                          ],
+                        ),
+                      ),
+                    ],
                     const Spacer(),
                     Text(
                       plan.titulo,
@@ -770,6 +852,9 @@ class _CardPlan extends StatelessWidget {
                         height: 0.98,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
+                        shadows: const [
+                          Shadow(blurRadius: 8, color: Colors.black54),
+                        ],
                       ),
                     ),
                     if (plan.descripcion.trim().isNotEmpty) ...[
@@ -782,7 +867,10 @@ class _CardPlan extends StatelessWidget {
                           fontSize: 11.8,
                           height: 1.12,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white.withValues(alpha: 0.82),
+                          color: Colors.white.withValues(alpha: 0.88),
+                          shadows: const [
+                            Shadow(blurRadius: 6, color: Colors.black54),
+                          ],
                         ),
                       ),
                     ],
@@ -792,7 +880,9 @@ class _CardPlan extends StatelessWidget {
                       runSpacing: 6,
                       children: [
                         _MiniBadge('${plan.personasAceptadas} van'),
-                        _MiniBadge(_fmtFechaCorta(plan.fechaInicio)),
+                        _MiniBadge(
+                          'inicio ${_fmtFechaCorta(plan.fechaInicio)}',
+                        ),
                         if (plan.fechaFin != null)
                           _MiniBadge('fin ${_fmtFechaCorta(plan.fechaFin!)}'),
                         _MiniBadge(
@@ -807,21 +897,24 @@ class _CardPlan extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 9),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _BotonGlass(texto: 'Ver más', onTap: onTap),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _BotonPlan(
-                            plan: plan,
-                            uniendo: uniendo,
-                            onTap: onUnirse,
+                    if (plan.soyMiembro)
+                      _BotonGlass(texto: 'Ver plan', onTap: onTap)
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _BotonGlass(texto: 'Ver más', onTap: onTap),
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _BotonPlan(
+                              plan: plan,
+                              uniendo: uniendo,
+                              onTap: onUnirse,
+                            ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),
@@ -969,14 +1062,15 @@ class _AutoresPlanLine extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            'Plan de ${plan.nombreOrganizador} en ${plan.nombreLocal}',
+            'Plan de ${plan.primerNombreOrganizador} en ${plan.nombreLocal}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.baloo2(
               fontSize: 13,
               height: 1.05,
               fontWeight: FontWeight.w900,
-              color: Colors.white.withValues(alpha: 0.9),
+              color: Colors.white.withValues(alpha: 0.94),
+              shadows: const [Shadow(blurRadius: 6, color: Colors.black54)],
             ),
           ),
         ),
@@ -995,25 +1089,26 @@ class _AvatarMini extends StatelessWidget {
     final ini = fallback.trim().isEmpty
         ? '?'
         : fallback.trim().substring(0, 1).toUpperCase();
-    return Container(
+    return SizedBox(
       width: 30,
       height: 30,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFF252525),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.8),
-          width: 1.4,
-        ),
+      child: ClipOval(
+        child: url != null && url!.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: url!,
+                width: 30,
+                height: 30,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                memCacheWidth: 90,
+                errorWidget: (_, _, _) => _fallback(ini),
+                placeholder: (_, _) => ColoredBox(
+                  color: const Color(0xFF252525),
+                  child: _fallback(ini),
+                ),
+              )
+            : ColoredBox(color: const Color(0xFF252525), child: _fallback(ini)),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: url != null && url!.isNotEmpty
-          ? CachedNetworkImage(
-              imageUrl: url!,
-              fit: BoxFit.cover,
-              errorWidget: (_, _, _) => _fallback(ini),
-            )
-          : _fallback(ini),
     );
   }
 

@@ -280,6 +280,45 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     }
   }
 
+  Future<void> _salirDelPlan() async {
+    final plan = _plan;
+    if (plan == null || !plan.soyMiembro || plan.soyModerador) return;
+    final ok = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('¿Salir del plan?'),
+        content: const Text(
+          'Vas a dejar de ser parte de este plan y del chat del grupo.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      final res = await _srv.salir(plan.id);
+      if (!mounted) return;
+      if (!res) {
+        _toast('No se pudo salir del plan.');
+        return;
+      }
+      _changed = true;
+      await _cargar();
+      _toast('Saliste del plan.');
+    } catch (e) {
+      if (mounted) _toast(_srv.mensajeError(e, accion: 'salir del plan'));
+    }
+  }
+
   Future<void> _cancelar() async {
     final ok = await showCupertinoDialog<bool>(
       context: context,
@@ -401,21 +440,16 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     final color = _parseColor(plan.colorHex);
     final detalle = _detalle;
     final soloMiembros = (detalle?.miembros ?? const <PlanMiembro>[])
-        .where(
-          (m) =>
-              m.estado == 'aceptado' &&
-              (m.idSquad == null || m.idSquad!.isEmpty),
-        )
+        .where((m) => m.estado == 'aceptado')
         .toList(growable: false);
     final squadsAceptados = (detalle?.squads ?? const <PlanSquadGrupo>[])
         .where((s) => s.estado == 'aceptado')
         .toList(growable: false);
     final pendientes =
         detalle?.miembros.where((m) => m.estado == 'pendiente').length ?? 0;
-    final hayPedido = plan.beneficioEstado != 'ninguno';
+    final hayPedido = plan.hayPedidoActivo || plan.beneficioEstado != 'ninguno';
     final puedeVotar =
-        (plan.beneficioEstado == 'pedido' ||
-            plan.beneficioEstado == 'contraoferta') &&
+        plan.beneficioEstado == 'pedido' &&
         (plan.soyMiembro || plan.soyModerador) &&
         !(detalle?.yaVotePedido ?? false);
 
@@ -446,8 +480,8 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.black.withValues(alpha: 0.18),
-                          Colors.black.withValues(alpha: 0.52),
+                          Colors.black.withValues(alpha: 0.38),
+                          Colors.black.withValues(alpha: 0.72),
                           ColoresApp.fondoPrincipal,
                         ],
                       ),
@@ -484,11 +518,17 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                                 child: Text(
                                   plan.esPlanLocal
                                       ? 'Plan del local · ${plan.nombreLocal}'
-                                      : 'Plan de ${plan.nombreOrganizador} en ${plan.nombreLocal}',
+                                      : 'Plan de ${plan.primerNombreOrganizador} en ${plan.nombreLocal}',
                                   style: GoogleFonts.baloo2(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w900,
                                     color: Colors.white,
+                                    shadows: const [
+                                      Shadow(
+                                        blurRadius: 6,
+                                        color: Colors.black54,
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -502,6 +542,9 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                               height: .92,
                               fontWeight: FontWeight.w900,
                               color: Colors.white,
+                              shadows: const [
+                                Shadow(blurRadius: 8, color: Colors.black54),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -510,7 +553,10 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                             style: GoogleFonts.baloo2(
                               fontSize: 15.5,
                               height: 1.2,
-                              color: Colors.white.withValues(alpha: 0.86),
+                              color: Colors.white.withValues(alpha: 0.9),
+                              shadows: const [
+                                Shadow(blurRadius: 6, color: Colors.black54),
+                              ],
                             ),
                           ),
                         ],
@@ -529,7 +575,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                     runSpacing: 8,
                     children: [
                       _Badge('${plan.personasAceptadas} personas'),
-                      _Badge(_fmt(plan.fechaInicio)),
+                      _Badge('inicio ${_fmt(plan.fechaInicio)}'),
                       if (plan.fechaFin != null)
                         _Badge('fin ${_fmt(plan.fechaFin!)}'),
                       _Badge(
@@ -541,12 +587,9 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                         _Badge('${plan.cupoUsados}/${plan.cupoMax} cupos'),
                       if (plan.edadMinima != null)
                         _Badge('+${plan.edadMinima}'),
+                      if (plan.soyModerador) const _Badge('Sos admin'),
                     ],
                   ),
-                  if ((plan.beneficioLocal ?? '').trim().isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    _PromoLocal(texto: plan.beneficioLocal!),
-                  ],
                   if (hayPedido) ...[
                     const SizedBox(height: 14),
                     _PedidoBox(
@@ -565,7 +608,10 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                   ],
                   if ((plan.contactoAnfitrion ?? '').trim().isNotEmpty) ...[
                     const SizedBox(height: 14),
-                    _ContactoChip(texto: plan.contactoAnfitrion!),
+                    _ContactoChip(
+                      texto: plan.contactoAnfitrion!,
+                      modo: plan.contactoModo,
+                    ),
                   ],
                   if (plan.soyModerador && pendientes > 0) ...[
                     const SizedBox(height: 14),
@@ -623,19 +669,20 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                       cargando: _uniendo,
                       onTap: _unirse,
                     )
+                  else if (plan.soyMiembro && !plan.estaFinalizado)
+                    _EresParteRow(
+                      esAdmin: plan.soyModerador,
+                      onSalir: plan.soyModerador ? null : _salirDelPlan,
+                    )
                   else
                     _InfoBox(
                       titulo: plan.estaFinalizado
                           ? 'Plan finalizado'
                           : plan.soyPendiente
                           ? 'Solicitud pendiente'
-                          : plan.soyMiembro
-                          ? 'Ya estás dentro'
                           : 'No disponible',
                       texto: plan.estaFinalizado
                           ? 'Este plan queda guardado como historial.'
-                          : plan.soyMiembro
-                          ? 'Podés entrar al chat y organizarte con el grupo.'
                           : 'Te avisamos cuando te acepten.',
                     ),
                   if (plan.soyModerador) ...[
@@ -687,22 +734,32 @@ class _Avatar extends StatelessWidget {
     final ini = fallback.trim().isEmpty
         ? '?'
         : fallback.trim().substring(0, 1).toUpperCase();
-    return Container(
+    return SizedBox(
       width: 50,
       height: 50,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 1.5),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: url != null && url!.isNotEmpty
-          ? CachedNetworkImage(imageUrl: url!, fit: BoxFit.cover)
-          : ColoredBox(
-              color: const Color(0xFF2B2B2B),
-              child: Center(
-                child: Text(ini, style: const TextStyle(color: Colors.white)),
+      child: ClipOval(
+        child: url != null && url!.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: url!,
+                width: 50,
+                height: 50,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                memCacheWidth: 150,
+                errorWidget: (_, _, _) => ColoredBox(
+                  color: const Color(0xFF2B2B2B),
+                  child: Center(
+                    child: Text(ini, style: const TextStyle(color: Colors.white)),
+                  ),
+                ),
+              )
+            : ColoredBox(
+                color: const Color(0xFF2B2B2B),
+                child: Center(
+                  child: Text(ini, style: const TextStyle(color: Colors.white)),
+                ),
               ),
-            ),
+      ),
     );
   }
 }
@@ -763,38 +820,59 @@ class _PromoLocal extends StatelessWidget {
 }
 
 class _ContactoChip extends StatelessWidget {
-  const _ContactoChip({required this.texto});
+  const _ContactoChip({required this.texto, this.modo = 'contactar'});
   final String texto;
+  final String modo;
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.05),
-      borderRadius: BorderRadius.circular(14),
-    ),
-    child: Row(
-      children: [
-        Icon(
-          CupertinoIcons.chat_bubble_2,
-          size: 15,
-          color: ColoresApp.principalMarca,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            texto,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.baloo2(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: Colors.white.withValues(alpha: 0.86),
+  Widget build(BuildContext context) {
+    final titulo = modo == 'colaborar'
+        ? 'Colaborar con organizador'
+        : 'Contactar organizador';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            modo == 'colaborar'
+                ? CupertinoIcons.link
+                : CupertinoIcons.chat_bubble_2,
+            size: 13,
+            color: ColoresApp.principalMarca,
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titulo,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: ColoresApp.textoSecundario,
+                  ),
+                ),
+                Text(
+                  texto,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white.withValues(alpha: 0.9),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class _FilaPedirAlLocal extends StatelessWidget {
@@ -857,6 +935,17 @@ class _PedidoBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final estado = plan.beneficioEstado;
+    final desc = () {
+      if (estado == 'aceptado' || estado == 'contraoferta') {
+        final oferta =
+            (plan.beneficioLocal ?? plan.beneficioContraoferta ?? '').trim();
+        if (oferta.isNotEmpty) {
+          return 'El local se puso la 10 con: $oferta';
+        }
+      }
+      return (plan.pedidoBeneficio ?? '').trim();
+    }();
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -876,7 +965,7 @@ class _PedidoBox extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  'Pedido al local',
+                  'Pedir beneficio al local',
                   style: GoogleFonts.baloo2(
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
@@ -887,38 +976,14 @@ class _PedidoBox extends StatelessWidget {
               _BadgeEstadoPedido(estado: estado),
             ],
           ),
-          if ((plan.pedidoBeneficio ?? '').trim().isNotEmpty) ...[
+          if (desc.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              plan.pedidoBeneficio!.trim(),
+              desc,
               style: GoogleFonts.baloo2(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w700,
                 color: Colors.white.withValues(alpha: 0.9),
-              ),
-            ),
-          ],
-          if (estado == 'contraoferta' &&
-              (plan.beneficioContraoferta ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Contraoferta: ${plan.beneficioContraoferta!.trim()}',
-              style: GoogleFonts.baloo2(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: ColoresApp.textoSecundario,
-              ),
-            ),
-          ],
-          if (estado == 'aceptado' &&
-              (plan.beneficioLocal ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              '¡El local aceptó! ${plan.beneficioLocal!.trim()}',
-              style: GoogleFonts.baloo2(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF34D399),
               ),
             ),
           ],
@@ -980,6 +1045,49 @@ class _PedidoBox extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _EresParteRow extends StatelessWidget {
+  const _EresParteRow({required this.esAdmin, this.onSalir});
+  final bool esAdmin;
+  final VoidCallback? onSalir;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            esAdmin ? 'Eres parte · admin' : 'Eres parte',
+            style: GoogleFonts.baloo2(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: ColoresApp.textoPrincipal,
+            ),
+          ),
+        ),
+        if (onSalir != null)
+          GestureDetector(
+            onTap: onSalir,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDC2626),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Salir',
+                style: GoogleFonts.baloo2(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1230,6 +1338,29 @@ class _CeldaPersona extends StatelessWidget {
               color: Colors.white,
             ),
           ),
+          if (miembro.rol == 'organizador')
+            Text(
+              'admin',
+              maxLines: 1,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.baloo2(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: ColoresApp.principalMarca,
+              ),
+            )
+          else if ((miembro.nombreSquad ?? '').trim().isNotEmpty)
+            Text(
+              miembro.nombreSquad!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.baloo2(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: ColoresApp.textoSecundario,
+              ),
+            ),
         ],
       ),
     );
@@ -1326,37 +1457,41 @@ class _AvatarRedondo extends StatelessWidget {
     final ini = fallback.trim().isEmpty
         ? '?'
         : fallback.trim().substring(0, 1).toUpperCase();
-    return Container(
+    return SizedBox(
       width: size,
       height: size,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: Color(0xFF2B2B2B),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: url != null && url!.isNotEmpty
-          ? CachedNetworkImage(
-              imageUrl: url!,
-              fit: BoxFit.cover,
-              errorWidget: (_, _, _) => Center(
-                child: Text(
-                  ini,
-                  style: GoogleFonts.baloo2(
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
+      child: ClipOval(
+        child: url != null && url!.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: url!,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                memCacheWidth: (size * 3).round(),
+                errorWidget: (_, _, _) => Center(
+                  child: Text(
+                    ini,
+                    style: GoogleFonts.baloo2(
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              )
+            : ColoredBox(
+                color: const Color(0xFF2B2B2B),
+                child: Center(
+                  child: Text(
+                    ini,
+                    style: GoogleFonts.baloo2(
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
-            )
-          : Center(
-              child: Text(
-                ini,
-                style: GoogleFonts.baloo2(
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
-              ),
-            ),
+      ),
     );
   }
 }

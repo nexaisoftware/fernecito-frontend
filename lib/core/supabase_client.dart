@@ -38,6 +38,13 @@ class ServicioSupabase {
     return cliente.storage.from('avatars').getPublicUrl(path);
   }
 
+  /// Avatar de local (`avatars_locales`). Path relativo o URL absoluta.
+  String? urlAvatarLocal(String? path) {
+    if (path == null || path.isEmpty) return null;
+    if (path.startsWith('http')) return path;
+    return cliente.storage.from('avatars_locales').getPublicUrl(path);
+  }
+
   /// Portada de squad (`squad-banners`). Acepta path relativo o URL absoluta.
   String? urlPortadaSquad(String? pathOrUrl) {
     if (pathOrUrl == null || pathOrUrl.isEmpty) return null;

@@ -40,6 +40,7 @@ class PlanComunidad {
     this.permiteSquads = true,
     this.edadMinima,
     this.contactoAnfitrion,
+    this.contactoModo = 'contactar',
     this.beneficioLocal,
     this.beneficioEstado = 'ninguno',
     this.beneficioContraoferta,
@@ -80,6 +81,7 @@ class PlanComunidad {
   final bool permiteSquads;
   final int? edadMinima;
   final String? contactoAnfitrion;
+  final String contactoModo; // contactar | colaborar
   final String? beneficioLocal;
   final String beneficioEstado;
   final String? beneficioContraoferta;
@@ -90,9 +92,31 @@ class PlanComunidad {
   final int personasAceptadas;
   final bool ingresoAbierto;
 
-  String? get fotoLocalUrl => ServicioSupabase().urlAvatar(fotoLocal);
-  String? get fotoOrganizadorUrl =>
-      ServicioSupabase().urlAvatar(fotoOrganizador);
+  /// Primer nombre del organizador (antes del espacio).
+  String get primerNombreOrganizador {
+    final raw = nombreOrganizador.trim();
+    if (raw.isEmpty) return 'Alguien';
+    final i = raw.indexOf(' ');
+    return i <= 0 ? raw : raw.substring(0, i);
+  }
+
+  bool get hayPedidoActivo =>
+      beneficioEstado == 'pedido' ||
+      beneficioEstado == 'aceptado' ||
+      beneficioEstado == 'rechazado' ||
+      (pedidoBeneficio != null && pedidoBeneficio!.trim().isNotEmpty);
+
+  String? get fotoLocalUrl => ServicioSupabase().urlAvatarLocal(fotoLocal);
+  String? get fotoOrganizadorUrl {
+    if (esPlanLocal || creadorTipo == 'local') {
+      return ServicioSupabase().urlAvatarLocal(fotoOrganizador);
+    }
+    if (tipoOrganizador == 'squad') {
+      return ServicioSupabase().urlPortadaSquad(fotoOrganizador);
+    }
+    return ServicioSupabase().urlAvatar(fotoOrganizador);
+  }
+
   String? get portadaUrl => ServicioSupabase().urlPortadaPlan(portadaPath);
 
   bool get soyMiembro => miEstado == 'aceptado' || miEstado == 'local';
@@ -151,6 +175,7 @@ class PlanComunidad {
         permiteSquads: permiteSquads,
         edadMinima: edadMinima,
         contactoAnfitrion: contactoAnfitrion,
+        contactoModo: contactoModo,
         beneficioLocal: beneficioLocal,
         beneficioEstado: beneficioEstado ?? this.beneficioEstado,
         beneficioContraoferta:
@@ -202,6 +227,9 @@ class PlanComunidad {
       permiteSquads: m['permite_squads'] != false,
       edadMinima: n(m['edad_minima']),
       contactoAnfitrion: m['contacto_anfitrion']?.toString(),
+      contactoModo: m['contacto_modo']?.toString() == 'colaborar'
+          ? 'colaborar'
+          : 'contactar',
       beneficioLocal: m['beneficio_local']?.toString(),
       beneficioEstado: m['beneficio_estado']?.toString() ?? 'ninguno',
       beneficioContraoferta: m['beneficio_contraoferta']?.toString(),
@@ -374,6 +402,7 @@ class ServicioPlanes {
     int limit = 20,
     int offset = 0,
     String modo = 'explorar',
+    String? q,
   }) async {
     try {
       final res = await _c.rpc(
@@ -384,6 +413,7 @@ class ServicioPlanes {
           'p_limit': limit,
           'p_offset': offset,
           'p_modo': modo,
+          'p_q': (q == null || q.trim().isEmpty) ? null : q.trim(),
         },
       );
       if (res is! Map) {
@@ -465,6 +495,7 @@ class ServicioPlanes {
     String tipoOrganizador = 'usuario',
     String? idSquad,
     String? contactoAnfitrion,
+    String contactoModo = 'contactar',
     String? portadaPath,
     String colorHex = '#C084FC',
     bool permiteSquads = true,
@@ -483,6 +514,7 @@ class ServicioPlanes {
         'p_tipo_organizador': tipoOrganizador,
         if (idSquad != null) 'p_id_squad': idSquad,
         'p_contacto_anfitrion': contactoAnfitrion,
+        'p_contacto_modo': contactoModo == 'colaborar' ? 'colaborar' : 'contactar',
         'p_portada_path': portadaPath,
         'p_color_hex': colorHex,
         'p_permite_squads': permiteSquads,
@@ -791,6 +823,9 @@ class ServicioPlanes {
     int? cupoMax,
     bool sinCupo = false,
     bool? ingresoAbierto,
+    String? contactoAnfitrion,
+    String? contactoModo,
+    bool limpiarContacto = false,
   }) async {
     final res = await _c.rpc(
       'planes_actualizar_basico',
@@ -802,6 +837,9 @@ class ServicioPlanes {
         'p_cupo_max': cupoMax,
         'p_sin_cupo': sinCupo,
         'p_ingreso_abierto': ingresoAbierto,
+        'p_contacto_anfitrion': contactoAnfitrion,
+        'p_contacto_modo': contactoModo,
+        'p_limpiar_contacto': limpiarContacto,
       },
     );
     return res is Map && res['ok'] == true;
