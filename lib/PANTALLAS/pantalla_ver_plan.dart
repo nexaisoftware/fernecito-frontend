@@ -234,14 +234,13 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
   @override
   Widget build(BuildContext context) {
     final plan = _plan;
-    if (_cargando && plan == null) {
-      return const CupertinoPageScaffold(
-        backgroundColor: ColoresApp.fondoPrincipal,
-        child: Center(child: FernecitoLoader.inline(size: 28)),
-      );
-    }
-
-    if (!_cargando && plan == null) {
+    if (plan == null) {
+      if (_cargando) {
+        return const CupertinoPageScaffold(
+          backgroundColor: ColoresApp.fondoPrincipal,
+          child: Center(child: FernecitoLoader.inline(size: 28)),
+        );
+      }
       return CupertinoPageScaffold(
         backgroundColor: ColoresApp.fondoPrincipal,
         navigationBar: CupertinoNavigationBar(
