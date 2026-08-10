@@ -1,17 +1,17 @@
 /// Servicio singleton para acceso centralizado al cliente de Supabase.
-/// 
+///
 /// Responsabilidades:
 /// - Proporcionar acceso único y consistente a SupabaseClient en toda la app
 /// - Exponer usuario actual autenticado de forma sencilla
 /// - Patrón Singleton para evitar múltiples instancias del cliente
-/// 
+///
 /// Uso:
 /// ```dart
 /// final supabase = ServicioSupabase();
 /// final promos = await supabase.cliente.from('promos').select();
 /// final usuario = supabase.usuarioActual;
 /// ```
-/// 
+///
 /// Backend: Supabase (PostgreSQL, Auth, Storage, Realtime, Edge Functions)
 library;
 
@@ -52,11 +52,16 @@ class ServicioSupabase {
     return cliente.storage.from('banners-usuarios').getPublicUrl(pathOrUrl);
   }
 
+  /// Portada de plan (`planes-portadas`). Path o URL absoluta.
+  String? urlPortadaPlan(String? pathOrUrl) {
+    if (pathOrUrl == null || pathOrUrl.isEmpty) return null;
+    if (pathOrUrl.startsWith('assets/')) return pathOrUrl;
+    if (pathOrUrl.startsWith('http')) return pathOrUrl;
+    return cliente.storage.from('planes-portadas').getPublicUrl(pathOrUrl);
+  }
+
   /// URL de banner de usuario con cache-bust opcional.
-  String? urlBannerUsuarioDisplay(
-    String? pathOrUrl, {
-    String? version,
-  }) {
+  String? urlBannerUsuarioDisplay(String? pathOrUrl, {String? version}) {
     final base = urlBannerUsuario(pathOrUrl);
     if (base == null) return null;
     final token = version?.trim();
@@ -92,10 +97,9 @@ class ServicioSupabase {
     String? pathOrUrl, {
     String? version,
     String? fallbackSeed,
-  }) =>
-      urlPortadaSquadDisplay(
-        pathOrUrl,
-        version: version,
-        fallbackSeed: fallbackSeed,
-      );
+  }) => urlPortadaSquadDisplay(
+    pathOrUrl,
+    version: version,
+    fallbackSeed: fallbackSeed,
+  );
 }

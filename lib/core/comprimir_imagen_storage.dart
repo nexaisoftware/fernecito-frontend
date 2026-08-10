@@ -3,7 +3,6 @@
 /// 🔁 SYNC: espejo en `frontend_locales/lib/core/comprimir_imagen_storage.dart`.
 library;
 
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image/image.dart' as img;
@@ -33,6 +32,9 @@ enum PerfilImagenStorage {
 
   /// `flyers_eventos`.
   flyerEvento(maxLado: 1080, calidadJpg: 75, webpEnMovil: true),
+
+  /// `planes-portadas` — portada liviana de cards de Planes.
+  portadaPlan(maxLado: 900, calidadJpg: 72, webpEnMovil: true),
 
   /// Caché local de flyers (más chico).
   flyerCacheLocal(maxLado: 900, calidadJpg: 70, webpEnMovil: false);
@@ -123,18 +125,17 @@ Future<ResultadoImagenComprimida> comprimirDesdeXFile(
 }
 
 /// Comprobante: imagen → JPEG comprimido; PDF → sin cambios.
-Future<({
-  Uint8List bytes,
-  String mime,
-  String nombre,
-})> prepararComprobantePago({
+Future<({Uint8List bytes, String mime, String nombre})>
+prepararComprobantePago({
   required Uint8List bytes,
   required String nombreOriginal,
   String? extension,
 }) async {
   final ext = (extension ?? '').toLowerCase();
   if (ext == 'pdf' || esArchivoPdf(bytes)) {
-    final nombre = nombreOriginal.trim().isEmpty ? 'comprobante.pdf' : nombreOriginal;
+    final nombre = nombreOriginal.trim().isEmpty
+        ? 'comprobante.pdf'
+        : nombreOriginal;
     return (bytes: bytes, mime: 'application/pdf', nombre: nombre);
   }
 
@@ -200,8 +201,9 @@ ResultadoImagenComprimida _comprimirConImage(
   }
 
   var resized = original;
-  final maxSide =
-      original.width > original.height ? original.width : original.height;
+  final maxSide = original.width > original.height
+      ? original.width
+      : original.height;
   if (maxSide > perfil.maxLado) {
     final scale = perfil.maxLado / maxSide;
     resized = img.copyResize(

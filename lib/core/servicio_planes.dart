@@ -1,10 +1,4 @@
-/// Planes (comunidad) — hub de juntadas en locales + chat grupal realtime.
-///
-/// Backend: RPCs `planes_*` (JWT + rate limit). Chat: SELECT historial en
-/// `planes_mensajes` (RLS miembros) + `postgres_changes`. Creación asistida
-/// vía edge `asistente_plan_comunidad` (no escribe DB; el alta es `planes_crear`).
-///
-/// Independiente de Fernecito Match.
+/// Planes (comunidad) — cartelera de juntadas en locales + chat grupal realtime.
 library;
 
 import 'dart:async';
@@ -12,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'comprimir_imagen_storage.dart';
 import 'supabase_client.dart';
 
 class PlanComunidad {
@@ -30,12 +25,28 @@ class PlanComunidad {
     required this.tipoOrganizador,
     this.provincia,
     this.fechaFin,
+    this.expiraEn,
     this.cupoMax,
     this.idSquad,
     this.nombreSquad,
     this.fotoLocal,
     this.fotoOrganizador,
     this.miEstado = 'ninguno',
+    this.estado = 'abierto',
+    this.creadorTipo = 'usuario',
+    this.idCreadorLocal,
+    this.portadaPath,
+    this.colorHex = '#C084FC',
+    this.permiteSquads = true,
+    this.edadMinima,
+    this.contactoAnfitrion,
+    this.beneficioLocal,
+    this.beneficioEstado = 'ninguno',
+    this.pedidoBeneficio,
+    this.pedidoVotos = 0,
+    this.soyModerador = false,
+    this.esPlanLocal = false,
+    this.personasAceptadas = 0,
   });
 
   final String id;
@@ -45,6 +56,7 @@ class PlanComunidad {
   final String? provincia;
   final DateTime fechaInicio;
   final DateTime? fechaFin;
+  final DateTime? expiraEn;
   final String modoLista; // auto | manual
   final int? cupoMax;
   final int cupoUsados;
@@ -52,19 +64,82 @@ class PlanComunidad {
   final String nombreLocal;
   final String? fotoLocal;
   final String idOrganizador;
+  final String? idCreadorLocal;
   final String nombreOrganizador;
   final String? fotoOrganizador;
-  final String tipoOrganizador; // usuario | squad
+  final String tipoOrganizador; // usuario | squad | local
+  final String creadorTipo; // usuario | local
   final String? idSquad;
   final String? nombreSquad;
-  final String miEstado; // ninguno | pendiente | aceptado | …
+  final String miEstado; // ninguno | pendiente | aceptado | local | cancelado
+  final String estado; // abierto | cerrado | cancelado | finalizado
+  final String? portadaPath;
+  final String colorHex;
+  final bool permiteSquads;
+  final int? edadMinima;
+  final String? contactoAnfitrion;
+  final String? beneficioLocal;
+  final String beneficioEstado;
+  final String? pedidoBeneficio;
+  final int pedidoVotos;
+  final bool soyModerador;
+  final bool esPlanLocal;
+  final int personasAceptadas;
 
   String? get fotoLocalUrl => ServicioSupabase().urlAvatar(fotoLocal);
-  String? get fotoOrganizadorUrl => ServicioSupabase().urlAvatar(fotoOrganizador);
+  String? get fotoOrganizadorUrl =>
+      ServicioSupabase().urlAvatar(fotoOrganizador);
+  String? get portadaUrl => ServicioSupabase().urlPortadaPlan(portadaPath);
 
-  bool get soyMiembro => miEstado == 'aceptado';
+  bool get soyMiembro => miEstado == 'aceptado' || miEstado == 'local';
   bool get soyPendiente => miEstado == 'pendiente';
+  bool get estaAbierto => estado == 'abierto' || estado == 'publicado';
+  bool get estaFinalizado =>
+      estado == 'finalizado' || estado == 'cancelado' || estado == 'cerrado';
   bool get cupoLleno => cupoMax != null && cupoUsados >= cupoMax!;
+  bool get puedeUnirse =>
+      estaAbierto && !soyMiembro && !soyPendiente && !cupoLleno;
+  bool get chatDisponible => soyMiembro && estaAbierto;
+
+  PlanComunidad copyWith({String? miEstado, int? cupoUsados, String? estado}) =>
+      PlanComunidad(
+        id: id,
+        titulo: titulo,
+        descripcion: descripcion,
+        ciudad: ciudad,
+        fechaInicio: fechaInicio,
+        modoLista: modoLista,
+        cupoUsados: cupoUsados ?? this.cupoUsados,
+        idLocal: idLocal,
+        nombreLocal: nombreLocal,
+        idOrganizador: idOrganizador,
+        nombreOrganizador: nombreOrganizador,
+        tipoOrganizador: tipoOrganizador,
+        provincia: provincia,
+        fechaFin: fechaFin,
+        expiraEn: expiraEn,
+        cupoMax: cupoMax,
+        idSquad: idSquad,
+        nombreSquad: nombreSquad,
+        fotoLocal: fotoLocal,
+        fotoOrganizador: fotoOrganizador,
+        miEstado: miEstado ?? this.miEstado,
+        estado: estado ?? this.estado,
+        creadorTipo: creadorTipo,
+        idCreadorLocal: idCreadorLocal,
+        portadaPath: portadaPath,
+        colorHex: colorHex,
+        permiteSquads: permiteSquads,
+        edadMinima: edadMinima,
+        contactoAnfitrion: contactoAnfitrion,
+        beneficioLocal: beneficioLocal,
+        beneficioEstado: beneficioEstado,
+        pedidoBeneficio: pedidoBeneficio,
+        pedidoVotos: pedidoVotos,
+        soyModerador: soyModerador,
+        esPlanLocal: esPlanLocal,
+        personasAceptadas: personasAceptadas,
+      );
 
   factory PlanComunidad.fromMap(Map<String, dynamic> m) {
     DateTime? dt(dynamic v) {
@@ -83,35 +158,101 @@ class PlanComunidad {
       provincia: m['provincia']?.toString(),
       fechaInicio: dt(m['fecha_inicio']) ?? DateTime.now(),
       fechaFin: dt(m['fecha_fin']),
+      expiraEn: dt(m['expira_en']),
       modoLista: m['modo_lista']?.toString() ?? 'auto',
       cupoMax: n(m['cupo_max']),
-      cupoUsados: n(m['cupo_usados']) ?? 0,
+      cupoUsados: n(m['cupo_usados']) ?? n(m['personas_aceptadas']) ?? 0,
       idLocal: m['id_local']?.toString() ?? '',
       nombreLocal: m['nombre_local']?.toString() ?? 'Local',
       fotoLocal: m['foto_local']?.toString(),
       idOrganizador: m['id_organizador']?.toString() ?? '',
+      idCreadorLocal: m['id_creador_local']?.toString(),
       nombreOrganizador: m['nombre_organizador']?.toString() ?? 'Alguien',
       fotoOrganizador: m['foto_organizador']?.toString(),
       tipoOrganizador: m['tipo_organizador']?.toString() ?? 'usuario',
+      creadorTipo: m['creador_tipo']?.toString() ?? 'usuario',
       idSquad: m['id_squad']?.toString(),
       nombreSquad: m['nombre_squad']?.toString(),
       miEstado: m['mi_estado']?.toString() ?? 'ninguno',
+      estado: m['estado']?.toString() ?? 'abierto',
+      portadaPath: m['portada_path']?.toString(),
+      colorHex: m['color_hex']?.toString() ?? '#C084FC',
+      permiteSquads: m['permite_squads'] != false,
+      edadMinima: n(m['edad_minima']),
+      contactoAnfitrion: m['contacto_anfitrion']?.toString(),
+      beneficioLocal: m['beneficio_local']?.toString(),
+      beneficioEstado: m['beneficio_estado']?.toString() ?? 'ninguno',
+      pedidoBeneficio: m['pedido_beneficio']?.toString(),
+      pedidoVotos: n(m['pedido_votos']) ?? 0,
+      soyModerador: m['soy_moderador'] == true,
+      esPlanLocal: m['es_plan_local'] == true || m['creador_tipo'] == 'local',
+      personasAceptadas: n(m['personas_aceptadas']) ?? n(m['cupo_usados']) ?? 0,
     );
   }
+}
+
+class PlanMiembro {
+  const PlanMiembro({
+    required this.idUsuario,
+    required this.nombre,
+    required this.estado,
+    this.username,
+    this.fotoPath,
+    this.rol = 'miembro',
+    this.idSquad,
+    this.nombreSquad,
+  });
+
+  final String idUsuario;
+  final String nombre;
+  final String? username;
+  final String? fotoPath;
+  final String rol;
+  final String estado;
+  final String? idSquad;
+  final String? nombreSquad;
+
+  String? get fotoUrl => ServicioSupabase().urlAvatar(fotoPath);
+
+  factory PlanMiembro.fromMap(Map<String, dynamic> m) => PlanMiembro(
+    idUsuario: m['id_usuario']?.toString() ?? '',
+    nombre: m['nombre']?.toString() ?? 'Alguien',
+    username: m['username']?.toString(),
+    fotoPath: m['foto_perfil_url']?.toString(),
+    rol: m['rol']?.toString() ?? 'miembro',
+    estado: m['estado']?.toString() ?? 'aceptado',
+    idSquad: m['id_squad']?.toString(),
+    nombreSquad: m['nombre_squad']?.toString(),
+  );
+}
+
+class PlanDetalle {
+  const PlanDetalle({required this.plan, required this.miembros});
+  final PlanComunidad plan;
+  final List<PlanMiembro> miembros;
 }
 
 class PlanMensaje {
   const PlanMensaje({
     required this.id,
-    required this.idAutor,
     required this.cuerpo,
     required this.creadoEn,
+    this.idAutor,
+    this.idAutorLocal,
+    this.autorTipo = 'usuario',
+    this.tipo = 'mensaje',
   });
 
   final int id;
-  final String idAutor;
+  final String? idAutor;
+  final String? idAutorLocal;
+  final String autorTipo; // usuario | local | sistema
+  final String tipo; // mensaje | sistema | beneficio
   final String cuerpo;
   final DateTime creadoEn;
+
+  bool get esSistema => autorTipo == 'sistema' || tipo == 'sistema';
+  bool get esLocal => autorTipo == 'local';
 
   factory PlanMensaje.fromMap(Map<String, dynamic> m) {
     final idRaw = m['id'];
@@ -120,15 +261,50 @@ class PlanMensaje {
         : int.tryParse(idRaw?.toString() ?? '') ?? 0;
     return PlanMensaje(
       id: id,
-      idAutor: m['id_autor']?.toString() ?? '',
+      idAutor: m['id_autor']?.toString(),
+      idAutorLocal: m['id_autor_local']?.toString(),
+      autorTipo: m['autor_tipo']?.toString() ?? 'usuario',
+      tipo: m['tipo']?.toString() ?? 'mensaje',
       cuerpo: m['cuerpo']?.toString() ?? '',
-      creadoEn: DateTime.tryParse(m['creado_en']?.toString() ?? '')?.toLocal() ??
+      creadoEn:
+          DateTime.tryParse(m['creado_en']?.toString() ?? '')?.toLocal() ??
           DateTime.now(),
     );
   }
 }
 
+class PlanSquadOpcion {
+  const PlanSquadOpcion({
+    required this.idGrupo,
+    required this.nombre,
+    this.portadaPath,
+    this.cantidadMiembros = 0,
+    this.puedeOrganizar = false,
+  });
+
+  final String idGrupo;
+  final String nombre;
+  final String? portadaPath;
+  final int cantidadMiembros;
+  final bool puedeOrganizar;
+
+  String? get portadaUrl =>
+      ServicioSupabase().urlPortadaSquadDisplay(portadaPath);
+
+  factory PlanSquadOpcion.fromMap(Map<String, dynamic> m) => PlanSquadOpcion(
+    idGrupo: m['id_grupo']?.toString() ?? '',
+    nombre: m['nombre_grupo']?.toString() ?? 'Squad',
+    portadaPath: m['url_portada']?.toString(),
+    cantidadMiembros: m['cantidad_miembros'] is num
+        ? (m['cantidad_miembros'] as num).toInt()
+        : int.tryParse(m['cantidad_miembros']?.toString() ?? '') ?? 0,
+    puedeOrganizar: m['puede_organizar'] == true,
+  );
+}
+
 class ServicioPlanes {
+  static const _bucketPortadas = 'planes-portadas';
+
   SupabaseClient get _c => ServicioSupabase().cliente;
   String? get miUid => _c.auth.currentUser?.id;
 
@@ -137,6 +313,7 @@ class ServicioPlanes {
     String? provincia,
     int limit = 20,
     int offset = 0,
+    String modo = 'explorar',
   }) async {
     try {
       final res = await _c.rpc(
@@ -146,19 +323,43 @@ class ServicioPlanes {
           'p_provincia': provincia,
           'p_limit': limit,
           'p_offset': offset,
+          'p_modo': modo,
         },
       );
       if (res is! Map) return (items: const <PlanComunidad>[], hayMas: false);
       final raw = res['items'];
       if (raw is! List) return (items: const <PlanComunidad>[], hayMas: false);
       final items = raw
-          .map((e) => PlanComunidad.fromMap(Map<String, dynamic>.from(e as Map)))
+          .map(
+            (e) => PlanComunidad.fromMap(Map<String, dynamic>.from(e as Map)),
+          )
           .where((p) => p.id.isNotEmpty)
           .toList(growable: false);
       return (items: items, hayMas: res['hay_mas'] == true);
     } catch (e) {
       debugPrint('⚠️ planes_hub: $e');
       return (items: const <PlanComunidad>[], hayMas: false);
+    }
+  }
+
+  Future<PlanDetalle?> detalle(String idPlan) async {
+    try {
+      final res = await _c.rpc('planes_detalle', params: {'p_id_plan': idPlan});
+      if (res is! Map) return null;
+      final planRaw = res['plan'];
+      if (planRaw is! Map) return null;
+      final miembrosRaw = res['miembros'] as List? ?? const [];
+      return PlanDetalle(
+        plan: PlanComunidad.fromMap(Map<String, dynamic>.from(planRaw)),
+        miembros: miembrosRaw
+            .map(
+              (e) => PlanMiembro.fromMap(Map<String, dynamic>.from(e as Map)),
+            )
+            .toList(growable: false),
+      );
+    } catch (e) {
+      debugPrint('⚠️ planes_detalle: $e');
+      return null;
     }
   }
 
@@ -172,6 +373,11 @@ class ServicioPlanes {
     int? cupoMax,
     String tipoOrganizador = 'usuario',
     String? idSquad,
+    String? contactoAnfitrion,
+    String? portadaPath,
+    String colorHex = '#C084FC',
+    bool permiteSquads = true,
+    int? edadMinima,
   }) async {
     final res = await _c.rpc(
       'planes_crear',
@@ -185,19 +391,89 @@ class ServicioPlanes {
         'p_cupo_max': cupoMax,
         'p_tipo_organizador': tipoOrganizador,
         if (idSquad != null) 'p_id_squad': idSquad,
+        'p_contacto_anfitrion': contactoAnfitrion,
+        'p_portada_path': portadaPath,
+        'p_color_hex': colorHex,
+        'p_permite_squads': permiteSquads,
+        'p_edad_minima': edadMinima,
       },
     );
     if (res is Map && res['ok'] == true) return res['id']?.toString();
     return null;
   }
 
-  Future<String?> solicitarUnirse(String idPlan) async {
+  Future<String?> solicitarUnirse(String idPlan, {String? idSquad}) async {
     final res = await _c.rpc(
       'planes_solicitar_unirse',
-      params: {'p_id_plan': idPlan},
+      params: {'p_id_plan': idPlan, 'p_id_squad': idSquad},
     );
     if (res is Map) return res['estado']?.toString();
     return null;
+  }
+
+  String mensajeError(Object error, {String accion = 'procesar el plan'}) {
+    final msg = error.toString().toLowerCase();
+    if (msg.contains('no_auth') || msg.contains('jwt')) {
+      return 'Tu sesión expiró. Cerrá sesión y volvé a entrar.';
+    }
+    if (msg.contains('rate') || msg.contains('demasiad')) {
+      return 'Estás haciendo muchas acciones seguidas. Esperá un ratito y probá de nuevo.';
+    }
+    if (msg.contains('cupo_lleno')) return 'Se llenó el cupo.';
+    if (msg.contains('squads_no_permitidos')) {
+      return 'Este plan no acepta squads.';
+    }
+    if (msg.contains('no_miembro_squad')) {
+      return 'No figurás como miembro aceptado de ese squad.';
+    }
+    if (msg.contains('plan_cerrado') ||
+        msg.contains('plan_finalizado') ||
+        msg.contains('plan_inexistente')) {
+      return 'Este plan ya no está disponible.';
+    }
+    if (msg.contains('bloqueado')) {
+      return 'No podés interactuar con este plan por configuración de privacidad.';
+    }
+    if (msg.contains('local_inactivo') || msg.contains('local_inexistente')) {
+      return 'El local elegido ya no está disponible.';
+    }
+    if (msg.contains('titulo_invalido')) {
+      return 'El título tiene que tener entre 3 y 80 caracteres.';
+    }
+    if (msg.contains('descripcion_invalida')) {
+      return 'La descripción es demasiado larga.';
+    }
+    if (msg.contains('fecha_fin_invalida')) {
+      return 'La fecha de fin no puede ser antes del inicio.';
+    }
+    if (msg.contains('fecha_fuera_ventana')) {
+      return 'La fecha del plan está fuera de la ventana permitida.';
+    }
+    if (msg.contains('edad_insuficiente')) {
+      return 'No cumplís la edad mínima para este plan.';
+    }
+    if (msg.contains('expulsado')) {
+      return 'Te expulsaron de este plan y no podés volver a sumarte.';
+    }
+    if (msg.contains('no_admin_squad')) {
+      return 'Solo un admin del squad puede publicar o gestionar esto.';
+    }
+    if (msg.contains('squad_requerido')) {
+      return 'Tenés que elegir un squad para continuar.';
+    }
+    if (msg.contains('cupo_menor_usados')) {
+      return 'El cupo no puede ser menor a la gente que ya está adentro.';
+    }
+    if (msg.contains('estado_invalido')) {
+      return 'El estado del plan no permite esta acción.';
+    }
+    if (msg.contains('mensaje_invalido')) {
+      return 'El mensaje está vacío o es demasiado largo.';
+    }
+    if (msg.contains('no_participante')) {
+      return 'Solo pueden chatear los aceptados en el plan.';
+    }
+    return 'No se pudo $accion. Revisá conexión y probá de nuevo.';
   }
 
   Future<bool> gestionarMiembro({
@@ -224,7 +500,9 @@ class ServicioPlanes {
   Future<List<PlanMensaje>> historial(String idPlan) async {
     final rows = await _c
         .from('planes_mensajes')
-        .select('id, id_autor, cuerpo, creado_en')
+        .select(
+          'id, id_autor, id_autor_local, autor_tipo, tipo, cuerpo, creado_en',
+        )
         .eq('id_plan', idPlan)
         .order('id', ascending: true)
         .limit(300);
@@ -290,6 +568,94 @@ class ServicioPlanes {
 
   Future<void> cerrarCanal(RealtimeChannel canal) async {
     await _c.removeChannel(canal);
+  }
+
+  Future<List<PlanSquadOpcion>> misSquads() async {
+    try {
+      final res = await _c.rpc('planes_mis_squads');
+      if (res is! Map) return const [];
+      final raw = res['items'] as List? ?? const [];
+      return raw
+          .map(
+            (e) => PlanSquadOpcion.fromMap(Map<String, dynamic>.from(e as Map)),
+          )
+          .where((s) => s.idGrupo.isNotEmpty)
+          .toList(growable: false);
+    } catch (e) {
+      debugPrint('⚠️ planes_mis_squads: $e');
+      return const [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> buscarLocales(String query) async {
+    final q = query.trim();
+    if (q.length < 2) return const [];
+    try {
+      final rows = await _c
+          .from('perfiles_locales')
+          .select('id, nombre_local, ciudad, provincia, foto_perfil_url')
+          .ilike('nombre_local', '%$q%')
+          .eq('estado_cuenta', 'activa')
+          .limit(12);
+      return (rows as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(growable: false);
+    } catch (e) {
+      debugPrint('⚠️ buscarLocales planes: $e');
+      return const [];
+    }
+  }
+
+  Future<bool> actualizarBasico({
+    required String idPlan,
+    String? titulo,
+    DateTime? fechaInicio,
+    DateTime? fechaFin,
+    int? cupoMax,
+    bool sinCupo = false,
+    bool? ingresoAbierto,
+  }) async {
+    final res = await _c.rpc(
+      'planes_actualizar_basico',
+      params: {
+        'p_id_plan': idPlan,
+        'p_titulo': titulo,
+        'p_fecha_inicio': fechaInicio?.toUtc().toIso8601String(),
+        'p_fecha_fin': fechaFin?.toUtc().toIso8601String(),
+        'p_cupo_max': cupoMax,
+        'p_sin_cupo': sinCupo,
+        'p_ingreso_abierto': ingresoAbierto,
+      },
+    );
+    return res is Map && res['ok'] == true;
+  }
+
+  Future<String?> subirPortada({
+    required String idTemporal,
+    required Uint8List bytes,
+    String ext = 'jpg',
+  }) async {
+    final uid = miUid;
+    if (uid == null) return null;
+    try {
+      final path = '$uid/$idTemporal.jpg';
+      await _c.storage
+          .from(_bucketPortadas)
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(
+              upsert: true,
+              contentType: contentTypeDesdeExtension(
+                ext == 'webp' ? 'jpg' : ext,
+              ),
+            ),
+          );
+      return path;
+    } catch (e) {
+      debugPrint('⚠️ subirPortada plan: $e');
+      return null;
+    }
   }
 
   /// Orquesta el chatbot de creación (edge). No persiste.
