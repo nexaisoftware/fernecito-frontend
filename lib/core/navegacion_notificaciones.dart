@@ -168,7 +168,16 @@ Future<bool> abrirEventoDesdeNotificacion(Notificacion n) async {
 Future<bool> abrirPlanDesdeNotificacion(Notificacion n) async {
   final idPlan =
       n.ctaIdRef?.trim() ?? n.payload?['id_plan']?.toString().trim();
-  if (idPlan == null || idPlan.isEmpty) {
+  final accion =
+      n.payload?['accion']?.toString() ??
+      (n.tipo == 'plan_aceptado'
+          ? 'chat'
+          : (n.tipo == 'plan_cancelado' || n.tipo == 'plan_eliminado'
+                ? 'hub'
+                : 'detalle'));
+
+  // Cancelado / eliminado (o sin id): volver al hub de planes.
+  if (accion == 'hub' || idPlan == null || idPlan.isEmpty) {
     await _push(
       CupertinoPageRoute(
         fullscreenDialog: true,
@@ -177,10 +186,6 @@ Future<bool> abrirPlanDesdeNotificacion(Notificacion n) async {
     );
     return true;
   }
-
-  final accion =
-      n.payload?['accion']?.toString() ??
-      (n.tipo == 'plan_aceptado' ? 'chat' : 'detalle');
 
   if (accion == 'chat') {
     final res = await ServicioPlanes().detalle(idPlan);
@@ -365,6 +370,10 @@ Future<bool> navegarDesdeNotificacion(
     case 'plan_solicitud':
     case 'plan_aceptado':
     case 'plan_rechazado':
+    case 'plan_cancelado':
+    case 'plan_eliminado':
+    case 'plan_pedido_local':
+    case 'plan_pedido_respuesta':
       return abrirPlanDesdeNotificacion(n);
     case 'rompehielo_recibido':
     case 'rompehielo_respondido':

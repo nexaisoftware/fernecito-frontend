@@ -596,7 +596,7 @@ class _AdministrarPlanesButton extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Administrar mis planes',
+              'Administrar',
               style: GoogleFonts.baloo2(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w900,
@@ -1167,7 +1167,7 @@ class _ErrorPlanes extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            'No pudimos cargar los planes',
+            'No se pudieron cargar',
             textAlign: TextAlign.center,
             style: GoogleFonts.baloo2(
               fontSize: 20,
@@ -1177,16 +1177,27 @@ class _ErrorPlanes extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            mensaje,
+            'Probá de nuevo en un momento.',
             textAlign: TextAlign.center,
             style: GoogleFonts.baloo2(
               fontSize: 14,
               color: ColoresApp.textoSecundario,
             ),
           ),
+          if (mensaje.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              mensaje,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.baloo2(
+                fontSize: 12.5,
+                color: ColoresApp.textoSecundario.withValues(alpha: 0.85),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
             color: ColoresApp.principalMarca.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(999),
             onPressed: onReintentar,
@@ -1227,7 +1238,7 @@ class _VacioPlanes extends StatelessWidget {
           Text(
             modo == 'mis'
                 ? 'Todavía no tenés planes'
-                : 'No hay planes nuevos, crea el primero!!',
+                : 'Todavía no hay planes por acá',
             textAlign: TextAlign.center,
             style: GoogleFonts.baloo2(
               fontSize: 20,
@@ -1238,8 +1249,8 @@ class _VacioPlanes extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             modo == 'mis'
-                ? 'Creá uno o sumate a alguna juntada de la comunidad.'
-                : 'Sé anfitrión de la próxima juntada en un local de Fernecito.',
+                ? 'Creá uno o sumate a alguno de la comunidad.'
+                : 'Podés crear el primero en un local de Fernecito.',
             textAlign: TextAlign.center,
             style: GoogleFonts.baloo2(
               fontSize: 14,
@@ -1248,12 +1259,12 @@ class _VacioPlanes extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
             color: ColoresApp.principalMarca.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(999),
             onPressed: onReintentar,
             child: Text(
-              'Reintentar',
+              'Actualizar',
               style: GoogleFonts.baloo2(
                 fontWeight: FontWeight.w800,
                 color: ColoresApp.principalMarca,

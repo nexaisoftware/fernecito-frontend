@@ -90,9 +90,9 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
 
   Future<void> _arrancar() async {
     await _bot([
-      '¡Vamos a armar una juntada fachera! 🍻✨',
-      'Yo te guío paso a paso: nombre, quién organiza, local, fondo, fecha y cómo se suma la gente.',
-      'Arranquemos fácil: ¿cómo querés que se llame el plan? 🪩',
+      '¡Vamos a crear un super plan! 🍻',
+      'Te guío paso a paso. El local define la ciudad, puede durar hasta 45 días, y la gente se suma libre o con tu aprobación.',
+      '¿Cómo querés que se llame?',
     ]);
     _focus.requestFocus();
   }
@@ -170,7 +170,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         _titulo = v;
         _usuarioTexto(v);
         await _bot([
-          'Nombre aprobado, suena convocante 🔥',
+          'Buena elección 👍',
           '¿Lo publicás **vos** o como **admin de un squad**?',
         ]);
         await _cargarSquadsOrganizar();
@@ -184,7 +184,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         _descripcion = v;
         _usuarioTexto(v);
         await _bot([
-          'Buenísimo, ya se entiende la vibra 😎',
+          'Buena, ya se entiende 😊',
           'Quedó así:\n\n**$_titulo**\n$_descripcion',
           '¿Está bien o lo corregimos?',
         ]);
@@ -213,7 +213,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
     );
     await _bot([
       'Perfecto, vas como anfitrión ✨',
-      'Ahora vendeme el plan en pocas líneas: ¿qué onda, qué se hace y por qué alguien tendría que sumarse?',
+      'Contame en pocas líneas qué se hace y por qué alguien se sumaría.',
       'Ej: birritas tranqui, solos y solas, previa con música, merienda para charlar…',
     ]);
     _irA(_PasoPlan.descripcion);
@@ -232,8 +232,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
       ),
     );
     await _bot([
-      'Genial, el plan sale a nombre de **${squad.nombre}** 🫡',
-      'Ahora vendeme el plan en pocas líneas: ¿qué onda, qué se hace y por qué alguien tendría que sumarse?',
+      'Genial, el plan sale a nombre de **${squad.nombre}**',
+      'Contame en pocas líneas qué se hace y por qué alguien se sumaría.',
       'Ej: birritas tranqui, solos y solas, previa con música, merienda para charlar…',
     ]);
     _irA(_PasoPlan.descripcion);
@@ -284,8 +284,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
       ),
     );
     await _bot([
-      'Perfecto: ese local define ciudad y provincia del plan ✅',
-      'Ahora pongámosle cara linda a la card: elegí un fondo o subí una portada custom 🎨',
+      'Perfecto: ese local define la ciudad del plan ✅',
+      'Ahora elegí un fondo o subí una portada 🎨',
     ]);
     _irA(_PasoPlan.fondo);
   }
@@ -304,8 +304,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
       _ChipRespuesta(icono: CupertinoIcons.photo, texto: preset.nombre),
     );
     await _bot([
-      'Ese fondo va como piña 😮‍💨',
-      'Ahora pongamos cuándo arranca y si querés cuándo termina 🕒',
+      'Buena elección 🎨',
+      'Ahora pongamos cuándo arranca y, si querés, cuándo termina 🕒',
     ]);
     _irA(_PasoPlan.fechas);
   }
@@ -322,8 +322,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
       ),
     );
     await _bot([
-      'Portada custom lista, quedó más personal ✨',
-      'Ahora pongamos cuándo arranca y si querés cuándo termina 🕒',
+      'Portada lista ✨',
+      'Ahora pongamos cuándo arranca y, si querés, cuándo termina 🕒',
     ]);
     _irA(_PasoPlan.fechas);
   }
@@ -394,8 +394,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
     if (_procesando || _botEscribiendo) return;
     _usuarioTexto('Están bien');
     await _bot([
-      'Genial. Ahora definamos la entrada 🚪',
-      'Podés dejarlo libre para que entren al toque, o revisar solicitudes una por una.',
+      'Listo. Ahora definamos cómo se suma la gente 🚪',
+      'Puede ser entrada libre o con tu aprobación, una por una.',
     ]);
     _irA(_PasoPlan.union);
   }
@@ -418,8 +418,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
     );
     await _bot([
       'Último detalle opcional 📲',
-      'Podés dejar Instagram o WhatsApp para la gente aceptada, por si necesitan coordinar algo.',
-      'Si no hace falta, saltealo sin drama.',
+      'Podés dejar Instagram o WhatsApp para quien se sume, por si necesitan coordinar.',
+      'Si no hace falta, saltealo.',
     ]);
     _irA(_PasoPlan.contacto);
     _focus.requestFocus();
@@ -434,8 +434,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
 
   Future<void> _mostrarResumen() async {
     await _bot([
-      'Hermoso, ya tenemos plan armado 🥂',
-      'Revisá el resumen y si está todo bien lo mandamos a la cartelera.',
+      'Listo, ya tenemos el plan armado 🥂',
+      'Revisá el resumen y, si está todo bien, lo publicamos.',
     ]);
     _irA(_PasoPlan.resumen);
   }
@@ -462,7 +462,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
     });
     _usuarioTexto('Publicar plan');
     await _bot([
-      'Publicando tu plan y abriendo el espacio para organizarse… 🚀',
+      'Publicando tu plan…',
     ]);
     setState(() => _procesando = true);
     try {
