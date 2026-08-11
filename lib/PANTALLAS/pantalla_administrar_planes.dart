@@ -1239,6 +1239,21 @@ class _SolicitudesSheetState extends State<_SolicitudesSheet> {
   }
 
   void _verPerfil(PlanMiembro m) {
+    if (!m.perfilPublico) {
+      showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          content: Text('Perfil privado · @${m.username ?? 'usuario'}'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Ok'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     Navigator.of(context, rootNavigator: true).push(
       CupertinoPageRoute(
         builder: (_) => PantallaPerfilUsuarios(

@@ -1540,94 +1540,27 @@ class _CeldaPersona extends StatelessWidget {
               ),
             )
           else if ((miembro.nombreSquad ?? '').trim().isNotEmpty)
-            Text(
-              miembro.nombreSquad!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.baloo2(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: ColoresApp.textoSecundario,
+            Container(
+              margin: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'via ${miembro.nombreSquad}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.baloo2(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  color: ColoresApp.textoSecundario,
+                ),
               ),
             ),
         ],
       ),
-    );
-  }
-}
-
-class _CeldaSquad extends StatelessWidget {
-  const _CeldaSquad({required this.squad, required this.tamCelda});
-  final PlanSquadGrupo squad;
-  final double tamCelda;
-
-  @override
-  Widget build(BuildContext context) {
-    final avatarSize = tamCelda * 0.62;
-    final portada = squad.portadaUrl;
-    final ini = squad.nombreSquad.trim().isEmpty
-        ? '?'
-        : squad.nombreSquad.trim().substring(0, 1).toUpperCase();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: avatarSize,
-          height: avatarSize,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(avatarSize * 0.32),
-            color: const Color(0xFF2B2B2B),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: portada != null && portada.isNotEmpty
-              ? CachedNetworkImage(
-                  imageUrl: portada,
-                  fit: BoxFit.cover,
-                  errorWidget: (_, _, _) => Center(
-                    child: Text(
-                      ini,
-                      style: GoogleFonts.baloo2(
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                )
-              : Center(
-                  child: Text(
-                    ini,
-                    style: GoogleFonts.baloo2(
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          squad.nombreSquad,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: GoogleFonts.baloo2(
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-          ),
-        ),
-        Text(
-          '${squad.cantidadMiembros} personas',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: GoogleFonts.baloo2(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            color: ColoresApp.textoSecundario,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1725,6 +1658,21 @@ class _SolicitudesSheetState extends State<_SolicitudesSheet> {
   }
 
   void _verPerfil(PlanMiembro m) {
+    if (!m.perfilPublico) {
+      showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          content: Text('Perfil privado · @${m.username ?? 'usuario'}'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Ok'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     Navigator.of(context, rootNavigator: true).push(
       CupertinoPageRoute(
         builder: (_) => PantallaPerfilUsuarios(

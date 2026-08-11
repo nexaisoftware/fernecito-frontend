@@ -498,8 +498,8 @@ class _BurbujaMensaje extends StatelessWidget {
                 ],
               ),
             if (nombreAutor != null) const SizedBox(height: 3),
-            Text(
-              m.cuerpo,
+            _TextoConMenciones(
+              texto: m.cuerpo,
               style: GoogleFonts.baloo2(
                 fontSize: 15,
                 height: 1.18,
@@ -511,6 +511,43 @@ class _BurbujaMensaje extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Resalta `@menciones` dentro del cuerpo del mensaje.
+final RegExp _mencionRegex = RegExp(r'(@[a-zA-Z0-9_.]+)');
+
+class _TextoConMenciones extends StatelessWidget {
+  const _TextoConMenciones({required this.texto, required this.style});
+  final String texto;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final partes = texto.split(_mencionRegex);
+    final menciones = _mencionRegex
+        .allMatches(texto)
+        .map((m) => m.group(0)!)
+        .toList();
+    if (menciones.isEmpty) {
+      return Text(texto, style: style);
+    }
+    final spans = <TextSpan>[];
+    for (var i = 0; i < partes.length; i++) {
+      if (partes[i].isNotEmpty) spans.add(TextSpan(text: partes[i]));
+      if (i < menciones.length) {
+        spans.add(
+          TextSpan(
+            text: menciones[i],
+            style: TextStyle(
+              color: ColoresApp.principalMarca,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        );
+      }
+    }
+    return Text.rich(TextSpan(style: style, children: spans));
   }
 }
 

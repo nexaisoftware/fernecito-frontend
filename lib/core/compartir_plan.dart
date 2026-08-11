@@ -10,7 +10,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'auth_redirect.dart';
-import 'compartir_evento.dart' show origenCompartirDesdeContexto;
 
 /// URL pública con preview (OG) para WhatsApp / redes.
 String urlPreviewCompartirPlan(String idPlan) {
