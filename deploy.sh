@@ -38,14 +38,12 @@ flutter build web --release --base-href / --no-wasm-dry-run \
   --dart-define=FIREBASE_WEB_STORAGE_BUCKET="${FIREBASE_WEB_STORAGE_BUCKET:-}" \
   --dart-define=FCM_WEB_VAPID_KEY="${FCM_WEB_VAPID_KEY:-}"
 
-echo "==> [1b/3] deploy_id en build/web/version.json"
+echo "==> [1b/3] version.json deploy_id + cache-bust bootstrap (banner PWA)"
 python3 - <<'PY'
-import json, os, subprocess, time
+import json, os, re, subprocess, time
+from pathlib import Path
 
-path = "build/web/version.json"
-with open(path, encoding="utf-8") as f:
-    data = json.load(f)
-
+# ── fingerprint único por deploy (ServicioActualizacionWeb lo compara) ──
 git_ref = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "").strip()
 if not git_ref:
     try:
@@ -54,10 +52,67 @@ if not git_ref:
         ).strip()
     except Exception:
         git_ref = "local"
+deploy_id = f"{git_ref[:12]}-{int(time.time())}"
 
-data["deploy_id"] = f"{git_ref[:12]}-{int(time.time())}"
-with open(path, "w", encoding="utf-8") as f:
-    json.dump(data, f, separators=(",", ":"))
+# ── sincronizar version/build desde pubspec.yaml ──
+pubspec = Path("pubspec.yaml").read_text(encoding="utf-8")
+m = re.search(r"^version:\s*([0-9]+(?:\.[0-9]+)*)\+([0-9]+)\s*$", pubspec, re.M)
+version = m.group(1) if m else ""
+build_number = m.group(2) if m else ""
+
+version_path = Path("build/web/version.json")
+data = {}
+if version_path.exists():
+    data = json.loads(version_path.read_text(encoding="utf-8"))
+data["app_name"] = data.get("app_name") or "fernecito_frontend"
+data["package_name"] = data.get("package_name") or "fernecito_frontend"
+if version:
+    data["version"] = version
+if build_number:
+    data["build_number"] = build_number
+data["deploy_id"] = deploy_id
+version_path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+
+# ── cache-bust flutter_bootstrap.js en index.html del build ──
+index_path = Path("build/web/index.html")
+if index_path.exists():
+    html = index_path.read_text(encoding="utf-8")
+    html2, n = re.subn(
+        r'src="flutter_bootstrap\.js(?:\?v=[^"]*)?"',
+        f'src="flutter_bootstrap.js?v={deploy_id}"',
+        html,
+        count=1,
+    )
+    if n == 0:
+        html2 = html.replace(
+            'src="flutter_bootstrap.js"',
+            f'src="flutter_bootstrap.js?v={deploy_id}"',
+            1,
+        )
+    index_path.write_text(html2, encoding="utf-8")
+
+# También alinea version/build en web/ fuente (sin pisar deploy_id local).
+src_version = Path("web/version.json")
+src = {}
+if src_version.exists():
+    try:
+        src = json.loads(src_version.read_text(encoding="utf-8"))
+    except Exception:
+        src = {}
+changed = False
+if version and src.get("version") != version:
+    src["version"] = version
+    changed = True
+if build_number and src.get("build_number") != build_number:
+    src["build_number"] = build_number
+    changed = True
+src.setdefault("app_name", "fernecito_frontend")
+src.setdefault("package_name", "fernecito_frontend")
+src.setdefault("deploy_id", "pending-local")
+if changed or not src_version.exists():
+    src_version.write_text(json.dumps(src, separators=(",", ":")), encoding="utf-8")
+
+print(f"version={data.get('version')}+{data.get('build_number')} deploy_id={deploy_id}")
 PY
 
 echo "==> [2/3] preparando Vercel: api + build/web/vercel.json"
@@ -168,3 +223,8 @@ vercel deploy --prod --yes
 
 echo ""
 echo "OK -> https://appusuarios.fernecitoapp.com"
+if [ -f build/web/version.json ]; then
+  echo "PWA version.json:"
+  cat build/web/version.json
+  echo
+fi

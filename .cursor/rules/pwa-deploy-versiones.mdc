@@ -1,0 +1,14 @@
+---
+description: Al deployar la PWA usuarios, controlar versionado para el banner de actualización
+alwaysApply: true
+---
+
+# Deploy PWA usuarios — versiones
+
+Al correr `./deploy.sh` (appusuarios.fernecitoapp.com):
+
+1. **Antes del deploy**, subir `pubspec.yaml` `version:` (ej. `1.2.9+16`) y alinear `web/version.json` (`version` + `build_number`).
+2. El banner de “Hay una nueva versión” compara **`deploy_id`** en `/version.json` (`ServicioActualizacionWeb`). `deploy.sh` debe estampar un `deploy_id` nuevo en cada deploy.
+3. También cache-bustear `flutter_bootstrap.js?v=<deploy_id>` en el `index.html` del build.
+4. Tras el deploy, verificar `https://appusuarios.fernecitoapp.com/version.json` y confirmar que `deploy_id` cambió.
+5. No deployar sin bump de build si el cambio es visible para usuarios.
