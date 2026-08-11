@@ -6,18 +6,15 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 
 import '../PANTALLAS/pantalla_actividad.dart';
-import '../PANTALLAS/pantalla_chat_plan.dart';
 import '../PANTALLAS/pantalla_fernecito_match.dart';
 import '../PANTALLAS/pantalla_match_chat.dart';
 import '../PANTALLAS/pantalla_match_chats.dart';
 import '../PANTALLAS/pantalla_mis_squads.dart';
 import '../PANTALLAS/pantalla_perfil_squads.dart';
 import '../PANTALLAS/pantalla_perfil_usuarios.dart';
-import '../PANTALLAS/pantalla_planes.dart';
 import '../PANTALLAS/pantalla_rompehielo.dart' show TipoContraparte;
 import '../PANTALLAS/pantalla_social.dart';
 import '../PANTALLAS/pantalla_soporte.dart';
-import '../PANTALLAS/pantalla_ver_plan.dart';
 import '../models/notificacion.dart';
 import 'app_navigator.dart';
 import 'navegacion_evento_compartido.dart';
@@ -25,7 +22,6 @@ import 'rompehielo_navegacion.dart';
 import 'servicio_amigos.dart';
 import 'servicio_match.dart';
 import 'servicio_perfil_usuario.dart';
-import 'servicio_planes.dart';
 import 'servicio_rompehielo.dart';
 import 'servicio_squads.dart';
 import 'squad_helpers.dart';
@@ -164,48 +160,6 @@ Future<bool> abrirEventoDesdeNotificacion(Notificacion n) async {
   final idEvento = n.ctaIdRef?.trim();
   if (ctx == null || idEvento == null || idEvento.isEmpty) return false;
   await abrirEventoCompartidoPorId(ctx, idEvento);
-  return true;
-}
-
-Future<bool> abrirPlanDesdeNotificacion(Notificacion n) async {
-  final idPlan =
-      n.ctaIdRef?.trim() ?? n.payload?['id_plan']?.toString().trim();
-  final accion =
-      n.payload?['accion']?.toString() ??
-      (n.tipo == 'plan_aceptado'
-          ? 'chat'
-          : (n.tipo == 'plan_cancelado' || n.tipo == 'plan_eliminado'
-                ? 'hub'
-                : 'detalle'));
-
-  // Cancelado / eliminado (o sin id): volver al hub de planes.
-  if (accion == 'hub' || idPlan == null || idPlan.isEmpty) {
-    await _push(
-      CupertinoPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => const PantallaPlanes(),
-      ),
-    );
-    return true;
-  }
-
-  if (accion == 'chat') {
-    final res = await ServicioPlanes().detalle(idPlan);
-    final plan = res.detalle?.plan;
-    if (plan != null && plan.chatDisponible) {
-      await _push(
-        CupertinoPageRoute(builder: (_) => PantallaChatPlan(plan: plan)),
-      );
-      return true;
-    }
-  }
-
-  await _push(
-    CupertinoPageRoute(
-      fullscreenDialog: true,
-      builder: (_) => PantallaVerPlan(idPlan: idPlan),
-    ),
-  );
   return true;
 }
 
@@ -394,14 +348,6 @@ Future<bool> navegarDesdeNotificacion(
         CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
       );
       return true;
-    case 'plan_solicitud':
-    case 'plan_aceptado':
-    case 'plan_rechazado':
-    case 'plan_cancelado':
-    case 'plan_eliminado':
-    case 'plan_pedido_local':
-    case 'plan_pedido_respuesta':
-      return abrirPlanDesdeNotificacion(n);
     case 'rompehielo_recibido':
     case 'rompehielo_respondido':
     case 'rompehielo_replicado':
@@ -433,16 +379,15 @@ Future<bool> navegarDesdeNotificacion(
         case '/match_chats':
           if (_nav == null) return false;
           unawaited(
-            _push(
+            _nav!.push(
               CupertinoPageRoute(
                 builder: (_) => const PantallaFernecitoMatch(),
               ),
             ),
           );
-          unawaited(
-            _push(
-              CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
-            ),
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+          await _nav!.push(
+            CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
           );
           return true;
         case '/match':
@@ -461,9 +406,6 @@ Future<bool> navegarDesdeNotificacion(
             onIrATab: onIrATab,
             socialVista: SocialVista.amigos,
           );
-        case 'planes':
-        case '/planes':
-          return abrirPlanDesdeNotificacion(n);
         case '/actividad':
           return _irATabOFallback(0, onIrATab: onIrATab);
         case '/home':
