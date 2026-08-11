@@ -11,6 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
 import '../core/servicio_match.dart';
+import '../widgets/stack_avatares_squad.dart';
 import 'pantalla_match_chat.dart';
 import 'pantalla_perfil_squads.dart';
 import 'pantalla_perfil_usuarios.dart';
@@ -274,7 +275,7 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
           ),
         ),
         SizedBox(
-          height: 104,
+          height: 112,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: pendientes.length,
@@ -290,54 +291,64 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
   Widget _miniaturaPendiente(MatchPendiente p) {
     final foto = p.otro.fotoUrl;
     final recopa = p.esRecopa;
+    final urls = p.otro.avataresMiembrosUrls;
+    final esSquadStack = p.otro.esSquad && urls.isNotEmpty;
     return GestureDetector(
       onTap: () => _abrirTarjetaPendiente(p),
       child: SizedBox(
-        width: 72,
+        width: esSquadStack ? 96 : 72,
         child: Column(
           children: [
-            Container(
-              width: 66,
-              height: 66,
-              padding: const EdgeInsets.all(2.5),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: recopa ? _kAzulRePinta : ColoresApp.principalMarca,
-                  width: 2.4,
-                ),
-                boxShadow: recopa
-                    ? [
-                        BoxShadow(
-                          color: _kAzulRePinta.withValues(alpha: 0.45),
-                          blurRadius: 10,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Container(
+            if (esSquadStack)
+              StackAvataresSquad(
+                avatares: urls,
+                totalExtra: p.otro.miembrosParaStack,
+                size: 42,
+                paddingExterno: 2,
+              )
+            else
+              Container(
+                width: 66,
+                height: 66,
+                padding: const EdgeInsets.all(2.5),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF2A2A2A),
-                  image: foto != null
-                      ? DecorationImage(
-                          image: NetworkImage(foto),
-                          fit: BoxFit.cover,
+                  border: Border.all(
+                    color: recopa ? _kAzulRePinta : ColoresApp.principalMarca,
+                    width: 2.4,
+                  ),
+                  boxShadow: recopa
+                      ? [
+                          BoxShadow(
+                            color: _kAzulRePinta.withValues(alpha: 0.45),
+                            blurRadius: 10,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF2A2A2A),
+                    image: foto != null
+                        ? DecorationImage(
+                            image: NetworkImage(foto),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: foto == null
+                      ? Text(
+                          p.otro.esSquad ? '👥' : '🙋',
+                          style: const TextStyle(fontSize: 24),
                         )
                       : null,
                 ),
-                alignment: Alignment.center,
-                child: foto == null
-                    ? Text(
-                        p.otro.esSquad ? '👥' : '🙋',
-                        style: const TextStyle(fontSize: 24),
-                      )
-                    : null,
               ),
-            ),
             const SizedBox(height: 5),
             Text(
-              p.otro.nombre.split(RegExp(r'\s+')).first,
+              p.otro.nombre,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.baloo2(
@@ -576,6 +587,8 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
 
   Widget _fila(MatchItem m) {
     final foto = m.otro.fotoUrl;
+    final urls = m.otro.avataresMiembrosUrls;
+    final esSquadStack = m.otro.esSquad && urls.isNotEmpty;
     return GestureDetector(
       onTap: () => _abrirChat(m),
       onLongPress: () => _menuFila(m),
@@ -588,35 +601,44 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
         ),
         child: Row(
           children: [
-            // Avatar
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF2A2A2A),
-                image: foto != null
-                    ? DecorationImage(
-                        image: NetworkImage(foto),
-                        fit: BoxFit.cover,
+            if (esSquadStack)
+              StackAvataresSquad(
+                avatares: urls,
+                totalExtra: m.otro.miembrosParaStack,
+                size: 40,
+                paddingExterno: 0,
+              )
+            else
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF2A2A2A),
+                  image: foto != null
+                      ? DecorationImage(
+                          image: NetworkImage(foto),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: foto == null
+                    ? Text(
+                        m.otro.esSquad ? '👥' : '🙋',
+                        style: const TextStyle(fontSize: 24),
                       )
                     : null,
               ),
-              alignment: Alignment.center,
-              child: foto == null
-                  ? Text(
-                      m.otro.esSquad ? '👥' : '🙋',
-                      style: const TextStyle(fontSize: 24),
-                    )
-                  : null,
-            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Match con ${m.otro.nombre}',
+                    m.otro.esSquad
+                        ? m.otro.nombre
+                        : 'Match con ${m.otro.nombre}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.baloo2(

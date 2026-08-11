@@ -197,6 +197,76 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
     }
   }
 
+  Future<void> _cancelarDesdeChat() async {
+    final nombre = widget.match.otro.nombre;
+    final confirmar = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('¿Cancelar el match con $nombre?'),
+        content: const Text(
+          'Se borra este chat y el match. Igual pueden volver a cruzarse en las cards.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Volver'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cancelar match'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+    final ok = await _srv.cancelarMatch(widget.match.idMatch);
+    if (!mounted) return;
+    if (ok) {
+      Navigator.of(context).pop(true);
+    } else {
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('No se pudo cancelar'),
+          content: const Text('Probá de nuevo en un momento.'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  void _menuChat() {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text(
+          widget.match.otro.nombre,
+          style: GoogleFonts.baloo2(fontWeight: FontWeight.w800),
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _cancelarDesdeChat();
+            },
+            child: const Text('✋ Cancelar match'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Volver'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
@@ -272,6 +342,16 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
               ),
             ),
           ],
+        ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(36, 36),
+          onPressed: _menuChat,
+          child: const Icon(
+            CupertinoIcons.ellipsis_circle,
+            color: Colors.white54,
+            size: 24,
+          ),
         ),
       ),
       child: SafeArea(

@@ -20,6 +20,8 @@ import '../core/servicio_ubicacion_global.dart';
 import '../core/ubicaciones_data.dart';
 import '../models/social.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
+import '../widgets/stack_avatares_squad.dart';
+import 'pantalla_match_chat.dart';
 import 'pantalla_match_chats.dart';
 
 const _kPlanes = [
@@ -399,14 +401,30 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     );
     if (confirmado != true || !mounted) return;
     try {
-      await _srv.aceptarInteres(p.idPlanOrigen);
+      final idMatch = await _srv.aceptarInteres(p.idPlanOrigen);
       if (!mounted) return;
+      if (idMatch == null || idMatch.isEmpty) {
+        await _avisoRequisito(
+          'No pudimos matchear',
+          'Probá de nuevo en un momento.',
+        );
+        return;
+      }
       await _cargarPendientes();
       _cargarCantMatches();
       if (!mounted) return;
+      final match = MatchItem(
+        idMatch: idMatch,
+        tipo: p.tipo,
+        otro: p.otro,
+        planPrincipal: p.planPrincipal ?? p.miPlan,
+        miPlan: p.miPlan,
+        otroTeRecopo: p.esRecopa,
+        sinChat: true,
+      );
       await Navigator.push(
         context,
-        CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
+        CupertinoPageRoute(builder: (_) => PantallaMatchChat(match: match)),
       );
     } catch (_) {
       if (mounted) {
@@ -1038,54 +1056,64 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   Widget _burbujaPendiente(MatchPendiente p) {
     final foto = p.otro.fotoUrl;
+    final urls = p.otro.avataresMiembrosUrls;
+    final esSquadStack = p.otro.esSquad && urls.isNotEmpty;
     return GestureDetector(
       onTap: () => _abrirPendiente(p),
       child: SizedBox(
-        width: 62,
+        width: esSquadStack ? 88 : 62,
         child: Column(
           children: [
-            Container(
-              width: 56,
-              height: 56,
-              padding: const EdgeInsets.all(2.2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: p.esRecopa ? _kAzulRecopa : ColoresApp.principalMarca,
-                  width: 2.3,
-                ),
-                boxShadow: p.esRecopa
-                    ? [
-                        BoxShadow(
-                          color: _kAzulRecopa.withValues(alpha: 0.5),
-                          blurRadius: 10,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Container(
+            if (esSquadStack)
+              StackAvataresSquad(
+                avatares: urls,
+                totalExtra: p.otro.miembrosParaStack,
+                size: 36,
+                paddingExterno: 2,
+              )
+            else
+              Container(
+                width: 56,
+                height: 56,
+                padding: const EdgeInsets.all(2.2),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF2A2A2A),
-                  image: foto != null
-                      ? DecorationImage(
-                          image: NetworkImage(foto),
-                          fit: BoxFit.cover,
+                  border: Border.all(
+                    color: p.esRecopa ? _kAzulRecopa : ColoresApp.principalMarca,
+                    width: 2.3,
+                  ),
+                  boxShadow: p.esRecopa
+                      ? [
+                          BoxShadow(
+                            color: _kAzulRecopa.withValues(alpha: 0.5),
+                            blurRadius: 10,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF2A2A2A),
+                    image: foto != null
+                        ? DecorationImage(
+                            image: NetworkImage(foto),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: foto == null
+                      ? Text(
+                          p.otro.esSquad ? '👥' : '🙋',
+                          style: const TextStyle(fontSize: 20),
                         )
                       : null,
                 ),
-                alignment: Alignment.center,
-                child: foto == null
-                    ? Text(
-                        p.otro.esSquad ? '👥' : '🙋',
-                        style: const TextStyle(fontSize: 20),
-                      )
-                    : null,
               ),
-            ),
             const SizedBox(height: 4),
             Text(
-              p.otro.nombre.split(RegExp(r'\s+')).first,
+              p.otro.nombre,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.baloo2(

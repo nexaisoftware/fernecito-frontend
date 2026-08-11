@@ -35,6 +35,7 @@ class MatchCard {
     this.teRecopo = false,
     this.lugarFoto,
     this.esRecopa = false,
+    this.avataresMiembros = const [],
   });
 
   final String idPlan;
@@ -67,9 +68,22 @@ class MatchCard {
   /// En pendientes: el interés recibido fue un "me re pinta".
   final bool esRecopa;
 
+  /// Paths de fotos de miembros (squad), para stack 3+n en listas.
+  final List<String> avataresMiembros;
+
   bool get esSquad => tipo == 'squad';
   String? get fotoUrl => ServicioSupabase().urlAvatar(fotoPath);
   String? get lugarFotoUrl => ServicioSupabase().urlAvatar(lugarFoto);
+
+  /// URLs listas para [StackAvataresSquad].
+  List<String> get avataresMiembrosUrls => avataresMiembros
+      .map((p) => ServicioSupabase().urlAvatar(p))
+      .whereType<String>()
+      .where((u) => u.trim().isNotEmpty)
+      .toList();
+
+  /// Total de miembros para el badge +n (fallback a avatares disponibles).
+  int get miembrosParaStack => miembros ?? avataresMiembrosUrls.length;
 
   factory MatchCard.fromMap(Map<String, dynamic> m) {
     int? n(dynamic v) =>
@@ -77,6 +91,13 @@ class MatchCard {
     final generos = m['generos'] is Map
         ? Map<String, dynamic>.from(m['generos'] as Map)
         : const <String, dynamic>{};
+    final avatarsRaw = m['avatares_miembros'];
+    final avatares = avatarsRaw is List
+        ? avatarsRaw
+            .map((e) => e?.toString().trim() ?? '')
+            .where((s) => s.isNotEmpty)
+            .toList()
+        : const <String>[];
     return MatchCard(
       idPlan: m['id_plan']?.toString() ?? '',
       tipo: m['tipo']?.toString() ?? 'usuario',
@@ -103,6 +124,7 @@ class MatchCard {
       teRecopo: m['te_recopo'] == true,
       lugarFoto: m['lugar_foto']?.toString(),
       esRecopa: m['es_recopa'] == true,
+      avataresMiembros: avatares,
     );
   }
 }
