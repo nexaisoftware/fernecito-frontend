@@ -20,6 +20,7 @@ import '../core/servicio_ubicacion_global.dart';
 import '../core/ubicaciones_data.dart';
 import '../models/social.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
+import 'pantalla_match_chat.dart';
 import 'pantalla_match_chats.dart';
 
 const _kPlanes = [
@@ -127,6 +128,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   final Set<String> _idsVistos = {};
   bool _hayMasCards = true;
   bool _cargandoMas = false;
+
+  /// Invalida cargas en vuelo al cambiar ciudad / modo / filtros.
+  int _mazoGen = 0;
   /// Activa duración en el transform (vuelo al soltar / snap al centro).
   bool _animarArrastre = false;
   static const _duracionVuelo = Duration(milliseconds: 280);
@@ -166,16 +170,20 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   }
 
   Future<void> _cargarEstado() async {
+    final gen = ++_mazoGen;
     setState(() {
       _cargando = true;
       _errorCarga = false;
       _mazo = [];
+      _hayMasCards = true;
+      _cargandoMas = false;
     });
     try {
       final estado = await _srv.miEstado(
         tipo: _modo,
         idGrupo: _squad?.idGrupo,
       );
+      if (!mounted || gen != _mazoGen) return;
       final tiene = estado['tiene_plan'] == true;
       _sexoCargado = estado['sexo_cargado'] == true;
       _perfilPublico = estado['perfil_publico'] == true;
@@ -191,7 +199,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
           final preview = await _srv.feedPreview(
             ciudades: PreferenciasCartelera.instancia.ciudadesActivas.toList(),
           );
-          if (!mounted) return;
+          if (!mounted || gen != _mazoGen) return;
           setState(() {
             _mazo = preview;
             _cargando = false;
@@ -203,11 +211,12 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       }
       setState(() => _sinPlan = false);
       await _cargarPendientes();
-      await _cargarMazo();
+      if (!mounted || gen != _mazoGen) return;
+      await _cargarMazo(gen: gen);
     } catch (_) {
       // Error real (red, rate limit, etc.): NO resetear como si no hubiera
       // plan — mostramos estado de error con reintento.
-      if (mounted) {
+      if (mounted && gen == _mazoGen) {
         setState(() {
           _errorCarga = true;
           _cargando = false;
@@ -216,7 +225,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     }
   }
 
-  Future<void> _cargarMazo() async {
+  Future<void> _cargarMazo({int? gen}) async {
+    final g = gen ?? ++_mazoGen;
+    _cargandoMas = false;
     try {
       final ciudades = PreferenciasCartelera.instancia.ciudadesActivas.toList();
       final mazo = await _srv.feed(
@@ -224,7 +235,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
         idGrupo: _squad?.idGrupo,
         ciudades: ciudades,
       );
-      if (!mounted) return;
+      if (!mounted || g != _mazoGen) return;
       setState(() {
         _mazo = mazo;
         _idsVistos
@@ -235,13 +246,14 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
         _cargando = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _cargando = false);
+      if (mounted && g == _mazoGen) setState(() => _cargando = false);
     }
   }
 
   /// Trae la siguiente tanda y la agrega al final, sin reiniciar el mazo.
   Future<void> _cargarMasCards() async {
     if (_cargandoMas || !_hayMasCards || _sinPlan) return;
+    final gen = _mazoGen;
     _cargandoMas = true;
     try {
       final ciudades = PreferenciasCartelera.instancia.ciudadesActivas.toList();
@@ -251,7 +263,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
         ciudades: ciudades,
         excluir: _idsVistos.toList(),
       );
-      if (!mounted) return;
+      if (!mounted || gen != _mazoGen) return;
       final nuevas = mas.where((c) => !_idsVistos.contains(c.idPlan)).toList();
       setState(() {
         _mazo = [..._mazo, ...nuevas];
@@ -261,7 +273,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     } catch (_) {
       // Si falla, reintentamos en el próximo swipe.
     } finally {
-      _cargandoMas = false;
+      if (gen == _mazoGen) _cargandoMas = false;
     }
   }
 
@@ -317,7 +329,17 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       tipo: _modo,
       idGrupo: _modo == 'squad' ? _squad?.idGrupo : null,
     );
-    if (ok && mounted) setState(() => _activo = v);
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _activo = v);
+      return;
+    }
+    await _avisoRequisito(
+      'No se pudo cambiar',
+      v
+          ? 'Para aparecer en las cards el plan tiene que estar completo (tipo + lugar).'
+          : 'No pudimos apagar la visibilidad. Probá de nuevo.',
+    );
   }
 
   /// Tarjeta grande del pendiente + "Matchear y chatear".
@@ -343,15 +365,38 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     );
     if (confirmado != true || !mounted) return;
     try {
-      await _srv.aceptarInteres(p.idPlanOrigen);
+      final idMatch = await _srv.aceptarInteres(p.idPlanOrigen);
       if (!mounted) return;
       await _cargarPendientes();
       _cargarCantMatches();
       if (!mounted) return;
-      await Navigator.push(
-        context,
-        CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
-      );
+      if (idMatch == null || idMatch.isEmpty) {
+        await _avisoRequisito(
+          'No pudimos matchear',
+          'El like se aceptó mal o ya no está disponible. Probá de nuevo.',
+        );
+        return;
+      }
+      final matches = await _srv.misMatches();
+      if (!mounted) return;
+      MatchItem? m;
+      for (final x in matches) {
+        if (x.idMatch == idMatch) {
+          m = x;
+          break;
+        }
+      }
+      if (m != null) {
+        await Navigator.push(
+          context,
+          CupertinoPageRoute(builder: (_) => PantallaMatchChat(match: m!)),
+        );
+      } else {
+        await Navigator.push(
+          context,
+          CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
+        );
+      }
     } catch (_) {
       if (mounted) {
         await _avisoRequisito(
@@ -387,11 +432,13 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       );
     }
     if (!mounted) return;
-    setState(() {});
-    if (!_sinPlan) {
-      setState(() => _cargando = true);
-      await _cargarMazo();
-    }
+    // Ubicación es excluyente: siempre recargar mazo o preview.
+    setState(() {
+      _cargando = true;
+      _mazo = const [];
+      _hayMasCards = true;
+    });
+    await _cargarEstado();
   }
 
   Offset _destinoVuelo(String decision) {
@@ -457,13 +504,15 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       if (mounted) _cargarCantMatches();
     } catch (e) {
       if (!mounted) return;
-      if (decision == 'recopa' && e.toString().contains('rate_limit')) {
-        // Tope diario de "Me re pinta": devolvemos la card al mazo y avisamos.
-        setState(() {
-          _animarArrastre = false;
-          _arrastre = Offset.zero;
-          _mazo = [card, ..._mazo];
-        });
+      final err = e.toString();
+      // Cualquier fallo: devolvemos la card al mazo.
+      setState(() {
+        _animarArrastre = false;
+        _arrastre = Offset.zero;
+        _mazo = [card, ..._mazo];
+        if (decision == 'recopa') _rePintaDetalle = null;
+      });
+      if (decision == 'recopa' && err.contains('rate_limit')) {
         await showCupertinoDialog<void>(
           context: context,
           builder: (ctx) => CupertinoAlertDialog(
@@ -479,8 +528,19 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
             ],
           ),
         );
+      } else if (err.contains('sin_plan')) {
+        await _abrirConfiguracion();
+      } else if (err.contains('bloqueado') || err.contains('plan_no_disponible')) {
+        await _avisoRequisito(
+          'No disponible',
+          'Esa card ya no se puede matchear. Seguimos con las demás.',
+        );
+      } else if (err.contains('rate_limit')) {
+        await _avisoRequisito(
+          'Más despacio',
+          'Deslizaste mucho seguido. Esperá un toque y seguí.',
+        );
       }
-      // Otros errores: la card ya salió del mazo, no rompemos el flujo.
     } finally {
       if (mounted) setState(() => _swipeando = false);
     }

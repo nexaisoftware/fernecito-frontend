@@ -337,9 +337,9 @@ class ServicioMatch {
     }
   }
 
-  /// El mazo de cards para deslizar. [ciudades] = las ciudades activas del
-  /// selector global de ubicación (cartelera/explorar); si va vacío el
-  /// backend usa la ciudad del plan (permisivo).
+  /// El mazo de cards para deslizar. [ciudades] = filtro EXCLUYENTE (como
+  /// cartelera / aparecer-en-cards): solo gente de esas ciudades. Si va vacío,
+  /// el backend filtra por la ciudad del plan/perfil del usuario.
   Future<List<MatchCard>> feed({
     required String tipo,
     String? idGrupo,
@@ -370,7 +370,8 @@ class ServicioMatch {
   /// Swipe: decision = 'interesa' | 'paso' | 'recopa'.
   /// Ya no crea match automático: el dueño del plan acepta desde pendientes.
   /// 'recopa' tiene tope de 2 por día (lanza rate_limit_exceeded al pasarse).
-  Future<String?> swipe({
+  /// Lanza si el backend responde sin ok (sin_plan, bloqueado, rate_limit…).
+  Future<void> swipe({
     required String idPlanDestino,
     required String decision,
     String? idGrupo,
@@ -383,11 +384,13 @@ class ServicioMatch {
         if (idGrupo != null) 'p_id_grupo': idGrupo,
       },
     );
-    // Compat: si el backend viejo aún devolviera match, lo respetamos.
-    if (res is Map && res['match'] == true) {
-      return res['id_match']?.toString();
+    if (res is! Map) {
+      throw StateError('swipe_respuesta_invalida');
     }
-    return null;
+    final m = Map<String, dynamic>.from(res);
+    if (m['ok'] != true) {
+      throw StateError(m['error']?.toString() ?? 'swipe_fail');
+    }
   }
 
   /// Likes entrantes todavía no aceptados (avatars arriba).
@@ -441,15 +444,19 @@ class ServicioMatch {
   /// Envía y devuelve el id real que quedó en la DB (para reconciliar la
   /// burbuja optimista y no duplicarla cuando llega por realtime).
   Future<int?> enviarMensaje(String idMatch, String cuerpo) async {
+    final texto = cuerpo.trim();
+    if (texto.isEmpty || texto.length > 500) {
+      throw StateError('mensaje_invalido');
+    }
     final res = await _c.rpc(
       'match_enviar_mensaje',
-      params: {'p_id_match': idMatch, 'p_cuerpo': cuerpo},
+      params: {'p_id_match': idMatch, 'p_cuerpo': texto},
     );
     if (res is Map && res['id'] != null) {
       final id = res['id'];
       return id is num ? id.toInt() : int.tryParse(id.toString());
     }
-    return null;
+    throw StateError('enviar_sin_id');
   }
 
   /// Marca el chat como leído (al abrirlo) para el indicador de no leídos.

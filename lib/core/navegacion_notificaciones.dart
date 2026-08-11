@@ -6,20 +6,26 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 
 import '../PANTALLAS/pantalla_actividad.dart';
+import '../PANTALLAS/pantalla_chat_plan.dart';
 import '../PANTALLAS/pantalla_fernecito_match.dart';
+import '../PANTALLAS/pantalla_match_chat.dart';
 import '../PANTALLAS/pantalla_match_chats.dart';
 import '../PANTALLAS/pantalla_mis_squads.dart';
 import '../PANTALLAS/pantalla_perfil_squads.dart';
 import '../PANTALLAS/pantalla_perfil_usuarios.dart';
+import '../PANTALLAS/pantalla_planes.dart';
 import '../PANTALLAS/pantalla_rompehielo.dart' show TipoContraparte;
 import '../PANTALLAS/pantalla_social.dart';
 import '../PANTALLAS/pantalla_soporte.dart';
+import '../PANTALLAS/pantalla_ver_plan.dart';
 import '../models/notificacion.dart';
 import 'app_navigator.dart';
 import 'navegacion_evento_compartido.dart';
 import 'rompehielo_navegacion.dart';
 import 'servicio_amigos.dart';
+import 'servicio_match.dart';
 import 'servicio_perfil_usuario.dart';
+import 'servicio_planes.dart';
 import 'servicio_rompehielo.dart';
 import 'servicio_squads.dart';
 import 'squad_helpers.dart';
@@ -161,6 +167,48 @@ Future<bool> abrirEventoDesdeNotificacion(Notificacion n) async {
   return true;
 }
 
+Future<bool> abrirPlanDesdeNotificacion(Notificacion n) async {
+  final idPlan =
+      n.ctaIdRef?.trim() ?? n.payload?['id_plan']?.toString().trim();
+  final accion =
+      n.payload?['accion']?.toString() ??
+      (n.tipo == 'plan_aceptado'
+          ? 'chat'
+          : (n.tipo == 'plan_cancelado' || n.tipo == 'plan_eliminado'
+                ? 'hub'
+                : 'detalle'));
+
+  // Cancelado / eliminado (o sin id): volver al hub de planes.
+  if (accion == 'hub' || idPlan == null || idPlan.isEmpty) {
+    await _push(
+      CupertinoPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const PantallaPlanes(),
+      ),
+    );
+    return true;
+  }
+
+  if (accion == 'chat') {
+    final res = await ServicioPlanes().detalle(idPlan);
+    final plan = res.detalle?.plan;
+    if (plan != null && plan.chatDisponible) {
+      await _push(
+        CupertinoPageRoute(builder: (_) => PantallaChatPlan(plan: plan)),
+      );
+      return true;
+    }
+  }
+
+  await _push(
+    CupertinoPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => PantallaVerPlan(idPlan: idPlan),
+    ),
+  );
+  return true;
+}
+
 Future<bool> abrirSquadDesdeNotificacion(Notificacion n) async {
   final idGrupo = n.ctaIdRef?.trim();
   if (idGrupo == null || idGrupo.isEmpty) {
@@ -283,44 +331,77 @@ Future<bool> navegarDesdeNotificacion(
         socialVista: SocialVista.squads,
       );
     case 'match_plan':
-      // ¡Match! → Match (pantalla completa) + la lista de chats encima, así
-      // el "atrás" deja al usuario en el mazo y no lo saca de la sección.
-      // OJO: _push se resuelve recién al cerrarse la pantalla → no se awaitea
-      // el primero, si no el segundo nunca se apilaría.
+      // ¡Match! → mazo + bandeja (sin await del primero: si no, el 2º espera el pop).
       final navMatch = _nav;
       if (navMatch == null) return false;
       unawaited(
-        _push(
+        navMatch.push(
           CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
         ),
       );
-      unawaited(
-        _push(CupertinoPageRoute(builder: (_) => const PantallaMatchChats())),
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      await navMatch.push(
+        CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
       );
       return true;
     case 'match_mensaje':
-      // Mensaje nuevo en un match → Match + bandeja de chats.
+      // Mensaje nuevo → Match + chat concreto si viene id_match.
       final navMsj = _nav;
       if (navMsj == null) return false;
       unawaited(
-        _push(
+        navMsj.push(
           CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
         ),
       );
-      unawaited(
-        _push(CupertinoPageRoute(builder: (_) => const PantallaMatchChats())),
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      final idMatch = n.ctaIdRef?.trim();
+      if (idMatch != null && idMatch.isNotEmpty) {
+        try {
+          final matches = await ServicioMatch().misMatches();
+          MatchItem? encontrado;
+          for (final m in matches) {
+            if (m.idMatch == idMatch) {
+              encontrado = m;
+              break;
+            }
+          }
+          if (encontrado != null) {
+            await navMsj.push(
+              CupertinoPageRoute(
+                builder: (_) => PantallaMatchChat(match: encontrado!),
+              ),
+            );
+            return true;
+          }
+        } catch (_) {}
+      }
+      await navMsj.push(
+        CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
       );
       return true;
     case 'match_recopa':
-      // "Le re pintó tu plan" → a Mis matches (pendientes).
+    case 'match_interes':
+      // Pendientes viven en Mis matches / chats.
       final navRecopa = _nav;
       if (navRecopa == null) return false;
       unawaited(
-        _push(
+        navRecopa.push(
           CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
         ),
       );
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      await navRecopa.push(
+        CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
+      );
       return true;
+    case 'plan_solicitud':
+    case 'plan_aceptado':
+    case 'plan_rechazado':
+    case 'plan_cancelado':
+    case 'plan_eliminado':
+    case 'plan_pedido_local':
+    case 'plan_pedido_respuesta':
+      return abrirPlanDesdeNotificacion(n);
     case 'rompehielo_recibido':
     case 'rompehielo_respondido':
     case 'rompehielo_replicado':
@@ -380,6 +461,9 @@ Future<bool> navegarDesdeNotificacion(
             onIrATab: onIrATab,
             socialVista: SocialVista.amigos,
           );
+        case 'planes':
+        case '/planes':
+          return abrirPlanDesdeNotificacion(n);
         case '/actividad':
           return _irATabOFallback(0, onIrATab: onIrATab);
         case '/home':

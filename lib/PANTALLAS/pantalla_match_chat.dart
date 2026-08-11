@@ -127,6 +127,63 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
     });
   }
 
+  Future<void> _bloquear() async {
+    final otro = widget.match.otro;
+    final confirmar = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('¿Bloquear a ${otro.nombre}?'),
+        content: const Text(
+          'No van a volver a cruzarse en Match y este chat se cierra. Podés desbloquear más adelante desde soporte.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Bloquear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    final ok = await _srv.bloquear(
+      idUsuario: otro.esSquad ? null : otro.idUsuario,
+      idGrupo: otro.esSquad ? otro.idGrupo : null,
+    );
+    if (ok && mounted) Navigator.of(context).pop(true);
+  }
+
+  void _menuChat() {
+    final otro = widget.match.otro;
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text(
+          'Chat con ${otro.nombre}',
+          style: GoogleFonts.baloo2(fontWeight: FontWeight.w800),
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _bloquear();
+            },
+            child: const Text('🚫 Bloquear'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+  }
+
   Future<void> _enviar() async {
     final texto = _input.text.trim();
     if (texto.isEmpty || _enviando) return;
@@ -171,19 +228,27 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
       });
     } catch (e) {
       if (!mounted) return;
-      final bloqueado = e.toString().contains('bloqueado');
+      final s = e.toString();
+      final titulo = s.contains('bloqueado')
+          ? 'Chat cerrado'
+          : s.contains('rate_limit')
+              ? 'Más despacio'
+              : 'No se envió';
+      final detalle = s.contains('bloqueado')
+          ? 'Este chat ya no está disponible.'
+          : s.contains('rate_limit')
+              ? 'Mandaste muchos mensajes seguidos. Esperá un toque.'
+              : s.contains('mensaje_invalido')
+                  ? 'El mensaje es inválido o muy largo (máx. 500).'
+                  : 'No pude enviar el mensaje. Probá de nuevo.';
       setState(
         () => _mensajes = _mensajes.where((m) => m.id != idTemp).toList(),
       );
       await showCupertinoDialog<void>(
         context: context,
         builder: (ctx) => CupertinoAlertDialog(
-          title: Text(bloqueado ? 'Chat cerrado' : 'No se envió'),
-          content: Text(
-            bloqueado
-                ? 'Este chat ya no está disponible.'
-                : 'No pude enviar el mensaje. Probá de nuevo.',
-          ),
+          title: Text(titulo),
+          content: Text(detalle),
           actions: [
             CupertinoDialogAction(
               onPressed: () => Navigator.pop(ctx),
@@ -273,6 +338,16 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
             ),
           ],
         ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(30, 30),
+          onPressed: _menuChat,
+          child: const Icon(
+            CupertinoIcons.ellipsis,
+            size: 20,
+            color: Colors.white54,
+          ),
+        ),
       ),
       child: SafeArea(
         bottom: false,
@@ -314,6 +389,8 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
                       controller: _input,
                       minLines: 1,
                       maxLines: 4,
+                      maxLength: 500,
+                      enabled: !_enviando,
                       placeholder: 'Escribí un mensaje...',
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
