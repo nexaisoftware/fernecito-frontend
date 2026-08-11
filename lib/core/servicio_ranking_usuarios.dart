@@ -70,7 +70,7 @@ class ServicioRankingUsuarios {
   Future<List<UsuarioRanking>> listar({
     Set<String> ciudades = const {},
     String? provincia,
-    int limite = 6,
+    int limite = 10,
   }) async {
     try {
       final res = await rpcConReintento(

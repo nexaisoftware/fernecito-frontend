@@ -14,7 +14,7 @@ class ServicioTendenciasSocial {
     Set<String> ciudades = const {},
     String? provincia,
     int dias = 7,
-    int limite = 5,
+    int limite = 10,
   }) async {
     try {
       // Ranking semanal: puntaje base (completitud de perfil) + interacciones

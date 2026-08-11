@@ -173,7 +173,7 @@ class _PantallaSocialHubState extends State<PantallaSocial>
         ciudades: prefs.ciudadesActivas,
         provincia: prefs.provinciaActiva,
         dias: 7,
-        limite: 6,
+        limite: 10,
       ),
     ]);
     if (!mounted) return;

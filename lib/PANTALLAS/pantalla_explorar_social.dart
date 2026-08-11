@@ -78,7 +78,7 @@ class _PantallaExplorarSocialState extends State<PantallaExplorarSocial> {
     final lista = await _rankingSrv.listar(
       ciudades: prefs.ciudadesActivas,
       provincia: prefs.provinciaActiva,
-      limite: 8,
+      limite: 10,
     );
     if (!mounted) return;
     setState(() {

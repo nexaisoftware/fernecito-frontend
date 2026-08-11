@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
 import '../core/servicio_ranking_usuarios.dart';
+import '../core/supabase_client.dart';
 
 class RankingUsuariosExplorar extends StatelessWidget {
   const RankingUsuariosExplorar({
@@ -32,6 +33,8 @@ class RankingUsuariosExplorar extends StatelessWidget {
       );
     }
     if (usuarios.isEmpty) return const SizedBox.shrink();
+
+    final yoId = ServicioSupabase().usuarioActual?.id;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -58,13 +61,17 @@ class RankingUsuariosExplorar extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 2),
-            itemCount: usuarios.length,
+            itemCount: usuarios.length.clamp(0, 10),
             separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (_, i) => _UsuarioRankingItem(
-              posicion: i + 1,
-              usuario: usuarios[i],
-              onTap: () => onTapUsuario(usuarios[i]),
-            ),
+            itemBuilder: (_, i) {
+              final u = usuarios[i];
+              return _UsuarioRankingItem(
+                posicion: i + 1,
+                usuario: u,
+                esYo: yoId != null && u.idUsuario == yoId,
+                onTap: () => onTapUsuario(u),
+              );
+            },
           ),
         ),
       ],
@@ -77,6 +84,7 @@ class _UsuarioRankingItem extends StatelessWidget {
     required this.posicion,
     required this.usuario,
     required this.onTap,
+    this.esYo = false,
   });
 
   static const _oro = Color(0xFFFFD54A);
@@ -86,6 +94,7 @@ class _UsuarioRankingItem extends StatelessWidget {
   final int posicion;
   final UsuarioRanking usuario;
   final VoidCallback onTap;
+  final bool esYo;
 
   Color get _acento => switch (posicion) {
     1 => _oro,
@@ -100,6 +109,7 @@ class _UsuarioRankingItem extends StatelessWidget {
     final acento = _acento;
     final esPodio = posicion <= 3;
     final estado = usuario.estado?.trim();
+    final etiqueta = esYo ? 'Tu' : usuario.nombreCorto;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -156,12 +166,11 @@ class _UsuarioRankingItem extends StatelessWidget {
                         fontSize: 28,
                         height: 0.9,
                         fontWeight: FontWeight.w900,
-                        color: acento,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withValues(alpha: 0.55),
-                            blurRadius: 5,
-                          ),
+                        // 1–3 medalla; 4–10 “punteados” en blanco (igual locales).
+                        color: esPodio ? acento : Colors.white,
+                        shadows: const [
+                          Shadow(color: Colors.black, blurRadius: 7),
+                          Shadow(color: Colors.black, blurRadius: 2),
                         ],
                       ),
                     ),
@@ -171,7 +180,7 @@ class _UsuarioRankingItem extends StatelessWidget {
             ),
             const SizedBox(height: 3),
             Text(
-              usuario.nombreCorto,
+              etiqueta,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.baloo2(
