@@ -135,9 +135,13 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   String? _rePintaDetalle;
   Timer? _timerRePinta;
 
+  /// Descarta respuestas viejas si el usuario cambia de ciudad enseguida.
+  int _genUbicacion = 0;
+
   @override
   void initState() {
     super.initState();
+    PreferenciasCartelera.instancia.cambios.addListener(_onUbicacionGlobal);
     _cargarSquads();
     _cargarEstado();
     _cargarCantMatches();
@@ -145,8 +149,50 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   @override
   void dispose() {
+    PreferenciasCartelera.instancia.cambios.removeListener(_onUbicacionGlobal);
     _timerRePinta?.cancel();
     super.dispose();
+  }
+
+  /// Cartelera / perfil / pill local: siempre nueva query y mazo limpio.
+  void _onUbicacionGlobal() {
+    unawaited(_recargarPorUbicacion());
+  }
+
+  /// Limpia cards al toque y vuelve a pedir el feed (plan o preview).
+  Future<void> _recargarPorUbicacion() async {
+    final gen = ++_genUbicacion;
+    setState(() {
+      _cargando = true;
+      _errorCarga = false;
+      _mazo = [];
+      _idsVistos.clear();
+      _hayMasCards = false;
+      _arrastre = Offset.zero;
+      _swipeando = false;
+    });
+    await PreferenciasCartelera.instancia.cargar();
+    if (!mounted || gen != _genUbicacion) return;
+
+    if (_sinPlan) {
+      // Modo mirar: re-pedir preview con ciudades nuevas (antes solo
+      // actualizaba el pill y quedaban cards de la ubicación anterior).
+      if (_modo == 'usuario' && _perfilPublico && _tieneFoto) {
+        final ciudades =
+            PreferenciasCartelera.instancia.ciudadesActivas.toList();
+        final preview = await _srv.feedPreview(ciudades: ciudades);
+        if (!mounted || gen != _genUbicacion) return;
+        setState(() {
+          _mazo = preview;
+          _cargando = false;
+        });
+      } else if (mounted && gen == _genUbicacion) {
+        setState(() => _cargando = false);
+      }
+      return;
+    }
+
+    await _cargarMazo(gen: gen);
   }
 
   Future<void> _cargarSquads() async {
@@ -216,15 +262,17 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     }
   }
 
-  Future<void> _cargarMazo() async {
+  Future<void> _cargarMazo({int? gen}) async {
+    final g = gen ?? _genUbicacion;
     try {
+      await PreferenciasCartelera.instancia.cargar();
       final ciudades = PreferenciasCartelera.instancia.ciudadesActivas.toList();
       final mazo = await _srv.feed(
         tipo: _modo,
         idGrupo: _squad?.idGrupo,
         ciudades: ciudades,
       );
-      if (!mounted) return;
+      if (!mounted || g != _genUbicacion) return;
       setState(() {
         _mazo = mazo;
         _idsVistos
@@ -235,7 +283,15 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
         _cargando = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _cargando = false);
+      // Ante error de red tras cambio de ciudad: mazo vacío, no cards viejas.
+      if (mounted && g == _genUbicacion) {
+        setState(() {
+          _mazo = [];
+          _idsVistos.clear();
+          _hayMasCards = false;
+          _cargando = false;
+        });
+      }
     }
   }
 
@@ -387,11 +443,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       );
     }
     if (!mounted) return;
-    setState(() {});
-    if (!_sinPlan) {
-      setState(() => _cargando = true);
-      await _cargarMazo();
-    }
+    // aplicarManual/Inteligente dispara PreferenciasCartelera.cambios; acá
+    // reforzamos para cubrir también el modo mirar (sin plan).
+    await _recargarPorUbicacion();
   }
 
   Offset _destinoVuelo(String decision) {

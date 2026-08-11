@@ -338,8 +338,8 @@ class ServicioMatch {
   }
 
   /// El mazo de cards para deslizar. [ciudades] = las ciudades activas del
-  /// selector global de ubicación (cartelera/explorar); si va vacío el
-  /// backend usa la ciudad del plan (permisivo).
+  /// selector global de ubicación (cartelera/explorar). Con lista no vacía
+  /// la ciudad es excluyente; si va vacía el backend usa la ciudad del plan.
   Future<List<MatchCard>> feed({
     required String tipo,
     String? idGrupo,
