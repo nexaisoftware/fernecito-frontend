@@ -103,8 +103,10 @@ cat > build/web/vercel.json <<'JSON'
   "cleanUrls": true,
   "rewrites": [
     { "source": "/share-evento", "destination": "/api/share-evento" },
+    { "source": "/share-plan", "destination": "/api/share-plan" },
+    { "source": "/descargar", "destination": "/descargar.html" },
     {
-      "source": "/((?!firebase-messaging-sw\\.js|firebase-config-sw\\.js|flutter_service_worker\\.js|flutter_bootstrap\\.js|main\\.dart\\.js|version\\.json|manifest\\.json|favicon\\.png|assets/|icons/|splash/|canvaskit/|api/).*)",
+      "source": "/((?!descargar\\.html|firebase-messaging-sw\\.js|firebase-config-sw\\.js|flutter_service_worker\\.js|flutter_bootstrap\\.js|main\\.dart\\.js|version\\.json|manifest\\.json|favicon\\.png|assets/|icons/|splash/|canvaskit/|api/).*)",
       "destination": "/index.html"
     }
   ],

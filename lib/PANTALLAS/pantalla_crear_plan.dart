@@ -987,6 +987,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
               ingreso: _modo == 'manual' ? 'Con aprobación' : 'Entrada libre',
               cupo: _cupo == null ? 'Sin cupo' : '${_cupo!} cupos',
               organizador: _nombreOrganizador,
+              contacto: _contacto,
+              contactoModo: _contactoModo,
             ),
             const SizedBox(height: 8),
             _OpcionBarraPlan(
@@ -1587,6 +1589,8 @@ class _ResumenPlanCard extends StatelessWidget {
     required this.ingreso,
     required this.cupo,
     required this.organizador,
+    this.contacto,
+    this.contactoModo = 'contactar',
   });
 
   final String titulo;
@@ -1597,6 +1601,8 @@ class _ResumenPlanCard extends StatelessWidget {
   final String ingreso;
   final String cupo;
   final String organizador;
+  final String? contacto;
+  final String contactoModo;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1638,6 +1644,12 @@ class _ResumenPlanCard extends StatelessWidget {
             _PillPlan(fecha),
             _PillPlan(ingreso),
             _PillPlan(cupo),
+            if ((contacto ?? '').trim().isNotEmpty)
+              _PillPlan(
+                contactoModo == 'colaborar'
+                    ? 'Colaborar: ${contacto!.trim()}'
+                    : 'Contactar: ${contacto!.trim()}',
+              ),
           ],
         ),
       ],

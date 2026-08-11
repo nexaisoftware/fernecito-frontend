@@ -68,15 +68,20 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
     unawaited(_abrir(id));
   }
 
-  Future<void> _editarTitulo(PlanComunidad p) async {
-    final ctrl = TextEditingController(text: p.titulo);
+  Future<void> _editarDescripcion(PlanComunidad p) async {
+    final ctrl = TextEditingController(text: p.descripcion);
     final nuevo = await showCupertinoDialog<String>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Editar nombre'),
+        title: const Text('Editar descripción'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10),
-          child: CupertinoTextField(controller: ctrl, maxLength: 80),
+          child: CupertinoTextField(
+            controller: ctrl,
+            maxLength: 500,
+            maxLines: 5,
+            placeholder: 'Qué se hace en el plan…',
+          ),
         ),
         actions: [
           CupertinoDialogAction(
@@ -91,8 +96,8 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
       ),
     );
     ctrl.dispose();
-    if (nuevo == null || nuevo == p.titulo || nuevo.length < 3) return;
-    await _actualizar(p, titulo: nuevo);
+    if (nuevo == null || nuevo == p.descripcion || nuevo.length < 8) return;
+    await _actualizar(p, descripcion: nuevo);
   }
 
   Future<void> _editarFecha(PlanComunidad p, {required bool inicio}) async {
@@ -174,7 +179,7 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
 
   Future<void> _actualizar(
     PlanComunidad p, {
-    String? titulo,
+    String? descripcion,
     DateTime? fechaInicio,
     DateTime? fechaFin,
     int? cupoMax,
@@ -185,7 +190,7 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
     try {
       final ok = await _srv.actualizarBasico(
         idPlan: p.id,
-        titulo: titulo,
+        descripcion: descripcion,
         fechaInicio: fechaInicio,
         fechaFin: fechaFin,
         cupoMax: cupoMax,
@@ -576,7 +581,8 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
                               _PanelEditar(
                                 plan: seleccionado,
                                 detalle: _detalle!,
-                                onNombre: () => _editarTitulo(seleccionado),
+                                onDescripcion: () =>
+                                    _editarDescripcion(seleccionado),
                                 onInicio: () =>
                                     _editarFecha(seleccionado, inicio: true),
                                 onFin: () =>
@@ -709,7 +715,7 @@ class _PanelEditar extends StatelessWidget {
   const _PanelEditar({
     required this.plan,
     required this.detalle,
-    required this.onNombre,
+    required this.onDescripcion,
     required this.onInicio,
     required this.onFin,
     required this.onCupo,
@@ -724,7 +730,7 @@ class _PanelEditar extends StatelessWidget {
 
   final PlanComunidad plan;
   final PlanDetalle detalle;
-  final VoidCallback onNombre;
+  final VoidCallback onDescripcion;
   final VoidCallback onInicio;
   final VoidCallback onFin;
   final VoidCallback onCupo;
@@ -753,8 +759,18 @@ class _PanelEditar extends StatelessWidget {
         _EditRow(
           icono: CupertinoIcons.textformat,
           label: 'Nombre',
-          valor: plan.titulo,
-          onTap: onNombre,
+          valor: '${plan.titulo} · fijo',
+          onTap: () {},
+          soloLectura: true,
+        ),
+        const SizedBox(height: 8),
+        _EditRow(
+          icono: CupertinoIcons.doc_text,
+          label: 'Descripción',
+          valor: plan.descripcion.trim().isEmpty
+              ? 'Sin descripción'
+              : plan.descripcion.trim(),
+          onTap: onDescripcion,
         ),
         const SizedBox(height: 8),
         _EditRow(
@@ -928,6 +944,7 @@ class _EditRow extends StatelessWidget {
     required this.valor,
     required this.onTap,
     this.destacado = false,
+    this.soloLectura = false,
   });
 
   final IconData icono;
@@ -935,10 +952,11 @@ class _EditRow extends StatelessWidget {
   final String valor;
   final VoidCallback onTap;
   final bool destacado;
+  final bool soloLectura;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
+    onTap: soloLectura ? null : onTap,
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -972,7 +990,7 @@ class _EditRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   valor,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.baloo2(
                     fontSize: 14,
@@ -983,12 +1001,14 @@ class _EditRow extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 6),
-          Icon(
-            CupertinoIcons.chevron_right,
-            size: 14,
-            color: Colors.white.withValues(alpha: 0.32),
-          ),
+          if (!soloLectura) ...[
+            const SizedBox(width: 6),
+            Icon(
+              CupertinoIcons.chevron_right,
+              size: 14,
+              color: Colors.white.withValues(alpha: 0.32),
+            ),
+          ],
         ],
       ),
     ),

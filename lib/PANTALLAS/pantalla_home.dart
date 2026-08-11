@@ -38,7 +38,9 @@ import '../core/servicio_impresiones.dart';
 import '../core/servicio_notificaciones_usuarios.dart';
 import '../core/servicio_perfil_usuario.dart';
 import '../core/navegacion_evento_compartido.dart';
+import '../core/navegacion_plan_compartido.dart';
 import '../core/servicio_enlace_evento.dart';
+import '../core/servicio_enlace_plan.dart';
 import '../core/supabase_client.dart';
 import '../core/coordenadas_ciudades.dart';
 import '../core/servicio_ubicacion_global.dart';
@@ -856,6 +858,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     ServicioEnlaceEvento.instancia.cambios.addListener(
       _consumirEnlaceEventoPendiente,
     );
+    ServicioEnlacePlan.instancia.cambios.addListener(
+      _consumirEnlacePlanPendiente,
+    );
     _arrancar();
   }
 
@@ -864,6 +869,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     ServicioImpresiones.instancia.alSalirCartelera();
     ServicioEnlaceEvento.instancia.cambios.removeListener(
       _consumirEnlaceEventoPendiente,
+    );
+    ServicioEnlacePlan.instancia.cambios.removeListener(
+      _consumirEnlacePlanPendiente,
     );
     super.dispose();
   }
@@ -1178,6 +1186,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       BootstrapCartelera.marcarLista();
 
       _consumirEnlaceEventoPendiente();
+      _consumirEnlacePlanPendiente();
 
       // Top Ultra y luego modal de reseña sobre la cartelera.
       if (!_storiesYaMostrado) {
@@ -1632,6 +1641,15 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
         return;
       }
       await abrirEventoCompartidoPorId(context, id);
+    });
+  }
+
+  void _consumirEnlacePlanPendiente() {
+    final id = ServicioEnlacePlan.instancia.tomarPendiente();
+    if (id == null || id.isEmpty || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await abrirPlanCompartidoPorId(context, id);
     });
   }
 

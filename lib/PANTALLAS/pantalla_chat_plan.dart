@@ -314,7 +314,7 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                   Expanded(
                     child: CupertinoTextField(
                       controller: _ctrl,
-                      placeholder: 'Escribí en el plan...',
+                      placeholder: 'Escribí… Usá @username para mencionar',
                       placeholderStyle: TextStyle(
                         color: ColoresApp.textoSecundario.withValues(
                           alpha: 0.75,

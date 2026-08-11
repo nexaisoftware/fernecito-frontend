@@ -5,6 +5,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../core/compartir_evento.dart' show origenCompartirDesdeContexto;
+import '../core/compartir_plan.dart';
 import '../core/constants.dart';
 import '../core/preferencias_cartelera.dart';
 import '../core/servicio_ubicacion_global.dart';
@@ -106,33 +108,7 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
       q: _tab == 'explorar' ? _q : null,
     );
 
-    // Si en la zona exacta no hay nada, ampliamos a provincia / general
-    // para que el hub no quede vacío por un mismatch de nombre de ciudad.
-    if (reset &&
-        _tab == 'explorar' &&
-        res.error == null &&
-        res.items.isEmpty &&
-        prefs.ciudadesActivas.isNotEmpty &&
-        _q.isEmpty) {
-      res = await _srv.hub(
-        ciudades: const {},
-        provincia: prefs.provinciaActiva,
-        limit: _pageSize,
-        offset: 0,
-        modo: 'explorar',
-        q: _q,
-      );
-      if (res.error == null && res.items.isEmpty) {
-        res = await _srv.hub(
-          ciudades: const {},
-          provincia: null,
-          limit: _pageSize,
-          offset: 0,
-          modo: 'explorar',
-          q: _q,
-        );
-      }
-    }
+    // Sin fallback a “todas las ciudades”: la ubicación del local define el feed.
 
     if (!mounted) return;
     setState(() {
@@ -516,6 +492,7 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
                       hasScrollBody: false,
                       child: _VacioPlanes(
                         modo: _tab,
+                        busqueda: _q,
                         onReintentar: () => _cargar(reset: true),
                       ),
                     )
@@ -540,6 +517,16 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
                             uniendo: _uniendoId == plan.id,
                             onTap: () => _abrirPlan(plan),
                             onUnirse: () => _unirse(plan),
+                            onCompartir: () => compartirPlan(
+                              idPlan: plan.id,
+                              titulo: plan.titulo,
+                              nombreLocal: plan.nombreLocal,
+                              ciudad: plan.ciudad,
+                              fechaInicio: plan.fechaInicio,
+                              sharePositionOrigin:
+                                  origenCompartirDesdeContexto(context),
+                              feedbackContext: context,
+                            ),
                           );
                         },
                       ),
@@ -763,12 +750,14 @@ class _CardPlan extends StatelessWidget {
     required this.plan,
     required this.onTap,
     required this.onUnirse,
+    this.onCompartir,
     this.uniendo = false,
   });
 
   final PlanComunidad plan;
   final VoidCallback onTap;
   final VoidCallback onUnirse;
+  final VoidCallback? onCompartir;
   final bool uniendo;
 
   @override
@@ -782,7 +771,7 @@ class _CardPlan extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          height: 190,
+          constraints: const BoxConstraints(minHeight: 188),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(26),
             color: color,
@@ -796,31 +785,47 @@ class _CardPlan extends StatelessWidget {
           ),
           clipBehavior: Clip.antiAlias,
           child: Stack(
-            fit: StackFit.expand,
             children: [
-              if (portada != null && portada.isNotEmpty)
-                _FondoPlan(path: portada, fallback: color),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.36),
-                      Colors.black.withValues(alpha: 0.70),
-                      Colors.black.withValues(alpha: 0.90),
-                    ],
+              Positioned.fill(
+                child: portada != null && portada.isNotEmpty
+                    ? _FondoPlan(path: portada, fallback: color)
+                    : ColoredBox(color: color),
+              ),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.36),
+                        Colors.black.withValues(alpha: 0.72),
+                        Colors.black.withValues(alpha: 0.92),
+                      ],
+                    ),
                   ),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(13, 12, 13, 13),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
                         Expanded(child: _AutoresPlanLine(plan: plan)),
+                        if (onCompartir != null) ...[
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: onCompartir,
+                            child: const Icon(
+                              CupertinoIcons.share,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                         const SizedBox(width: 8),
                         if (plan.soyModerador)
                           const _MiniBadge('Sos admin')
@@ -842,7 +847,7 @@ class _CardPlan extends StatelessWidget {
                         ),
                       ),
                     ],
-                    const Spacer(),
+                    const SizedBox(height: 10),
                     Text(
                       plan.titulo,
                       maxLines: 2,
@@ -861,7 +866,7 @@ class _CardPlan extends StatelessWidget {
                       const SizedBox(height: 5),
                       Text(
                         plan.descripcion.trim(),
-                        maxLines: 2,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.baloo2(
                           fontSize: 11.8,
@@ -879,7 +884,7 @@ class _CardPlan extends StatelessWidget {
                       spacing: 7,
                       runSpacing: 6,
                       children: [
-                        _MiniBadge('${plan.personasAceptadas} van'),
+                        _MiniBadgePersonas(plan.personasAceptadas),
                         _MiniBadge(
                           'inicio ${_fmtFechaCorta(plan.fechaInicio)}',
                         ),
@@ -1156,6 +1161,42 @@ class _EstadoBadge extends StatelessWidget {
   }
 }
 
+class _MiniBadgePersonas extends StatelessWidget {
+  const _MiniBadgePersonas(this.n);
+  final int n;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE5E7EB).withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            CupertinoIcons.person_2_fill,
+            size: 11,
+            color: Colors.white.withValues(alpha: 0.92),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '$n',
+            style: GoogleFonts.baloo2(
+              fontSize: 10.5,
+              height: 1,
+              fontWeight: FontWeight.w800,
+              color: Colors.white.withValues(alpha: 0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MiniBadge extends StatelessWidget {
   const _MiniBadge(this.texto);
   final String texto;
@@ -1311,19 +1352,27 @@ class _ErrorPlanes extends StatelessWidget {
 }
 
 class _VacioPlanes extends StatelessWidget {
-  const _VacioPlanes({required this.modo, required this.onReintentar});
+  const _VacioPlanes({
+    required this.modo,
+    required this.onReintentar,
+    this.busqueda = '',
+  });
   final String modo;
+  final String busqueda;
   final VoidCallback onReintentar;
 
   @override
   Widget build(BuildContext context) {
+    final hayQ = busqueda.trim().isNotEmpty;
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            modo == 'mis'
+            hayQ
+                ? CupertinoIcons.search
+                : modo == 'mis'
                 ? CupertinoIcons.calendar
                 : CupertinoIcons.calendar_badge_plus,
             size: 42,
@@ -1331,7 +1380,9 @@ class _VacioPlanes extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            modo == 'mis'
+            hayQ
+                ? 'No hay planes con esa búsqueda'
+                : modo == 'mis'
                 ? 'Todavía no tenés planes'
                 : 'Todavía no hay planes por acá',
             textAlign: TextAlign.center,
@@ -1343,6 +1394,35 @@ class _VacioPlanes extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
+            hayQ
+                ? 'Probá con otra palabra o limpiá el buscador.'
+                : modo == 'mis'
+                ? 'Creá uno o sumate desde Explorar.'
+                : 'Cuando haya juntadas en tu zona, van a aparecer acá.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.baloo2(
+              fontSize: 13.5,
+              color: ColoresApp.textoSecundario,
+            ),
+          ),
+          const SizedBox(height: 16),
+          CupertinoButton(
+            color: ColoresApp.principalMarca.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(999),
+            onPressed: onReintentar,
+            child: Text(
+              'Reintentar',
+              style: GoogleFonts.baloo2(
+                fontWeight: FontWeight.w800,
+                color: ColoresApp.principalMarca,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}          Text(
             modo == 'mis'
                 ? 'Creá uno o sumate a alguno de la comunidad.'
                 : 'Podés crear el primero en un local de Fernecito.',

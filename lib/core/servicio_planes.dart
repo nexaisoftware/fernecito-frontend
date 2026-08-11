@@ -282,6 +282,7 @@ class PlanMiembro {
     this.rol = 'miembro',
     this.idSquad,
     this.nombreSquad,
+    this.perfilPublico = true,
   });
 
   final String idUsuario;
@@ -292,8 +293,10 @@ class PlanMiembro {
   final String estado;
   final String? idSquad;
   final String? nombreSquad;
+  final bool perfilPublico;
 
-  String? get fotoUrl => ServicioSupabase().urlAvatar(fotoPath);
+  String? get fotoUrl =>
+      perfilPublico ? ServicioSupabase().urlAvatar(fotoPath) : null;
 
   factory PlanMiembro.fromMap(Map<String, dynamic> m) => PlanMiembro(
     idUsuario: m['id_usuario']?.toString() ?? '',
@@ -304,6 +307,7 @@ class PlanMiembro {
     estado: m['estado']?.toString() ?? 'aceptado',
     idSquad: m['id_squad']?.toString(),
     nombreSquad: m['nombre_squad']?.toString(),
+    perfilPublico: m['perfil_publico'] != false,
   );
 }
 
@@ -818,6 +822,7 @@ class ServicioPlanes {
   Future<bool> actualizarBasico({
     required String idPlan,
     String? titulo,
+    String? descripcion,
     DateTime? fechaInicio,
     DateTime? fechaFin,
     int? cupoMax,
@@ -831,7 +836,8 @@ class ServicioPlanes {
       'planes_actualizar_basico',
       params: {
         'p_id_plan': idPlan,
-        'p_titulo': titulo,
+        // título inmutable en backend; no lo mandamos para no confundir
+        'p_descripcion': descripcion,
         'p_fecha_inicio': fechaInicio?.toUtc().toIso8601String(),
         'p_fecha_fin': fechaFin?.toUtc().toIso8601String(),
         'p_cupo_max': cupoMax,

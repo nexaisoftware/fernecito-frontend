@@ -22,6 +22,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'app.dart';
 import 'core/config_push_web.dart';
 import 'core/servicio_enlace_evento.dart';
+import 'core/servicio_enlace_plan.dart';
 import 'core/servicio_push.dart';
 import 'core/tema_fernecito.dart';
 
@@ -113,7 +114,9 @@ void main() async {
   } catch (_) {}
 
   // Deep link web ?evento= /e/{id} → PantallaVerEvento tras login
+  // Deep link web ?plan= /share-plan?id= → PantallaVerPlan tras login
   ServicioEnlaceEvento.instancia.capturarDesdeUriActual();
+  ServicioEnlacePlan.instancia.capturarDesdeUriActual();
   await _inicializarDeepLinksNativos();
 
   // Solo lanzar la app principal si Supabase está inicializado (evita crash por Supabase.instance)
@@ -133,10 +136,17 @@ Future<void> _inicializarDeepLinksNativos() async {
         inicial,
         notificar: false,
       );
+      ServicioEnlacePlan.instancia.capturarDesdeUri(
+        inicial,
+        notificar: false,
+      );
     }
 
     appLinks.uriLinkStream.listen(
-      ServicioEnlaceEvento.instancia.capturarDesdeUri,
+      (uri) {
+        ServicioEnlaceEvento.instancia.capturarDesdeUri(uri);
+        ServicioEnlacePlan.instancia.capturarDesdeUri(uri);
+      },
       onError: (Object e) => print('⚠️ Deep link nativo: $e'),
     );
   } catch (e) {

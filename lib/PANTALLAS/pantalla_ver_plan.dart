@@ -3,8 +3,11 @@ library;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../core/compartir_evento.dart' show origenCompartirDesdeContexto;
+import '../core/compartir_plan.dart';
 import '../core/constants.dart';
 import '../core/servicio_planes.dart';
 import '../widgets/fernecito_loader.dart';
@@ -351,6 +354,10 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
   }
 
   void _verPerfil(PlanMiembro m) {
+    if (!m.perfilPublico) {
+      _toast('Perfil privado · @${m.username ?? 'usuario'}');
+      return;
+    }
     Navigator.of(context, rootNavigator: true).push(
       CupertinoPageRoute(
         builder: (_) => PantallaPerfilUsuarios(
@@ -364,6 +371,101 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
         ),
       ),
     );
+  }
+
+  Future<void> _compartir() async {
+    final plan = _plan;
+    if (plan == null) return;
+    await compartirPlan(
+      idPlan: plan.id,
+      titulo: plan.titulo,
+      nombreLocal: plan.nombreLocal,
+      ciudad: plan.ciudad,
+      fechaInicio: plan.fechaInicio,
+      sharePositionOrigin: origenCompartirDesdeContexto(context),
+      feedbackContext: context,
+    );
+  }
+
+  Future<void> _copiarContacto(String texto) async {
+    await Clipboard.setData(ClipboardData(text: texto));
+    if (!mounted) return;
+    _toast('Copiado al portapapeles');
+  }
+
+  Future<void> _localAceptarPedido() async {
+    final plan = _plan;
+    if (plan == null) return;
+    setState(() => _pedidoOcupado = true);
+    try {
+      final ok = await _srv.pedidoResponder(
+        idPlan: plan.id,
+        accion: 'aceptar',
+      );
+      if (!mounted) return;
+      if (!ok) {
+        _toast('No se pudo aceptar.');
+        return;
+      }
+      await _cargar();
+      _toast('¡Se puso la 10!');
+    } catch (e) {
+      if (mounted) _toast(_srv.mensajeError(e, accion: 'aceptar'));
+    } finally {
+      if (mounted) setState(() => _pedidoOcupado = false);
+    }
+  }
+
+  Future<void> _localContraoferta() async {
+    final plan = _plan;
+    if (plan == null) return;
+    final ctrl = TextEditingController();
+    final texto = await showCupertinoDialog<String>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Proponer otra cosa'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: CupertinoTextField(
+            controller: ctrl,
+            maxLength: 120,
+            maxLines: 3,
+            placeholder: 'Ej: 15% de descuento en birra',
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (texto == null || texto.length < 3) return;
+    setState(() => _pedidoOcupado = true);
+    try {
+      final ok = await _srv.pedidoResponder(
+        idPlan: plan.id,
+        accion: 'contraoferta',
+        contraoferta: texto,
+      );
+      if (!mounted) return;
+      if (!ok) {
+        _toast('No se pudo enviar la propuesta.');
+        return;
+      }
+      await _cargar();
+      _toast('Propuesta enviada.');
+    } catch (e) {
+      if (mounted) _toast(_srv.mensajeError(e, accion: 'proponer'));
+    } finally {
+      if (mounted) setState(() => _pedidoOcupado = false);
+    }
   }
 
   void _toast(String msg) {
@@ -442,9 +544,6 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     final soloMiembros = (detalle?.miembros ?? const <PlanMiembro>[])
         .where((m) => m.estado == 'aceptado')
         .toList(growable: false);
-    final squadsAceptados = (detalle?.squads ?? const <PlanSquadGrupo>[])
-        .where((s) => s.estado == 'aceptado')
-        .toList(growable: false);
     final pendientes =
         detalle?.miembros.where((m) => m.estado == 'pendiente').length ?? 0;
     final hayPedido = plan.hayPedidoActivo || plan.beneficioEstado != 'ninguno';
@@ -452,6 +551,11 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
         plan.beneficioEstado == 'pedido' &&
         (plan.soyMiembro || plan.soyModerador) &&
         !(detalle?.yaVotePedido ?? false);
+    final soyLocal = plan.miEstado == 'local';
+    final localPuedeResponder =
+        soyLocal &&
+        (plan.beneficioEstado == 'pedido' ||
+            plan.beneficioEstado == 'contraoferta');
 
     return PopScope(
       canPop: false,
@@ -598,6 +702,9 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                       yaVoto: detalle?.yaVotePedido ?? false,
                       votando: _pedidoOcupado,
                       onVotar: _votarPedido,
+                      localPuedeResponder: localPuedeResponder,
+                      onAceptarLocal: _localAceptarPedido,
+                      onContraofertaLocal: _localContraoferta,
                     ),
                   ] else if (plan.soyModerador) ...[
                     const SizedBox(height: 14),
@@ -611,8 +718,45 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                     _ContactoChip(
                       texto: plan.contactoAnfitrion!,
                       modo: plan.contactoModo,
+                      onTap: () => _copiarContacto(plan.contactoAnfitrion!),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: GestureDetector(
+                      onTap: _compartir,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              CupertinoIcons.share,
+                              size: 14,
+                              color: Colors.white70,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Compartir plan',
+                              style: GoogleFonts.baloo2(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                   if (plan.soyModerador && pendientes > 0) ...[
                     const SizedBox(height: 14),
                     _FilaSolicitudesPendientes(
@@ -704,7 +848,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  if (soloMiembros.isEmpty && squadsAceptados.isEmpty)
+                  if (soloMiembros.isEmpty)
                     _InfoBox(
                       titulo: 'Todavía no hay gente',
                       texto: 'Sé de los primeros en sumarte.',
@@ -712,7 +856,6 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                   else
                     _GridParticipantes(
                       personas: soloMiembros,
-                      squads: squadsAceptados,
                       onTapPersona: _verPerfil,
                     ),
                 ]),
@@ -799,56 +942,70 @@ class _Badge extends StatelessWidget {
 }
 
 class _ContactoChip extends StatelessWidget {
-  const _ContactoChip({required this.texto, this.modo = 'contactar'});
+  const _ContactoChip({
+    required this.texto,
+    this.modo = 'contactar',
+    this.onTap,
+  });
   final String texto;
   final String modo;
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
     final titulo = modo == 'colaborar'
         ? 'Colaborar con organizador'
         : 'Contactar organizador';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            modo == 'colaborar'
-                ? CupertinoIcons.link
-                : CupertinoIcons.chat_bubble_2,
-            size: 13,
-            color: ColoresApp.principalMarca,
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  titulo,
-                  style: GoogleFonts.baloo2(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: ColoresApp.textoSecundario,
-                  ),
-                ),
-                Text(
-                  texto,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.baloo2(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-                ),
-              ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              modo == 'colaborar'
+                  ? CupertinoIcons.link
+                  : CupertinoIcons.chat_bubble_2,
+              size: 13,
+              color: ColoresApp.principalMarca,
             ),
-          ),
-        ],
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: GoogleFonts.baloo2(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: ColoresApp.textoSecundario,
+                    ),
+                  ),
+                  Text(
+                    texto,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.baloo2(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (onTap != null)
+              Icon(
+                CupertinoIcons.doc_on_doc,
+                size: 14,
+                color: Colors.white.withValues(alpha: 0.45),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -903,6 +1060,9 @@ class _PedidoBox extends StatelessWidget {
     required this.yaVoto,
     required this.votando,
     required this.onVotar,
+    this.localPuedeResponder = false,
+    this.onAceptarLocal,
+    this.onContraofertaLocal,
   });
 
   final PlanComunidad plan;
@@ -910,16 +1070,25 @@ class _PedidoBox extends StatelessWidget {
   final bool yaVoto;
   final bool votando;
   final VoidCallback onVotar;
+  final bool localPuedeResponder;
+  final VoidCallback? onAceptarLocal;
+  final VoidCallback? onContraofertaLocal;
 
   @override
   Widget build(BuildContext context) {
     final estado = plan.beneficioEstado;
     final desc = () {
-      if (estado == 'aceptado' || estado == 'contraoferta') {
-        final oferta =
-            (plan.beneficioLocal ?? plan.beneficioContraoferta ?? '').trim();
+      if (estado == 'aceptado') {
+        final oferta = (plan.beneficioLocal ?? plan.pedidoBeneficio ?? '')
+            .trim();
         if (oferta.isNotEmpty) {
-          return 'El local se puso la 10 con: $oferta';
+          return '¡Se puso la 10! ${plan.nombreLocal} aceptó "$oferta"';
+        }
+      }
+      if (estado == 'contraoferta') {
+        final oferta = (plan.beneficioContraoferta ?? '').trim();
+        if (oferta.isNotEmpty) {
+          return '${plan.nombreLocal} propuso: "$oferta"';
         }
       }
       return (plan.pedidoBeneficio ?? '').trim();
@@ -1022,6 +1191,56 @@ class _PedidoBox extends StatelessWidget {
                 ),
             ],
           ),
+          if (localPuedeResponder) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: votando ? null : onAceptarLocal,
+                    child: Container(
+                      height: 34,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF34D399).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Aceptar',
+                        style: GoogleFonts.baloo2(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF34D399),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: votando ? null : onContraofertaLocal,
+                    child: Container(
+                      height: 34,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Proponer otra',
+                        style: GoogleFonts.baloo2(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1222,12 +1441,10 @@ const double _gridEspaciado = 12.0;
 class _GridParticipantes extends StatelessWidget {
   const _GridParticipantes({
     required this.personas,
-    required this.squads,
     required this.onTapPersona,
   });
 
   final List<PlanMiembro> personas;
-  final List<PlanSquadGrupo> squads;
   final ValueChanged<PlanMiembro> onTapPersona;
 
   List<List<int>> _filasAlternadas(int n) {
@@ -1247,7 +1464,7 @@ class _GridParticipantes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = personas.length + squads.length;
+    final total = personas.length;
     final ancho = MediaQuery.sizeOf(context).width - 32;
     final tamCelda = ((ancho - _gridEspaciado * 2) / 3).clamp(90.0, 110.0);
     final filas = _filasAlternadas(total);
@@ -1259,20 +1476,14 @@ class _GridParticipantes extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: indices.map((idx) {
-              final Widget celda;
-              if (idx < personas.length) {
-                celda = _CeldaPersona(
+              return SizedBox(
+                width: tamCelda,
+                child: _CeldaPersona(
                   miembro: personas[idx],
                   tamCelda: tamCelda,
                   onTap: () => onTapPersona(personas[idx]),
-                );
-              } else {
-                celda = _CeldaSquad(
-                  squad: squads[idx - personas.length],
-                  tamCelda: tamCelda,
-                );
-              }
-              return SizedBox(width: tamCelda, child: celda);
+                ),
+              );
             }).toList(),
           ),
         );
