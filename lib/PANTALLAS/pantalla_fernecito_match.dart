@@ -387,11 +387,13 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       );
     }
     if (!mounted) return;
-    setState(() {});
-    if (!_sinPlan) {
-      setState(() => _cargando = true);
-      await _cargarMazo();
-    }
+    // Ubicación es excluyente: siempre recargar el mazo/preview.
+    setState(() {
+      _cargando = true;
+      _mazo = const [];
+      _hayMasCards = true;
+    });
+    await _cargarEstado();
   }
 
   Offset _destinoVuelo(String decision) {

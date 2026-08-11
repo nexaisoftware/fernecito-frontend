@@ -50,6 +50,8 @@ class ServicioUbicacionGlobal {
   }
 
   /// Escribe la ciudad principal en el perfil (fuente de verdad). No pisa con vacío.
+  /// Match usa esta ciudad (antes que la del plan) para decidir dónde aparecen
+  /// en las cards y para el filtro excluyente de ubicación.
   static Future<void> _sincronizarPerfil(String? ciudad, String? provincia) async {
     if (ciudad == null || ciudad.trim().isEmpty) return;
     final uid = ServicioSupabase().usuarioActual?.id;

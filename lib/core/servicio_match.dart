@@ -337,9 +337,9 @@ class ServicioMatch {
     }
   }
 
-  /// El mazo de cards para deslizar. [ciudades] = las ciudades activas del
-  /// selector global de ubicación (cartelera/explorar); si va vacío el
-  /// backend usa la ciudad del plan (permisivo).
+  /// El mazo de cards para deslizar. [ciudades] = filtro EXCLUYENTE (como
+  /// cartelera / aparecer-en-cards): solo gente de esas ciudades. Si va vacío,
+  /// el backend filtra por la ciudad del plan/perfil del usuario.
   Future<List<MatchCard>> feed({
     required String tipo,
     String? idGrupo,
