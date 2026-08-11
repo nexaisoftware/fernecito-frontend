@@ -1138,14 +1138,13 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                             _BadgeEstadoHorarioPublico(
                               estado: estadoHorarioLocal(_horarios),
                               horarios: _horarios,
+                              cartaCantidad: _cartaItems.isEmpty
+                                  ? null
+                                  : _cartaItems.length,
+                              onVerCarta: _cartaItems.isEmpty
+                                  ? null
+                                  : () => _mostrarCartaLocal(context),
                             ),
-                            if (_cartaItems.isNotEmpty) ...[
-                              const SizedBox(height: 10),
-                              _BotonVerCartaLocal(
-                                cantidad: _cartaItems.length,
-                                onTap: () => _mostrarCartaLocal(context),
-                              ),
-                            ],
                             if (_ubicacionTextoComputed.isNotEmpty ||
                                 (_direccion ?? '').isNotEmpty) ...[
                               const SizedBox(height: 12),
@@ -1895,47 +1894,44 @@ class _BotonVerCartaLocal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1B1B1E),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                CupertinoIcons.list_bullet,
-                size: 13,
-                color: Color(0xFFFFD166),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1B1B1E),
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              CupertinoIcons.list_bullet,
+              size: 13,
+              color: Color(0xFFFFD166),
+            ),
+            const SizedBox(width: 7),
+            Text(
+              'Ver carta',
+              style: GoogleFonts.baloo2(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFFFFD166),
+                height: 1,
               ),
-              const SizedBox(width: 7),
-              Text(
-                'Ver carta',
-                style: GoogleFonts.baloo2(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFFFFD166),
-                  height: 1,
-                ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              '$cantidad',
+              style: GoogleFonts.baloo2(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: ColoresApp.textoSecundario,
+                height: 1,
               ),
-              const SizedBox(width: 5),
-              Text(
-                '$cantidad',
-                style: GoogleFonts.baloo2(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  color: ColoresApp.textoSecundario,
-                  height: 1,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -2145,74 +2141,105 @@ class _BadgeEstadoHorarioPublico extends StatelessWidget {
   const _BadgeEstadoHorarioPublico({
     required this.estado,
     required this.horarios,
+    this.cartaCantidad,
+    this.onVerCarta,
   });
 
   final EstadoHorarioLocal estado;
   final HorariosLocal horarios;
+  final int? cartaCantidad;
+  final VoidCallback? onVerCarta;
 
   @override
   Widget build(BuildContext context) {
-    if (!estado.tieneHorarios) return const SizedBox.shrink();
+    final mostrarHorario = estado.tieneHorarios;
+    final mostrarCarta = cartaCantidad != null &&
+        cartaCantidad! > 0 &&
+        onVerCarta != null;
+    if (!mostrarHorario && !mostrarCarta) return const SizedBox.shrink();
+
     final color = estado.abierto
         ? const Color(0xFF27D66D)
         : ColoresApp.textoSecundario;
+
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Center(
-        child: GestureDetector(
-          onTap: () => _mostrarHorariosPublicos(context, horarios),
-          child: Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.sizeOf(context).width - 72,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1B1B1E),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.sizeOf(context).width - 72,
+          ),
+          child: IntrinsicWidth(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(CupertinoIcons.clock_fill, size: 14, color: color),
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        estado.titulo,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.baloo2(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w900,
-                          color: estado.abierto
-                              ? color
-                              : ColoresApp.textoPrincipal,
-                          height: 1.05,
-                        ),
+                if (mostrarHorario)
+                  GestureDetector(
+                    onTap: () => _mostrarHorariosPublicos(context, horarios),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 7,
                       ),
-                      Text(
-                        estado.detalle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.baloo2(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: ColoresApp.textoSecundario,
-                          height: 1.1,
-                        ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1B1B1E),
+                        borderRadius: BorderRadius.circular(13),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.clock_fill,
+                            size: 14,
+                            color: color,
+                          ),
+                          const SizedBox(width: 7),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                estado.titulo,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: estado.abierto
+                                      ? color
+                                      : ColoresApp.textoPrincipal,
+                                  height: 1.05,
+                                ),
+                              ),
+                              Text(
+                                estado.detalle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: ColoresApp.textoSecundario,
+                                  height: 1.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 5),
+                          Icon(
+                            CupertinoIcons.chevron_up_chevron_down,
+                            size: 12,
+                            color: ColoresApp.textoSecundario,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 5),
-                Icon(
-                  CupertinoIcons.chevron_up_chevron_down,
-                  size: 12,
-                  color: ColoresApp.textoSecundario,
-                ),
+                if (mostrarHorario && mostrarCarta) const SizedBox(height: 10),
+                if (mostrarCarta)
+                  _BotonVerCartaLocal(
+                    cantidad: cartaCantidad!,
+                    onTap: onVerCarta!,
+                  ),
               ],
             ),
           ),
