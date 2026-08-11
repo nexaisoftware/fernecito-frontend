@@ -461,12 +461,6 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   Future<void> _swipe(String decision) async {
     if (_mazo.isEmpty || _swipeando) return;
-    // Modo mirar: sin plan no se puede deslizar; lo invitamos a armarlo.
-    if (_sinPlan) {
-      setState(() => _arrastre = Offset.zero);
-      await _abrirConfiguracion();
-      return;
-    }
     final card = _mazo.first;
 
     // 1) Empujón: la card activa sale por el costado/arriba.
@@ -490,8 +484,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     setState(() {
       // Brindis 🥂 → overlay "¡ME RE PINTA!" que se va solo a los 3 seg.
       if (decision == 'recopa') {
-        _rePintaDetalle =
-            'Le va a llegar que te re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}';
+        _rePintaDetalle = _sinPlan
+            ? 'Probaste "me re pinta" 🥂\nArmá tu plan para que le llegue de verdad'
+            : 'Le va a llegar que te re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}';
       }
     });
     if (decision == 'recopa') {
@@ -503,27 +498,72 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
     try {
       // El like queda pendiente del otro lado; ya no hay match automático.
+      // Sin plan: preview rate-limited (3 likes/día) en el backend.
       await _srv.swipe(
         idPlanDestino: card.idPlan,
         decision: decision,
         idGrupo: _modo == 'squad' ? _squad?.idGrupo : null,
       );
-      if (mounted) _cargarCantMatches();
+      if (mounted && !_sinPlan) _cargarCantMatches();
     } catch (e) {
       if (!mounted) return;
-      if (decision == 'recopa' && e.toString().contains('rate_limit')) {
-        // Tope diario de "Me re pinta": devolvemos la card al mazo y avisamos.
+      final msg = e.toString();
+      // Devolver la card al mazo ante tope / gate de plan.
+      void restaurarCard() {
         setState(() {
           _animarArrastre = false;
           _arrastre = Offset.zero;
           _mazo = [card, ..._mazo];
+          if (decision == 'recopa') _rePintaDetalle = null;
         });
+      }
+
+      if (msg.contains('necesita_plan')) {
+        restaurarCard();
+        await showCupertinoDialog<void>(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('Armá tu plan para seguir'),
+            content: const Text(
+              'Ya usaste tus 3 "me pinta" / "me re pinta" de hoy en modo mirar. '
+              'Creá un plan para seguir haciendo match.',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        if (mounted) await _abrirConfiguracion();
+      } else if (decision == 'recopa' && msg.contains('rate_limit')) {
+        restaurarCard();
         await showCupertinoDialog<void>(
           context: context,
           builder: (ctx) => CupertinoAlertDialog(
             title: const Text('🥂 Sin "Me re pinta" por hoy'),
             content: const Text(
               'Ya usaste tus 2 de hoy. Mañana tenés más 🥂\nMientras, podés dar "me pinta" normal.',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } else if (decision == 'interesa' &&
+          msg.contains('rate_limit') &&
+          !_sinPlan) {
+        restaurarCard();
+        await showCupertinoDialog<void>(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('Tope de "me pinta" por hoy'),
+            content: const Text(
+              'Llegaste a los 100 "me pinta" de hoy. Mañana se renueva el cupo.',
             ),
             actions: [
               CupertinoDialogAction(
@@ -925,7 +965,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       );
     }
     if (_sinPlan) {
-      // Modo mirar: ve el mazo pero no puede deslizar hasta armar su plan.
+      // Modo mirar: puede deslizar con tope de 3 likes/día; después pide plan.
       if (_mazo.isNotEmpty) {
         return Column(
           children: [
@@ -1060,7 +1100,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     );
   }
 
-  /// Banner del modo mirar: ve el mazo pero todavía no participa.
+  /// Banner del modo mirar: puede probar likes con tope diario.
   Widget _bannerArmaTuPlan() {
     return GestureDetector(
       onTap: _abrirConfiguracion,
@@ -1091,7 +1131,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
                     ),
                   ),
                   Text(
-                    'Armá tu plan para deslizar y que te vean',
+                    'Tenés 3 "me pinta"/"me re pinta" por día. Armá tu plan para más.',
                     style: GoogleFonts.baloo2(
                       color: ColoresApp.textoSecundario,
                       fontWeight: FontWeight.w700,
