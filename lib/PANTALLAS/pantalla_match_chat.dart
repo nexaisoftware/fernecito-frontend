@@ -15,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants.dart';
 import '../core/servicio_match.dart';
 import '../core/supabase_client.dart';
+import '../widgets/stack_avatares_squad.dart';
 
 class PantallaMatchChat extends StatefulWidget {
   const PantallaMatchChat({super.key, required this.match});
@@ -279,6 +280,8 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
         : (keyboard > 0 ? keyboard : safeBottom);
     final otro = widget.match.otro;
     final foto = otro.fotoUrl;
+    final urlsSquad = otro.avataresMiembrosUrls;
+    final esSquadStack = otro.esSquad && urlsSquad.isNotEmpty;
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
       navigationBar: CupertinoNavigationBar(
@@ -291,27 +294,35 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
         middle: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF2A2A2A),
-                image: foto != null
-                    ? DecorationImage(
-                        image: NetworkImage(foto),
-                        fit: BoxFit.cover,
+            if (esSquadStack)
+              StackAvataresSquad(
+                avatares: urlsSquad,
+                totalExtra: otro.miembrosParaStack,
+                size: 26,
+                paddingExterno: 0,
+              )
+            else
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF2A2A2A),
+                  image: foto != null
+                      ? DecorationImage(
+                          image: NetworkImage(foto),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: foto == null
+                    ? Text(
+                        otro.esSquad ? '👥' : '🙋',
+                        style: const TextStyle(fontSize: 15),
                       )
                     : null,
               ),
-              alignment: Alignment.center,
-              child: foto == null
-                  ? Text(
-                      otro.esSquad ? '👥' : '🙋',
-                      style: const TextStyle(fontSize: 15),
-                    )
-                  : null,
-            ),
             const SizedBox(width: 8),
             Flexible(
               child: Column(

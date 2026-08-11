@@ -855,6 +855,8 @@ class _TarjetaMatchPendiente extends StatelessWidget {
     final foto = otro.fotoUrl;
     final ancho = MediaQuery.sizeOf(context).width * 0.86;
     final recopa = pendiente.esRecopa;
+    final urlsSquad = otro.avataresMiembrosUrls;
+    final esSquadStack = otro.esSquad && urlsSquad.isNotEmpty;
     final plan = pendiente.planPrincipal ?? pendiente.miPlan;
     final subtitulos = [
       if (otro.edad != null) '${otro.edad} años',
@@ -944,8 +946,19 @@ class _TarjetaMatchPendiente extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (esSquadStack) ...[
+                            StackAvataresSquad(
+                              avatares: urlsSquad,
+                              totalExtra: otro.miembrosParaStack,
+                              size: 44,
+                              paddingExterno: 0,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                           Text(
-                            otro.nombre.split(RegExp(r'\s+')).first,
+                            otro.esSquad
+                                ? otro.nombre
+                                : otro.nombre.split(RegExp(r'\s+')).first,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.baloo2(

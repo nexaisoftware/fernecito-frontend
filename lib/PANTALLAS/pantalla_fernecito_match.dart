@@ -210,6 +210,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     if (!mounted) return;
     final matches = resultados[0] as List<MatchItem>;
     final pendientes = resultados[1] as List<MatchPendiente>;
+    // Badge de "Mis matches": todo (personal+squad). La tira del mazo filtra.
     setState(() => _cantMatches = matches.length + pendientes.length);
   }
 
@@ -325,7 +326,21 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   Future<void> _cargarPendientes() async {
     final p = await _srv.pendientes();
-    if (mounted) setState(() => _pendientes = p);
+    if (!mounted) return;
+    setState(() => _pendientes = _filtrarPendientesPorModo(p));
+  }
+
+  /// En el mazo, la tira sigue el switch Personal/Squad (Mis matches sí mezcla).
+  List<MatchPendiente> _filtrarPendientesPorModo(List<MatchPendiente> todos) {
+    return todos.where((p) {
+      final mi = p.miPlan ?? p.planPrincipal;
+      if (_modo == 'usuario') {
+        return mi == null || !mi.esSquad;
+      }
+      final gid = _squad?.idGrupo;
+      if (mi == null || !mi.esSquad) return false;
+      return gid == null || mi.idGrupo == gid;
+    }).toList();
   }
 
   /// Aviso de requisito faltante (perfil público / foto) al tocar Preferencias.
@@ -1542,6 +1557,8 @@ class _MatchCardVisual extends StatelessWidget {
     final ancho = MediaQuery.sizeOf(context).width - 40;
     final alto = MediaQuery.sizeOf(context).height * 0.58;
     final foto = card.fotoUrl;
+    final urlsSquad = card.avataresMiembrosUrls;
+    final esSquadStack = card.esSquad && urlsSquad.isNotEmpty;
     return SizedBox(
       width: ancho,
       height: alto,
@@ -1627,6 +1644,15 @@ class _MatchCardVisual extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (esSquadStack) ...[
+                          StackAvataresSquad(
+                            avatares: urlsSquad,
+                            totalExtra: card.miembrosParaStack,
+                            size: 48,
+                            paddingExterno: 0,
+                          ),
+                          const SizedBox(height: 8),
+                        ],
                         Text(
                           card.esSquad
                               ? '$_nombreCorto${card.miembros != null ? ' · ${card.miembros} 👥' : ''}'
@@ -2454,6 +2480,8 @@ class _TarjetaPendiente extends StatelessWidget {
     final foto = card.fotoUrl;
     final ancho = MediaQuery.sizeOf(context).width * 0.86;
     final recopa = esRecopa;
+    final urlsSquad = card.avataresMiembrosUrls;
+    final esSquadStack = card.esSquad && urlsSquad.isNotEmpty;
     final datos = [
       if (card.edad != null) '${card.edad} años',
       if (_genero.isNotEmpty) _genero,
@@ -2546,8 +2574,19 @@ class _TarjetaPendiente extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (esSquadStack) ...[
+                            StackAvataresSquad(
+                              avatares: urlsSquad,
+                              totalExtra: card.miembrosParaStack,
+                              size: 44,
+                              paddingExterno: 0,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                           Text(
-                            card.nombre.split(RegExp(r'\s+')).first,
+                            card.esSquad
+                                ? card.nombre
+                                : card.nombre.split(RegExp(r'\s+')).first,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.baloo2(
