@@ -41,6 +41,9 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
   String? _error;
   String _q = '';
 
+  /// Descarta respuestas viejas si cambia la ciudad a mitad de un request.
+  int _genUbicacion = 0;
+
   static const _pageSize = 20;
 
   @override
@@ -85,10 +88,15 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
   }
 
   Future<void> _cargar({required bool reset}) async {
+    final gen = reset ? ++_genUbicacion : _genUbicacion;
     if (reset) {
+      // Limpiar al toque: si no, quedan cards de la ciudad anterior
+      // mientras llega la query nueva.
       setState(() {
         _cargando = true;
         _error = null;
+        _planes = const [];
+        _hayMas = false;
       });
     } else {
       if (_cargandoMas) return;
@@ -99,7 +107,7 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
     final prefs = PreferenciasCartelera.instancia;
     final offset = reset ? 0 : _planes.length;
 
-    var res = await _srv.hub(
+    final res = await _srv.hub(
       ciudades: _tab == 'explorar' ? prefs.ciudadesActivas : const {},
       provincia: _tab == 'explorar' ? prefs.provinciaActiva : null,
       limit: _pageSize,
@@ -110,11 +118,12 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
 
     // Sin fallback a “todas las ciudades”: la ubicación del local define el feed.
 
-    if (!mounted) return;
+    if (!mounted || gen != _genUbicacion) return;
     setState(() {
       if (res.error != null && reset) {
         _error = res.error;
-        if (_planes.isEmpty) _planes = const [];
+        _planes = const [];
+        _hayMas = false;
       } else {
         _error = null;
         _planes = reset ? res.items : [..._planes, ...res.items];
