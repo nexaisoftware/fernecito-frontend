@@ -369,7 +369,8 @@ class ServicioMatch {
 
   /// Swipe: decision = 'interesa' | 'paso' | 'recopa'.
   /// Ya no crea match automático: el dueño del plan acepta desde pendientes.
-  /// 'recopa' tiene tope de 2 por día (lanza rate_limit_exceeded al pasarse).
+  /// Sin plan: hasta 3 likes (interesa+recopa) / 24h → `necesita_plan`.
+  /// Con plan: 100 interesa / día; 'recopa' tope 2 / día (`rate_limit_exceeded`).
   Future<String?> swipe({
     required String idPlanDestino,
     required String decision,
