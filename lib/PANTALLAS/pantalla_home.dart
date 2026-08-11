@@ -158,7 +158,7 @@ class _PantallaHomeState extends State<PantallaHome>
   /// (IndexedStack no recrea el hijo).
   int _notifsReloadTick = 0;
   int _socialNavToken = 0;
-  SocialVista? _socialVistaInicial;
+  int? _socialAbrirAmigosSquadsTab;
 
   final _srvNotificaciones = ServicioNotificacionesUsuarios();
 
@@ -166,8 +166,13 @@ class _PantallaHomeState extends State<PantallaHome>
     setState(() {
       _currentTabIndex = tab.clamp(0, 4);
       if (tab == 0) _actividadReloadTick++;
-      if (tab == 1 && socialVista != null) {
-        _socialVistaInicial = socialVista;
+      if (tab == 1) {
+        // Tab Social = hub nuevo. Amigos/Squads se abren encima.
+        _socialAbrirAmigosSquadsTab = switch (socialVista) {
+          SocialVista.amigos => 0,
+          SocialVista.squads => 1,
+          _ => null,
+        };
         _socialNavToken++;
       }
     });
@@ -279,7 +284,9 @@ class _PantallaHomeState extends State<PantallaHome>
             CupertinoTabView(
               builder: (context) => PantallaSocial(
                 key: ValueKey('social_$_socialNavToken'),
-                vista: _socialVistaInicial ?? SocialVista.explorar,
+                // Siempre hub. Amigos/Squads van por push (abrirAmigosSquadsTab).
+                vista: SocialVista.explorar,
+                abrirAmigosSquadsTab: _socialAbrirAmigosSquadsTab,
               ),
             ),
             CupertinoTabView(builder: (context) => const _PantallaCartelera()),
@@ -313,7 +320,11 @@ class _PantallaHomeState extends State<PantallaHome>
                 setState(() {
                   _currentTabIndex = index;
                   if (index == 0) _actividadReloadTick++;
-                  if (index == 1) _socialVistaInicial = null;
+                  if (index == 1) {
+                    // Tap manual al tab Social: hub limpio, sin auto-abrir Amigos.
+                    _socialAbrirAmigosSquadsTab = null;
+                    _socialNavToken++;
+                  }
                   if (index == 2) _srvNotificaciones.refrescarContador();
                   if (index == 3) {
                     _notifsReloadTick++;

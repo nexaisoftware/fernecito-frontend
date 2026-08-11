@@ -2288,10 +2288,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
               onPressed: () {
                 Navigator.of(context).push(
                   CupertinoPageRoute(
-                    builder: (_) => const PantallaSocial(
-                      vista: SocialVista.squads,
-                      mostrarVolver: true,
-                    ),
+                    builder: (_) => const PantallaAmigosSquads(initialTab: 1),
                   ),
                 );
               },

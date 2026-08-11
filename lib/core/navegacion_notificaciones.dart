@@ -55,14 +55,27 @@ Future<bool> _irATabOFallback(
       );
       return true;
     case 1:
-      await _push(
-        CupertinoPageRoute(
-          builder: (_) => PantallaSocial(
-            vista: socialVista ?? SocialVista.explorar,
-            mostrarVolver: true,
+      final tab = switch (socialVista) {
+        SocialVista.amigos => 0,
+        SocialVista.squads => 1,
+        _ => null,
+      };
+      if (tab != null) {
+        await _push(
+          CupertinoPageRoute(
+            builder: (_) => PantallaAmigosSquads(initialTab: tab),
           ),
-        ),
-      );
+        );
+      } else {
+        await _push(
+          CupertinoPageRoute(
+            builder: (_) => const PantallaSocial(
+              vista: SocialVista.explorar,
+              mostrarVolver: true,
+            ),
+          ),
+        );
+      }
       return true;
     case 2:
       return true; // abrir la app/cartelera alcanza para broadcasts o home.
@@ -212,10 +225,7 @@ Future<bool> abrirSquadDesdeNotificacion(Notificacion n) async {
   if (idGrupo == null || idGrupo.isEmpty) {
     await _push(
       CupertinoPageRoute(
-        builder: (_) => const PantallaSocial(
-          vista: SocialVista.squads,
-          mostrarVolver: true,
-        ),
+        builder: (_) => const PantallaAmigosSquads(initialTab: 1),
       ),
     );
     return true;
@@ -227,10 +237,7 @@ Future<bool> abrirSquadDesdeNotificacion(Notificacion n) async {
   if (det == null) {
     await _push(
       CupertinoPageRoute(
-        builder: (_) => const PantallaSocial(
-          vista: SocialVista.squads,
-          mostrarVolver: true,
-        ),
+        builder: (_) => const PantallaAmigosSquads(initialTab: 1),
       ),
     );
     return true;
@@ -290,8 +297,7 @@ Future<bool> abrirPerfilAmistadDesdeNotificacion(
 
   await _push(
     CupertinoPageRoute(
-      builder: (_) =>
-          const PantallaSocial(vista: SocialVista.amigos, mostrarVolver: true),
+      builder: (_) => const PantallaAmigosSquads(initialTab: 0),
     ),
   );
   return true;

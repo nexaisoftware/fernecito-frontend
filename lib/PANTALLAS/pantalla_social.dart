@@ -117,6 +117,10 @@ class PantallaSocial extends StatefulWidget {
   final Set<String>? ciudadesIniciales;
   final bool? carteleraInteligenteInicial;
 
+  /// Si no es null, tras montar el hub abre Amigos & squads en esa pestaña
+  /// (0 = amigos, 1 = squads). Usado por notificaciones/push.
+  final int? abrirAmigosSquadsTab;
+
   /// Compatibilidad: 0 → amigos, 1 → squads (desde notificaciones antiguas).
   const PantallaSocial({
     super.key,
@@ -125,6 +129,7 @@ class PantallaSocial extends StatefulWidget {
     this.provinciaInicial,
     this.ciudadesIniciales,
     this.carteleraInteligenteInicial,
+    this.abrirAmigosSquadsTab,
     @Deprecated('Usar vista') this.initialTabIndex = 0,
   });
 
@@ -152,10 +157,28 @@ class _PantallaSocialHubState extends State<PantallaSocial>
       vsync: this,
       duration: const Duration(milliseconds: 1050),
     )..repeat(reverse: true);
-    if (widget.vista == SocialVista.explorar && !widget.mostrarVolver) {
+    // El tab Social siempre es el hub nuevo (nunca el legacy con Explorar).
+    if (!_debeDelegarFueraDelHub) {
       _cargarHub();
+      final tab = widget.abrirAmigosSquadsTab ??
+          (widget.vista == SocialVista.amigos
+              ? 0
+              : widget.vista == SocialVista.squads
+                  ? 1
+                  : null);
+      if (tab != null && !widget.mostrarVolver) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _abrir(PantallaAmigosSquads(initialTab: tab));
+        });
+      }
     }
   }
+
+  /// Entradas deep-link que no deben renderizar el hub en este State.
+  bool get _debeDelegarFueraDelHub =>
+      widget.mostrarVolver &&
+      (widget.vista == SocialVista.amigos || widget.vista == SocialVista.squads);
 
   @override
   void dispose() {
@@ -203,27 +226,36 @@ class _PantallaSocialHubState extends State<PantallaSocial>
 
   @override
   Widget build(BuildContext context) {
-    // Conserva los deep-links existentes de notificaciones y perfiles.
-    if (widget.vista == SocialVista.explorar && widget.mostrarVolver) {
-      return PantallaExplorarSocial(
-        provinciaInicial: widget.provinciaInicial,
-        ciudadesIniciales: widget.ciudadesIniciales,
-        carteleraInteligenteInicial: widget.carteleraInteligenteInicial,
-      );
-    }
-    if (widget.vista != SocialVista.explorar) {
-      return PantallaSocialLegacy(
-        vista: widget.vista,
-        mostrarVolver: widget.mostrarVolver,
-        provinciaInicial: widget.provinciaInicial,
-        ciudadesIniciales: widget.ciudadesIniciales,
-        carteleraInteligenteInicial: widget.carteleraInteligenteInicial,
+    // Deep-link Amigos/Squads con stack propio → pantalla dedicada (no legacy).
+    if (widget.mostrarVolver &&
+        (widget.vista == SocialVista.amigos ||
+            widget.vista == SocialVista.squads)) {
+      return PantallaAmigosSquads(
+        initialTab: widget.vista == SocialVista.squads ? 1 : 0,
       );
     }
 
+    // Hub Social (tab o push con volver).
     final bottom = reservaInferiorSocialEmbebido(context);
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
+      navigationBar: widget.mostrarVolver
+          ? CupertinoNavigationBar(
+              backgroundColor: Colors.transparent,
+              border: null,
+              leading: CupertinoNavigationBarBackButton(
+                color: ColoresApp.principalMarca,
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              middle: Text(
+                'Social',
+                style: GoogleFonts.baloo2(
+                  fontWeight: FontWeight.w800,
+                  color: ColoresApp.textoPrincipal,
+                ),
+              ),
+            )
+          : null,
       child: SafeArea(
         top: false,
         bottom: false,
@@ -233,14 +265,16 @@ class _PantallaSocialHubState extends State<PantallaSocial>
             SliverPadding(
               padding: EdgeInsets.fromLTRB(
                 16,
-                MediaQuery.paddingOf(context).top + 14,
+                MediaQuery.paddingOf(context).top + (widget.mostrarVolver ? 52 : 14),
                 16,
                 bottom,
               ),
               sliver: SliverList.list(
                 children: [
-                  _encabezadoHub(),
-                  const SizedBox(height: 12),
+                  if (!widget.mostrarVolver) ...[
+                    _encabezadoHub(),
+                    const SizedBox(height: 12),
+                  ],
                   _seccionTendencias(),
                   const SizedBox(height: 14),
                   _CardDestinoSocial(
@@ -403,14 +437,23 @@ class _PantallaSocialHubState extends State<PantallaSocial>
 }
 
 class PantallaAmigosSquads extends StatefulWidget {
-  const PantallaAmigosSquads({super.key});
+  const PantallaAmigosSquads({super.key, this.initialTab = 0});
+
+  /// 0 = Amigos, 1 = Squads.
+  final int initialTab;
 
   @override
   State<PantallaAmigosSquads> createState() => _PantallaAmigosSquadsState();
 }
 
 class _PantallaAmigosSquadsState extends State<PantallaAmigosSquads> {
-  int _indice = 0;
+  late int _indice;
+
+  @override
+  void initState() {
+    super.initState();
+    _indice = widget.initialTab.clamp(0, 1);
+  }
 
   @override
   Widget build(BuildContext context) {
