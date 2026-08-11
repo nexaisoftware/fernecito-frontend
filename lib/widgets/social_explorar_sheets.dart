@@ -19,6 +19,7 @@ import '../core/ubicaciones_data.dart';
 import '../models/social.dart';
 import 'burbuja_estado.dart';
 import 'filtro_ubicaciones_sheet.dart';
+import 'avatar_bordes.dart';
 import 'fernecito_loader.dart';
 import 'social_ui.dart';
 
@@ -1386,11 +1387,13 @@ class _StackAvataresExplorar extends StatelessWidget {
   }
 
   Widget _avatarCircle(String url, double size, {bool bordeClaro = false}) {
+    final borde = bordeClaro ? AvatarBordes.blanco : AvatarBordes.tema;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
+        border: Border.all(color: borde, width: AvatarBordes.ancho()),
         boxShadow: bordeClaro
             ? [
                 BoxShadow(

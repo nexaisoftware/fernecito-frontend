@@ -11,6 +11,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
 import '../core/servicio_match.dart';
+import '../widgets/avatar_bordes.dart';
+import '../widgets/avatar_usuario.dart';
 import 'pantalla_match_chat.dart';
 import 'pantalla_perfil_squads.dart';
 import 'pantalla_perfil_usuarios.dart';
@@ -530,6 +532,10 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: ColoresApp.principalMarca,
+                border: Border.all(
+                  color: AvatarBordes.blanco,
+                  width: AvatarBordes.ancho(),
+                ),
               ),
               child: const Icon(
                 CupertinoIcons.sparkles,
@@ -589,26 +595,10 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
         child: Row(
           children: [
             // Avatar
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF2A2A2A),
-                image: foto != null
-                    ? DecorationImage(
-                        image: NetworkImage(foto),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              alignment: Alignment.center,
-              child: foto == null
-                  ? Text(
-                      m.otro.esSquad ? '👥' : '🙋',
-                      style: const TextStyle(fontSize: 24),
-                    )
-                  : null,
+            AvatarUsuario(
+              avatar: foto ?? '',
+              size: 54,
+              borderColor: AvatarBordes.blanco,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -750,6 +740,10 @@ class _PantallaChatBienvenida extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: ColoresApp.principalMarca,
+                border: Border.all(
+                  color: AvatarBordes.blanco,
+                  width: 1.4,
+                ),
               ),
               child: const Icon(
                 CupertinoIcons.sparkles,

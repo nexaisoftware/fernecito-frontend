@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
 import '../core/tema_fernecito.dart';
+import 'avatar_bordes.dart';
 import 'fernecito_loader.dart';
 
 /// Reserva inferior en tab Social embebido (navbar home).
@@ -193,6 +194,7 @@ class AvatarSocial extends StatelessWidget {
   final VoidCallback? onTap;
   final Color? borderColor;
   final double borderWidth;
+  final bool esPionero;
 
   const AvatarSocial({
     super.key,
@@ -200,15 +202,28 @@ class AvatarSocial extends StatelessWidget {
     this.size = 52,
     this.onTap,
     this.borderColor,
-    this.borderWidth = 1.5,
+    this.borderWidth = 1.6,
+    this.esPionero = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final bc = AvatarBordes.color(
+      esPionero: esPionero,
+      preferido: borderColor ?? AvatarBordes.tema,
+    );
+    final bw = AvatarBordes.ancho(
+      esPionero: esPionero,
+      preferido: borderWidth,
+    );
     final child = Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: bc, width: bw),
+        color: ColoresApp.fondoSuperficie,
+      ),
       child: ClipOval(
         child: url.isEmpty
             ? Icon(
@@ -219,8 +234,8 @@ class AvatarSocial extends StatelessWidget {
             : CachedNetworkImage(
                 imageUrl: url,
                 fit: BoxFit.cover,
-                placeholder: (_, __) => const FernecitoLoader.inline(size: 16),
-                errorWidget: (_, __, ___) => Icon(
+                placeholder: (_, _) => const FernecitoLoader.inline(size: 16),
+                errorWidget: (_, _, _) => Icon(
                   CupertinoIcons.person_fill,
                   color: ColoresApp.textoSecundario,
                   size: size * 0.45,
@@ -368,21 +383,34 @@ class ChipMetricaPerfil extends StatelessWidget {
   }
 }
 
-/// Avatar con glow de marca (sin borde duro). Para explorar y listas.
+/// Avatar con glow de marca + borde (tema o dorado pionero).
 class AvatarSocialGlow extends StatelessWidget {
   final String url;
   final double size;
+  final bool esPionero;
+  final Color? borderColor;
 
-  const AvatarSocialGlow({super.key, required this.url, this.size = 52});
+  const AvatarSocialGlow({
+    super.key,
+    required this.url,
+    this.size = 52,
+    this.esPionero = false,
+    this.borderColor,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final accent = ColoresApp.principalMarca;
+    final accent = AvatarBordes.color(
+      esPionero: esPionero,
+      preferido: borderColor ?? AvatarBordes.tema,
+    );
+    final bw = AvatarBordes.ancho(esPionero: esPionero);
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
+        border: Border.all(color: accent, width: bw),
         boxShadow: [
           BoxShadow(
             color: accent.withValues(alpha: 0.42),
@@ -409,13 +437,13 @@ class AvatarSocialGlow extends StatelessWidget {
             : CachedNetworkImage(
                 imageUrl: url,
                 fit: BoxFit.cover,
-                placeholder: (_, __) => ColoredBox(
+                placeholder: (_, _) => ColoredBox(
                   color: ColoresApp.fondoSuperficie,
                   child: FernecitoLoader.inline(
                     size: (size * 0.24).clamp(14.0, 28.0),
                   ),
                 ),
-                errorWidget: (_, __, ___) => ColoredBox(
+                errorWidget: (_, _, _) => ColoredBox(
                   color: ColoresApp.fondoSuperficie,
                   child: Icon(
                     CupertinoIcons.person_fill,

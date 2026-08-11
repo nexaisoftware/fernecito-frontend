@@ -14,6 +14,7 @@ import '../models/rompehielo.dart';
 
 import '../models/social.dart';
 
+import 'avatar_bordes.dart';
 import 'social_ui.dart';
 import 'stack_avatares_squad.dart';
 
@@ -662,7 +663,11 @@ class _AvatarSquadModal extends StatelessWidget {
 
                   shape: BoxShape.circle,
 
-                                  ),
+                  border: Border.all(
+                    color: AvatarBordes.tema,
+                    width: AvatarBordes.ancho(),
+                  ),
+                ),
 
                 child: Icon(
                   CupertinoIcons.person_3_fill,

@@ -39,6 +39,7 @@ import '../widgets/filtro_ubicaciones_sheet.dart';
 import '../widgets/perfil_actividad_sheet.dart';
 import '../core/lanzador_externo.dart';
 import '../widgets/banner_perfil_usuario.dart';
+import '../widgets/avatar_bordes.dart';
 import '../widgets/fernecito_loader.dart';
 import '../widgets/recortar_avatar_sheet.dart';
 import '../widgets/skeleton_pantallas.dart';
@@ -1600,6 +1601,10 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
             height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
+              border: Border.all(
+                color: AvatarBordes.blanco,
+                width: AvatarBordes.ancho(preferido: 2.5),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.35),
@@ -1608,9 +1613,22 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                 ),
               ],
             ),
-            child: ClipOval(
-              child: _subiendoFoto
-                  ? ColoredBox(
+            clipBehavior: Clip.antiAlias,
+            child: _subiendoFoto
+                ? ColoredBox(
+                    color: ColoresApp.fondoSuperficie,
+                    child: Center(
+                      child: FernecitoLoader.inline(
+                        size: 16,
+                        color: ColoresApp.principalMarca,
+                      ),
+                    ),
+                  )
+                : _fotoPerfilUrl != null
+                ? CachedNetworkImage(
+                    imageUrl: _fotoPerfilUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => ColoredBox(
                       color: ColoresApp.fondoSuperficie,
                       child: Center(
                         child: FernecitoLoader.inline(
@@ -1618,32 +1636,18 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                           color: ColoresApp.principalMarca,
                         ),
                       ),
-                    )
-                  : _fotoPerfilUrl != null
-                  ? CachedNetworkImage(
-                      imageUrl: _fotoPerfilUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => ColoredBox(
-                        color: ColoresApp.fondoSuperficie,
-                        child: Center(
-                          child: FernecitoLoader.inline(
-                            size: 16,
-                            color: ColoresApp.principalMarca,
-                          ),
-                        ),
-                      ),
-                      errorWidget: (context, url, error) => Icon(
-                        CupertinoIcons.person_circle_fill,
-                        size: size * 0.7,
-                        color: ColoresApp.textoSecundario,
-                      ),
-                    )
-                  : Icon(
+                    ),
+                    errorWidget: (context, url, error) => Icon(
                       CupertinoIcons.person_circle_fill,
                       size: size * 0.7,
                       color: ColoresApp.textoSecundario,
                     ),
-            ),
+                  )
+                : Icon(
+                    CupertinoIcons.person_circle_fill,
+                    size: size * 0.7,
+                    color: ColoresApp.textoSecundario,
+                  ),
           ),
         ),
         Positioned(

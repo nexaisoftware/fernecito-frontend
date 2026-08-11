@@ -10,7 +10,9 @@ import '../core/constants.dart';
 import '../core/lanzador_externo.dart';
 import '../core/servicio_amigos.dart';
 import '../core/servicio_pools.dart';
+import '../widgets/avatar_bordes.dart';
 import '../widgets/avatar_local.dart';
+import '../widgets/avatar_usuario.dart';
 import '../widgets/burbuja_estado.dart';
 import '../models/rompehielo.dart';
 import 'pantalla_local_perfil.dart';
@@ -691,30 +693,13 @@ class _AvatarRed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipOval(
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: url.isNotEmpty
-            ? CachedNetworkImage(
-                imageUrl: url,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => _placeholder(),
-                errorWidget: (_, __, ___) => _placeholder(),
-              )
-            : _placeholder(),
-      ),
+    return AvatarUsuario(
+      avatar: url,
+      size: size,
+      borderColor: AvatarBordes.blanco,
+      borderWidth: size >= 80 ? 2.5 : AvatarBordes.ancho(),
     );
   }
-
-  Widget _placeholder() => Container(
-    color: ColoresApp.fondoSuperficie,
-    child: Icon(
-      CupertinoIcons.person_fill,
-      size: size * 0.5,
-      color: ColoresApp.textoSecundario,
-    ),
-  );
 }
 
 class _BottomSheetSquad extends StatelessWidget {

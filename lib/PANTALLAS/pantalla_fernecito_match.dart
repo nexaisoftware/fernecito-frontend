@@ -19,6 +19,7 @@ import '../core/servicio_squads.dart';
 import '../core/servicio_ubicacion_global.dart';
 import '../core/ubicaciones_data.dart';
 import '../models/social.dart';
+import '../widgets/avatar_local.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
 import 'pantalla_match_chats.dart';
 
@@ -2541,8 +2542,7 @@ class _TarjetaPendiente extends StatelessWidget {
   );
 }
 
-/// Avatar del local. Si todavía no tiene foto, muestra la copita como
-/// respaldo (antes se veía siempre el emoji aunque el local tuviera avatar).
+/// Avatar del local con borde de marca (dorado si pionero vía [AvatarLocal]).
 class _AvatarLocal extends StatelessWidget {
   const _AvatarLocal({required this.url, this.size = 20});
 
@@ -2551,21 +2551,10 @@ class _AvatarLocal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tiene = url != null && url!.isNotEmpty;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFFEDEDF2),
-        image: tiene
-            ? DecorationImage(image: NetworkImage(url!), fit: BoxFit.cover)
-            : null,
-      ),
-      alignment: Alignment.center,
-      child: tiene
-          ? null
-          : Text('🍸', style: TextStyle(fontSize: size * 0.55)),
+    return AvatarLocal(
+      imageUrl: url,
+      size: size,
+      borderWidth: size < 28 ? 1.2 : null,
     );
   }
 }

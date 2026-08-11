@@ -15,6 +15,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants.dart';
 import '../core/servicio_match.dart';
 import '../core/supabase_client.dart';
+import '../widgets/avatar_bordes.dart';
+import '../widgets/avatar_usuario.dart';
 
 class PantallaMatchChat extends StatefulWidget {
   const PantallaMatchChat({super.key, required this.match});
@@ -221,26 +223,11 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
         middle: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF2A2A2A),
-                image: foto != null
-                    ? DecorationImage(
-                        image: NetworkImage(foto),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              alignment: Alignment.center,
-              child: foto == null
-                  ? Text(
-                      otro.esSquad ? '👥' : '🙋',
-                      style: const TextStyle(fontSize: 15),
-                    )
-                  : null,
+            AvatarUsuario(
+              avatar: foto ?? '',
+              size: 32,
+              borderColor: AvatarBordes.blanco,
+              borderWidth: 1.4,
             ),
             const SizedBox(width: 8),
             Flexible(

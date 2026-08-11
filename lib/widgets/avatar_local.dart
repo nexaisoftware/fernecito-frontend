@@ -1,11 +1,12 @@
 /// Avatar circular de local/boliche con borde siempre visible.
-/// Pioneros: borde dorado. Resto: color del tema activo.
+/// Pioneros: borde dorado. Resto: color del tema activo (o override).
 library;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 
 import '../core/constants.dart';
+import 'avatar_bordes.dart';
 import 'fernecito_loader.dart';
 
 class AvatarLocal extends StatelessWidget {
@@ -17,6 +18,7 @@ class AvatarLocal extends StatelessWidget {
     this.onTap,
     this.placeholderIcon = CupertinoIcons.house_fill,
     this.borderWidth,
+    this.borderColor,
     this.memCacheWidth,
     this.boxShadow,
   });
@@ -27,25 +29,26 @@ class AvatarLocal extends StatelessWidget {
   final VoidCallback? onTap;
   final IconData placeholderIcon;
   final double? borderWidth;
+  final Color? borderColor;
   final int? memCacheWidth;
   final List<BoxShadow>? boxShadow;
 
-  static const doradoPionero = Color(0xFFE0B800);
+  static const doradoPionero = AvatarBordes.doradoPionero;
 
   static bool urlEsAsset(String? url) =>
       url != null && url.trim().startsWith('assets/');
 
-  static Color colorBorde({required bool esPionero}) =>
-      esPionero ? doradoPionero : ColoresApp.principalMarca;
+  static Color colorBorde({required bool esPionero, Color? preferido}) =>
+      AvatarBordes.color(esPionero: esPionero, preferido: preferido);
 
-  static double anchoBorde({required bool esPionero}) =>
-      esPionero ? 2.2 : 1.5;
+  static double anchoBorde({required bool esPionero, double? preferido}) =>
+      AvatarBordes.ancho(esPionero: esPionero, preferido: preferido);
 
   @override
   Widget build(BuildContext context) {
     final url = imageUrl?.trim() ?? '';
-    final bw = borderWidth ?? anchoBorde(esPionero: esPionero);
-    final bc = colorBorde(esPionero: esPionero);
+    final bw = anchoBorde(esPionero: esPionero, preferido: borderWidth);
+    final bc = colorBorde(esPionero: esPionero, preferido: borderColor);
 
     Widget imageChild;
     if (url.isEmpty) {
@@ -63,7 +66,7 @@ class AvatarLocal extends StatelessWidget {
       imageChild = Image.asset(
         url,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => ColoredBox(
+        errorBuilder: (_, _, _) => ColoredBox(
           color: ColoresApp.fondoSuperficie,
           child: Icon(
             placeholderIcon,
@@ -77,11 +80,11 @@ class AvatarLocal extends StatelessWidget {
         imageUrl: url,
         fit: BoxFit.cover,
         memCacheWidth: memCacheWidth,
-        placeholder: (_, __) => const ColoredBox(
+        placeholder: (_, _) => const ColoredBox(
           color: ColoresApp.fondoSuperficie,
           child: FernecitoLoaderCentro(),
         ),
-        errorWidget: (_, __, ___) => ColoredBox(
+        errorWidget: (_, _, _) => ColoredBox(
           color: ColoresApp.fondoSuperficie,
           child: Icon(
             placeholderIcon,
@@ -104,7 +107,11 @@ class AvatarLocal extends StatelessWidget {
     );
 
     if (onTap != null) {
-      avatar = GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: avatar);
+      avatar = GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: avatar,
+      );
     }
     return avatar;
   }

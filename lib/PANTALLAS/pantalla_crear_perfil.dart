@@ -24,6 +24,7 @@ import '../core/constants.dart';
 import '../core/sexo_perfil.dart';
 import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
+import '../widgets/avatar_bordes.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/burbuja_estado.dart';
 import '../widgets/recortar_avatar_sheet.dart';
@@ -1036,6 +1037,10 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: ColoresApp.fondoSuperficie,
+              border: Border.all(
+                color: AvatarBordes.tema,
+                width: AvatarBordes.ancho(preferido: 2.2),
+              ),
             ),
             clipBehavior: Clip.antiAlias,
             child: _imagenBytes != null

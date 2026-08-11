@@ -25,6 +25,7 @@ import 'pantalla_perfil_squads.dart';
 import 'pantalla_perfil_usuarios.dart';
 import '../widgets/busqueda_social_expandible.dart';
 import '../widgets/encabezado_amigos_social.dart';
+import '../widgets/avatar_bordes.dart';
 import '../widgets/fernecito_loader.dart';
 import '../widgets/social_explorar_sheets.dart';
 import '../widgets/social_ui.dart';
@@ -2334,7 +2335,13 @@ class _StackAvataresMiembros extends StatelessWidget {
               child: Container(
                 width: 28,
                 height: 28,
-                decoration: BoxDecoration(shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AvatarBordes.blanco,
+                    width: 1.4,
+                  ),
+                ),
                 child: ClipOval(
                   child: CachedNetworkImage(
                     imageUrl: avatares[i],
@@ -2358,6 +2365,10 @@ class _StackAvataresMiembros extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: ColoresApp.principalMarca,
+                border: Border.all(
+                  color: AvatarBordes.blanco,
+                  width: 1.4,
+                ),
               ),
               child: Text(
                 '+$overflow',
