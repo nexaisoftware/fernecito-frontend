@@ -1422,34 +1422,6 @@ class _VacioPlanes extends StatelessWidget {
       ),
     );
   }
-}          Text(
-            modo == 'mis'
-                ? 'Creá uno o sumate a alguno de la comunidad.'
-                : 'Podés crear el primero en un local de Fernecito.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.baloo2(
-              fontSize: 14,
-              color: ColoresApp.textoSecundario,
-            ),
-          ),
-          const SizedBox(height: 16),
-          CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-            color: ColoresApp.principalMarca.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(999),
-            onPressed: onReintentar,
-            child: Text(
-              'Actualizar',
-              style: GoogleFonts.baloo2(
-                fontWeight: FontWeight.w800,
-                color: ColoresApp.principalMarca,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 Color _parseColor(String hex) {
