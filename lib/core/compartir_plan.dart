@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -79,8 +80,12 @@ Future<void> compartirPlan({
     return;
   }
 
-  HapticFeedback.mediumImpact();
-  await _esperarFrameUi();
+  // En web NO esperamos frames: navigator.share exige el gesto del tap.
+  // Si se pierde, share_plus cae a mailto (Gmail/Outlook) — eso no queremos.
+  HapticFeedback.selectionClick();
+  if (!kIsWeb) {
+    await _esperarFrameUi();
+  }
 
   final previewUrl = urlPreviewCompartirPlan(id);
   final cuerpo = mensajeCompartirPlan(
@@ -96,23 +101,33 @@ Future<void> compartirPlan({
     await SharePlus.instance.share(
       ShareParams(
         text: payload,
+        // subject en web termina como title del Share API (ok).
+        // mailToFallbackEnabled: false → nunca abrir Gmail/Outlook.
         subject: subject,
-        sharePositionOrigin: sharePositionOrigin,
+        sharePositionOrigin: kIsWeb ? null : sharePositionOrigin,
+        mailToFallbackEnabled: false,
+        downloadFallbackEnabled: false,
       ),
     );
   } on MissingPluginException {
     await _copiar(payload, feedbackContext);
   } on PlatformException {
-    if (sharePositionOrigin != null) {
+    if (!kIsWeb && sharePositionOrigin != null) {
       try {
         await SharePlus.instance.share(
-          ShareParams(text: payload, subject: subject),
+          ShareParams(
+            text: payload,
+            subject: subject,
+            mailToFallbackEnabled: false,
+            downloadFallbackEnabled: false,
+          ),
         );
         return;
       } catch (_) {}
     }
     await _copiar(payload, feedbackContext);
   } catch (_) {
+    // Desktop / navegador sin Web Share API → portapapeles, nunca mailto.
     await _copiar(payload, feedbackContext);
   }
 }
@@ -120,7 +135,12 @@ Future<void> compartirPlan({
 Future<void> _copiar(String payload, BuildContext? ctx) async {
   try {
     await Clipboard.setData(ClipboardData(text: payload));
-    _avisar(ctx, 'Link copiado al portapapeles.');
+    _avisar(
+      ctx,
+      kIsWeb
+          ? 'Link copiado. Pegalo donde quieras compartirlo.'
+          : 'Link copiado al portapapeles.',
+    );
   } catch (_) {
     _avisar(ctx, 'No se pudo compartir el plan.');
   }

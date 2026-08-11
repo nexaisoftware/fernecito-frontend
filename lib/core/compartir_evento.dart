@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -155,8 +156,12 @@ Future<void> compartirEvento({
     return;
   }
 
-  HapticFeedback.mediumImpact();
-  await _esperarFrameUi();
+  // En web NO esperamos frames: navigator.share exige el gesto del tap.
+  // Si se pierde, share_plus cae a mailto (Gmail/Outlook).
+  HapticFeedback.selectionClick();
+  if (!kIsWeb) {
+    await _esperarFrameUi();
+  }
 
   final previewUrl = urlPreviewCompartirEvento(id);
   final cuerpo = mensajeCompartirEvento(
@@ -174,7 +179,9 @@ Future<void> compartirEvento({
       ShareParams(
         text: payload,
         subject: subject,
-        sharePositionOrigin: sharePositionOrigin,
+        sharePositionOrigin: kIsWeb ? null : sharePositionOrigin,
+        mailToFallbackEnabled: false,
+        downloadFallbackEnabled: false,
       ),
     );
   } on MissingPluginException catch (e) {
@@ -183,11 +190,15 @@ Future<void> compartirEvento({
     await _fallbackPortapapeles(payload, feedbackContext, esPluginNativo: true);
   } on PlatformException catch (e) {
     debugPrint('⚠️ compartirEvento PlatformException: ${e.code} ${e.message}');
-    // Reintento sin origin por si el rect falló en iPad/simulador.
-    if (sharePositionOrigin != null) {
+    if (!kIsWeb && sharePositionOrigin != null) {
       try {
         await SharePlus.instance.share(
-          ShareParams(text: payload, subject: subject),
+          ShareParams(
+            text: payload,
+            subject: subject,
+            mailToFallbackEnabled: false,
+            downloadFallbackEnabled: false,
+          ),
         );
         return;
       } catch (retry) {
@@ -221,7 +232,9 @@ Future<void> _fallbackPortapapeles(
       feedbackContext,
       esPluginNativo
           ? 'No se abrió compartir. Link copiado al portapapeles.'
-          : 'Link copiado al portapapeles.',
+          : (kIsWeb
+                ? 'Link copiado. Pegalo donde quieras compartirlo.'
+                : 'Link copiado al portapapeles.'),
     );
   } catch (_) {
     if (feedbackContext != null && feedbackContext.mounted) {
