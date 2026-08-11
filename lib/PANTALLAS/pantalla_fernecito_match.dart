@@ -1040,7 +1040,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
           ),
         ),
         SizedBox(
-          height: 82,
+          height: 96,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
