@@ -34,6 +34,7 @@ enum _PasoPlan {
   fechasPreview,
   union,
   contacto,
+  beneficio,
   resumen,
   guardando,
   felicitacion,
@@ -62,6 +63,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
   bool _permiteSquads = true;
   String? _contacto;
   String _contactoModo = 'contactar';
+  String? _pedidoBeneficio;
+  String? _idPlanCreado;
   String _presetAsset = fondosPlanesPreset.first.asset;
   XFile? _imagen;
   String _tipoOrganizador = 'usuario';
@@ -193,6 +196,15 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         break;
       case _PasoPlan.contacto:
         _contacto = v;
+        _usuarioTexto(v);
+        await _preguntarBeneficio();
+        break;
+      case _PasoPlan.beneficio:
+        if (v.length < 3) {
+          _toast('El pedido tiene que tener al menos 3 caracteres.');
+          return;
+        }
+        _pedidoBeneficio = v;
         _usuarioTexto(v);
         await _mostrarResumen();
         break;
@@ -430,6 +442,22 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
     if (_procesando || _botEscribiendo) return;
     _contacto = null;
     _usuarioTexto('Sin contacto opcional');
+    await _preguntarBeneficio();
+  }
+
+  Future<void> _preguntarBeneficio() async {
+    await _bot([
+      'Última opción antes del resumen 🎁',
+      '¿Querés pedirle algo al local para el grupo?',
+    ]);
+    _irA(_PasoPlan.beneficio);
+    _focus.requestFocus();
+  }
+
+  Future<void> _saltearBeneficio() async {
+    if (_procesando || _botEscribiendo) return;
+    _pedidoBeneficio = null;
+    _usuarioTexto('No, seguir sin pedido');
     await _mostrarResumen();
   }
 
@@ -508,9 +536,23 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         _irA(_PasoPlan.resumen);
         return;
       }
+      _idPlanCreado = id;
+      var pedidoEnviado = true;
+      final pedido = _pedidoBeneficio?.trim();
+      if (pedido != null && pedido.isNotEmpty) {
+        try {
+          pedidoEnviado = await _srv.pedidoLocal(id, pedido);
+        } catch (_) {
+          pedidoEnviado = false;
+        }
+      }
       await _bot([
         '¡Listo! Plan publicado 🍻',
-        'Ya está en la cartelera para que la comunidad se sume.',
+        pedidoEnviado && pedido != null && pedido.isNotEmpty
+            ? 'También le pedimos al local: "$pedido".'
+            : pedido != null && pedido.isNotEmpty
+            ? 'El plan quedó publicado, pero no pudimos enviar el pedido al local.'
+            : 'Ya está en la cartelera para que la comunidad se sume.',
       ]);
       if (!mounted) return;
       setState(() {
@@ -605,11 +647,13 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         return 7;
       case _PasoPlan.contacto:
         return 8;
+      case _PasoPlan.beneficio:
+        return 9;
       case _PasoPlan.resumen:
       case _PasoPlan.guardando:
-        return 9;
-      case _PasoPlan.felicitacion:
         return 10;
+      case _PasoPlan.felicitacion:
+        return 11;
     }
   }
 
@@ -973,6 +1017,26 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
             ),
           ],
         );
+      case _PasoPlan.beneficio:
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _InputTextoPlan(
+              controller: _input,
+              focus: _focus,
+              hint: 'Ej: 2x1 en tragos para el grupo',
+              maxLines: 3,
+              onSend: _onTexto,
+            ),
+            const SizedBox(height: 8),
+            _OpcionBarraPlan(
+              texto: 'Seguir sin pedido',
+              icono: CupertinoIcons.forward,
+              skip: true,
+              onTap: _saltearBeneficio,
+            ),
+          ],
+        );
       case _PasoPlan.resumen:
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -989,6 +1053,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
               organizador: _nombreOrganizador,
               contacto: _contacto,
               contactoModo: _contactoModo,
+              pedidoBeneficio: _pedidoBeneficio,
             ),
             const SizedBox(height: 8),
             _OpcionBarraPlan(
@@ -1004,7 +1069,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
           texto: 'Ver cartelera',
           icono: CupertinoIcons.square_grid_2x2_fill,
           primario: true,
-          onTap: () => Navigator.of(context).pop(true),
+          onTap: () => Navigator.of(context).pop(_idPlanCreado),
         );
       default:
         return const _InputDeshabilitadoPlan(texto: 'Un segundo…');
@@ -1080,7 +1145,7 @@ class _HeaderPlan extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(999),
           child: LinearProgressIndicator(
-            value: paso / 10,
+            value: paso / 11,
             minHeight: 5,
             backgroundColor: Colors.white.withValues(alpha: 0.10),
             valueColor: AlwaysStoppedAnimation(ColoresApp.principalMarca),
@@ -1591,6 +1656,7 @@ class _ResumenPlanCard extends StatelessWidget {
     required this.organizador,
     this.contacto,
     this.contactoModo = 'contactar',
+    this.pedidoBeneficio,
   });
 
   final String titulo;
@@ -1603,6 +1669,7 @@ class _ResumenPlanCard extends StatelessWidget {
   final String organizador;
   final String? contacto;
   final String contactoModo;
+  final String? pedidoBeneficio;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1650,6 +1717,8 @@ class _ResumenPlanCard extends StatelessWidget {
                     ? 'Colaborar: ${contacto!.trim()}'
                     : 'Contactar: ${contacto!.trim()}',
               ),
+            if ((pedidoBeneficio ?? '').trim().isNotEmpty)
+              _PillPlan('Pedir al local: ${pedidoBeneficio!.trim()}'),
           ],
         ),
       ],

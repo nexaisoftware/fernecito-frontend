@@ -829,10 +829,11 @@ class _PanelEditar extends StatelessWidget {
           destacado: pendientes > 0,
         ),
         const SizedBox(height: 14),
-        if (plan.beneficioEstado == 'ninguno')
+        if (plan.beneficioEstado == 'ninguno' ||
+            plan.beneficioEstado == 'rechazado')
           _EditRow(
             icono: CupertinoIcons.gift,
-            label: 'Pedirle al local',
+            label: 'Pedirle algo al local',
             valor: 'Pedir un beneficio para el grupo',
             onTap: onPedirAlLocal,
           )
@@ -1041,7 +1042,11 @@ class _PedidoBox extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  'Pedido al local',
+                  estado == 'aceptado'
+                      ? 'Beneficio del local'
+                      : estado == 'contraoferta'
+                      ? 'Oferta del local (legacy)'
+                      : 'Pedido al local',
                   style: GoogleFonts.baloo2(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w900,
@@ -1109,8 +1114,9 @@ class _BadgeEstadoPedido extends StatelessWidget {
     final (texto, color) = switch (estado) {
       'aceptado' => ('Aceptado', const Color(0xFF34D399)),
       'rechazado' => ('Rechazado', const Color(0xFFF87171)),
-      'contraoferta' => ('Contraoferta', const Color(0xFF60A5FA)),
-      _ => ('Pendiente', const Color(0xFFF5A623)),
+      'contraoferta' => ('Oferta pendiente', const Color(0xFF60A5FA)),
+      'pedido' => ('Pedido pendiente', const Color(0xFFF5A623)),
+      _ => ('Sin pedido', Colors.white54),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

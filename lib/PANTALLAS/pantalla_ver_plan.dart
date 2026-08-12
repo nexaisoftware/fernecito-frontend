@@ -93,8 +93,9 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
   Future<String?> _elegirIdentidadUnion(PlanComunidad plan) async {
     final squads = await _srv.misSquads();
     if (!mounted) return '__cancel__';
+    if (squads.isEmpty) return '';
     final accion = plan.modoLista == 'manual' ? 'solicitar' : 'unirte';
-    return showCupertinoModalPopup<String>(
+    final idSquad = await showCupertinoModalPopup<String>(
       context: context,
       builder: (ctx) => Material(
         color: Colors.transparent,
@@ -165,6 +166,34 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
         ),
       ),
     );
+    if (idSquad == null || idSquad == '__cancel__') return '__cancel__';
+    final squad = squads.firstWhere(
+      (s) => s.idGrupo == idSquad,
+      orElse: () => squads.first,
+    );
+    final confirmar = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('Ir con ${squad.nombre}'),
+        content: Text(
+          'Vas a sumar a ${squad.cantidadMiembros} '
+          '${squad.cantidadMiembros == 1 ? 'persona' : 'personas'} '
+          'al plan.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ir con squad'),
+          ),
+        ],
+      ),
+    );
+    return confirmar == true ? idSquad : '__cancel__';
   }
 
   Future<bool> _gestionar(PlanMiembro miembro, String accion) async {
@@ -346,10 +375,18 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     if (ok != true) return;
     final plan = _plan;
     if (plan == null) return;
-    final res = await _srv.cancelar(plan.id);
-    if (res) {
-      _changed = true;
-      await _cargar();
+    try {
+      final res = await _srv.cancelar(plan.id);
+      if (res) {
+        _changed = true;
+        await _cargar();
+      } else if (mounted) {
+        _toast('No se pudo cancelar el plan. Probá de nuevo.');
+      }
+    } catch (e) {
+      if (mounted) {
+        _toast(_srv.mensajeError(e, accion: 'cancelar el plan'));
+      }
     }
   }
 
@@ -451,7 +488,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     try {
       final ok = await _srv.pedidoResponder(
         idPlan: plan.id,
-        accion: 'contraoferta',
+        accion: 'cambiar',
         contraoferta: texto,
       );
       if (!mounted) return;
@@ -546,7 +583,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
         .toList(growable: false);
     final pendientes =
         detalle?.miembros.where((m) => m.estado == 'pendiente').length ?? 0;
-    final hayPedido = plan.hayPedidoActivo || plan.beneficioEstado != 'ninguno';
+    final hayPedido = plan.hayPedidoActivo;
     final puedeVotar =
         plan.beneficioEstado == 'pedido' &&
         (plan.soyMiembro || plan.soyModerador) &&
@@ -554,8 +591,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     final soyLocal = plan.miEstado == 'local';
     final localPuedeResponder =
         soyLocal &&
-        (plan.beneficioEstado == 'pedido' ||
-            plan.beneficioEstado == 'contraoferta');
+        plan.beneficioEstado == 'pedido';
 
     return PopScope(
       canPop: false,
@@ -706,7 +742,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                       onAceptarLocal: _localAceptarPedido,
                       onContraofertaLocal: _localContraoferta,
                     ),
-                  ] else if (plan.soyModerador) ...[
+                  ] else if (plan.puedePedirBeneficio) ...[
                     const SizedBox(height: 14),
                     _FilaPedirAlLocal(
                       ocupado: _pedidoOcupado,
@@ -785,22 +821,29 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: _ActionButton(
-                          texto: plan.chatDisponible
-                              ? 'Chat del plan'
-                              : 'Chat bloqueado',
-                          secundario: !plan.chatDisponible,
-                          onTap: plan.chatDisponible
-                              ? () => Navigator.of(context, rootNavigator: true)
-                                    .push(
-                                      CupertinoPageRoute(
-                                        fullscreenDialog: true,
-                                        builder: (_) =>
-                                            PantallaChatPlan(plan: plan),
-                                      ),
-                                    )
-                              : null,
-                        ),
+                        child: plan.chatDisponible
+                            ? _ActionButton(
+                                texto: 'Chat del plan',
+                                onTap: () => Navigator.of(
+                                  context,
+                                  rootNavigator: true,
+                                ).push(
+                                  CupertinoPageRoute(
+                                    fullscreenDialog: true,
+                                    builder: (_) =>
+                                        PantallaChatPlan(plan: plan),
+                                  ),
+                                ),
+                              )
+                            : (!plan.estaFinalizado &&
+                                  !plan.soyMiembro &&
+                                  plan.puedeUnirse)
+                            ? _ActionButton(
+                                texto: 'Unite para chatear',
+                                secundario: true,
+                                onTap: _unirse,
+                              )
+                            : const SizedBox.shrink(),
                       ),
                     ],
                   ),
@@ -824,10 +867,24 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                           ? 'Plan finalizado'
                           : plan.soyPendiente
                           ? 'Solicitud pendiente'
+                          : plan.miEstado == 'expulsado'
+                          ? 'Ya no podés entrar'
+                          : plan.cupoLleno
+                          ? 'Cupo completo'
+                          : !plan.ingresoAbierto
+                          ? 'Ingreso cerrado'
                           : 'No disponible',
                       texto: plan.estaFinalizado
                           ? 'Este plan queda guardado como historial.'
-                          : 'Te avisamos cuando te acepten.',
+                          : plan.soyPendiente
+                          ? 'El admin tiene que aprobar tu solicitud.'
+                          : plan.miEstado == 'expulsado'
+                          ? 'Te expulsaron de este plan.'
+                          : plan.cupoLleno
+                          ? 'No quedan lugares disponibles.'
+                          : !plan.ingresoAbierto
+                          ? 'El admin cerró el ingreso de personas.'
+                          : 'Este plan no acepta nuevas solicitudes.',
                     ),
                   if (plan.soyModerador) ...[
                     const SizedBox(height: 8),
@@ -1031,7 +1088,7 @@ class _FilaPedirAlLocal extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Pedirle un beneficio al local',
+              'Pedirle algo al local',
               style: GoogleFonts.baloo2(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w900,
@@ -1088,7 +1145,7 @@ class _PedidoBox extends StatelessWidget {
       if (estado == 'contraoferta') {
         final oferta = (plan.beneficioContraoferta ?? '').trim();
         if (oferta.isNotEmpty) {
-          return '${plan.nombreLocal} propuso: "$oferta"';
+          return 'Oferta del local (pendiente): "$oferta"';
         }
       }
       return (plan.pedidoBeneficio ?? '').trim();
@@ -1113,7 +1170,11 @@ class _PedidoBox extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  'Pedir beneficio al local',
+                  estado == 'aceptado'
+                      ? 'Beneficio del local'
+                      : estado == 'contraoferta'
+                      ? 'Oferta del local (legacy)'
+                      : 'Pedido al local',
                   style: GoogleFonts.baloo2(
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
@@ -1228,7 +1289,7 @@ class _PedidoBox extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        'Proponer otra',
+                        'Cambiar',
                         style: GoogleFonts.baloo2(
                           fontSize: 13,
                           fontWeight: FontWeight.w900,
@@ -1299,8 +1360,9 @@ class _BadgeEstadoPedido extends StatelessWidget {
     final (texto, color) = switch (estado) {
       'aceptado' => ('Aceptado', const Color(0xFF34D399)),
       'rechazado' => ('Rechazado', const Color(0xFFF87171)),
-      'contraoferta' => ('Contraoferta', const Color(0xFF60A5FA)),
-      _ => ('Pendiente', const Color(0xFFF5A623)),
+      'contraoferta' => ('Oferta pendiente', const Color(0xFF60A5FA)),
+      'pedido' => ('Pedido pendiente', const Color(0xFFF5A623)),
+      _ => ('Sin pedido', Colors.white54),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

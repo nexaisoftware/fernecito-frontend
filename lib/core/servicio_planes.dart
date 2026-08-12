@@ -103,8 +103,12 @@ class PlanComunidad {
   bool get hayPedidoActivo =>
       beneficioEstado == 'pedido' ||
       beneficioEstado == 'aceptado' ||
-      beneficioEstado == 'rechazado' ||
-      (pedidoBeneficio != null && pedidoBeneficio!.trim().isNotEmpty);
+      beneficioEstado == 'contraoferta';
+
+  bool get puedePedirBeneficio =>
+      soyModerador &&
+      (beneficioEstado == 'ninguno' || beneficioEstado == 'rechazado') &&
+      !hayPedidoActivo;
 
   String? get fotoLocalUrl => ServicioSupabase().urlAvatarLocal(fotoLocal);
   String? get fotoOrganizadorUrl {
@@ -144,6 +148,7 @@ class PlanComunidad {
     String? beneficioEstado,
     String? pedidoBeneficio,
     int? pedidoVotos,
+    int? personasAceptadas,
   }) =>
       PlanComunidad(
         id: id,
@@ -184,7 +189,7 @@ class PlanComunidad {
         pedidoVotos: pedidoVotos ?? this.pedidoVotos,
         soyModerador: soyModerador,
         esPlanLocal: esPlanLocal,
-        personasAceptadas: personasAceptadas,
+        personasAceptadas: personasAceptadas ?? this.personasAceptadas,
         ingresoAbierto: ingresoAbierto ?? this.ingresoAbierto,
       );
 
@@ -781,6 +786,26 @@ class ServicioPlanes {
 
   Future<void> cerrarCanal(RealtimeChannel canal) async {
     await _c.removeChannel(canal);
+  }
+
+  RealtimeChannel suscribirCambiosPlan(
+    String idPlan,
+    void Function() onCambio,
+  ) {
+    return _c
+        .channel('plan_estado_$idPlan')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'planes',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: idPlan,
+          ),
+          callback: (_) => onCambio(),
+        )
+        .subscribe();
   }
 
   Future<List<PlanSquadOpcion>> misSquads() async {

@@ -40,10 +40,12 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
 
   List<PlanMensaje> _mensajes = const [];
   List<PlanMiembro> _miembros = const [];
+  PlanComunidad? _planActual;
   bool _cargando = true;
   bool _enviando = false;
   bool _bannerCerrado = false;
   RealtimeChannel? _canal;
+  RealtimeChannel? _canalEstado;
   final Map<String, String> _nombresAutores = {};
 
   String? _queryMencion;
@@ -51,14 +53,36 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
 
   String? get _miUid => _srv.miUid;
 
-  String get _handleLocal => handleMencionLocal(widget.plan.nombreLocal);
+  PlanComunidad get _plan => _planActual ?? widget.plan;
+
+  String get _handleLocal => handleMencionLocal(_plan.nombreLocal);
+
+  String? get _textoBannerBeneficio {
+    final estado = _plan.beneficioEstado;
+    final oferta = (estado == 'contraoferta'
+            ? _plan.beneficioContraoferta
+            : _plan.beneficioLocal)
+        ?.trim();
+    if (oferta == null || oferta.isEmpty) return null;
+    if (estado == 'contraoferta') {
+      return 'Oferta del local (pendiente): $oferta';
+    }
+    if ((_plan.pedidoBeneficio ?? '').trim().isNotEmpty) {
+      return 'El local se puso la 10 con: $oferta';
+    }
+    return 'Promo del local: $oferta';
+  }
 
   @override
   void initState() {
     super.initState();
     _ctrl.addListener(_onTextoCambio);
     _cargar();
-    _canal = _srv.suscribirMensajes(widget.plan.id, (m) {
+  }
+
+  void _suscribirRealtime() {
+    if (!_plan.chatDisponible || _canal != null) return;
+    _canal = _srv.suscribirMensajes(_plan.id, (m) {
       if (!mounted) return;
       if (_mensajes.any((x) => x.id == m.id)) return;
       setState(() {
@@ -78,6 +102,18 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
       unawaited(_resolverNombre(m));
       _bajar();
     });
+    _canalEstado ??= _srv.suscribirCambiosPlan(_plan.id, () {
+      unawaited(_refrescarPlan());
+    });
+  }
+
+  Future<void> _cerrarRealtime() async {
+    final canal = _canal;
+    final canalEstado = _canalEstado;
+    _canal = null;
+    _canalEstado = null;
+    if (canal != null) await _srv.cerrarCanal(canal);
+    if (canalEstado != null) await _srv.cerrarCanal(canalEstado);
   }
 
   @override
@@ -85,6 +121,8 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
     _ctrl.removeListener(_onTextoCambio);
     final canal = _canal;
     if (canal != null) unawaited(_srv.cerrarCanal(canal));
+    final canalEstado = _canalEstado;
+    if (canalEstado != null) unawaited(_srv.cerrarCanal(canalEstado));
     _ctrl.dispose();
     _scroll.dispose();
     _focus.dispose();
@@ -93,13 +131,14 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
 
   Future<void> _cargar() async {
     try {
-      final mensajesF = _srv.historial(widget.plan.id);
-      final detalleF = _srv.detalle(widget.plan.id);
+      final mensajesF = _srv.historial(_plan.id);
+      final detalleF = _srv.detalle(_plan.id);
       final mensajes = await mensajesF;
       final det = await detalleF;
-      await _srv.marcarLeido(widget.plan.id);
+      await _srv.marcarLeido(_plan.id);
       if (!mounted) return;
       setState(() {
+        _planActual = det.detalle?.plan ?? _plan;
         _mensajes = mensajes;
         _miembros = (det.detalle?.miembros ?? const [])
             .where((m) => m.estado == 'aceptado')
@@ -111,12 +150,33 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
         }
         _cargando = false;
       });
+      if (_plan.chatDisponible) {
+        _suscribirRealtime();
+      } else {
+        await _cerrarRealtime();
+      }
       for (final m in mensajes) {
         unawaited(_resolverNombre(m));
       }
       _bajar();
     } catch (_) {
       if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  Future<void> _refrescarPlan() async {
+    final res = await _srv.detalle(_plan.id);
+    if (!mounted || res.detalle == null) return;
+    setState(() {
+      _planActual = res.detalle!.plan;
+      _miembros = res.detalle!.miembros
+          .where((m) => m.estado == 'aceptado')
+          .toList(growable: false);
+    });
+    if (_plan.chatDisponible) {
+      _suscribirRealtime();
+    } else {
+      await _cerrarRealtime();
     }
   }
 
@@ -196,11 +256,11 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
     final q = (_queryMencion ?? '').toLowerCase();
     final out = <_CandidatoMencion>[];
     final handleLocal = _handleLocal;
-    final nombreLocal = widget.plan.nombreLocal.trim().isNotEmpty
-        ? widget.plan.nombreLocal.trim()
+    final nombreLocal = _plan.nombreLocal.trim().isNotEmpty
+        ? _plan.nombreLocal.trim()
         : 'Local';
 
-    if (widget.plan.idLocal != _miUid &&
+    if (_plan.idLocal != _miUid &&
         (q.isEmpty ||
             'local'.startsWith(q) ||
             handleLocal.startsWith(q) ||
@@ -217,10 +277,9 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
 
     for (final m in _miembros) {
       final user = (m.username ?? '').trim();
-      if (user.isEmpty) continue;
       if (m.idUsuario == _miUid) continue;
       if (q.isNotEmpty &&
-          !user.toLowerCase().startsWith(q) &&
+          (user.isEmpty || !user.toLowerCase().startsWith(q)) &&
           !m.nombre.toLowerCase().contains(q)) {
         continue;
       }
@@ -228,8 +287,9 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
         _CandidatoMencion(
           handle: user,
           label: m.nombre,
-          subtitulo: '@$user',
+          subtitulo: user.isEmpty ? 'sin @' : '@$user',
           esLocal: false,
+          habilitado: user.isNotEmpty,
         ),
       );
     }
@@ -280,7 +340,7 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
     });
     _bajar();
     try {
-      final idReal = await _srv.enviarMensaje(widget.plan.id, texto);
+      final idReal = await _srv.enviarMensaje(_plan.id, texto);
       if (!mounted) return;
       setState(() {
         final copia = [..._mensajes];
@@ -328,8 +388,10 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
     final bottomGap = kIsWeb
         ? (keyboard > 0 ? 8.0 : safeBottom)
         : (keyboard > 0 ? keyboard : safeBottom);
-    final candidatos =
-        _queryMencion != null ? _candidatos : const <_CandidatoMencion>[];
+    final candidatos = _plan.chatDisponible && _queryMencion != null
+        ? _candidatos
+        : const <_CandidatoMencion>[];
+    final bannerTexto = _textoBannerBeneficio;
 
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
@@ -353,7 +415,7 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      widget.plan.titulo,
+                      _plan.titulo,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.baloo2(
@@ -366,14 +428,7 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                 ],
               ),
             ),
-            if (!_bannerCerrado &&
-                (widget.plan.beneficioEstado == 'aceptado' ||
-                    widget.plan.beneficioEstado == 'contraoferta') &&
-                ((widget.plan.beneficioLocal ??
-                            widget.plan.beneficioContraoferta ??
-                            '')
-                        .trim()
-                        .isNotEmpty))
+            if (!_bannerCerrado && bannerTexto != null)
               Container(
                 margin: const EdgeInsets.fromLTRB(12, 6, 12, 4),
                 padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
@@ -385,7 +440,7 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                   children: [
                     Expanded(
                       child: Text(
-                        'El local se puso la 10 con: ${(widget.plan.beneficioLocal ?? widget.plan.beneficioContraoferta)!.trim()}',
+                        bannerTexto,
                         style: GoogleFonts.baloo2(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w800,
@@ -444,8 +499,7 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                       itemBuilder: (_, i) => _BurbujaMensaje(
                         m: _mensajes[i],
                         esMio: _mensajes[i].idAutor == _miUid,
-                        esAdmin:
-                            _mensajes[i].idAutor == widget.plan.idOrganizador,
+                        esAdmin: _mensajes[i].idAutor == _plan.idOrganizador,
                         nombreAutor: _nombreAutor(_mensajes[i]),
                       ),
                     ),
@@ -476,7 +530,9 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                         horizontal: 12,
                         vertical: 8,
                       ),
-                      onPressed: () => _insertarMencion(c),
+                      onPressed: c.habilitado
+                          ? () => _insertarMencion(c)
+                          : null,
                       child: Row(
                         children: [
                           Icon(
@@ -484,7 +540,9 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                                 ? CupertinoIcons.building_2_fill
                                 : CupertinoIcons.person_fill,
                             size: 18,
-                            color: c.esLocal
+                            color: !c.habilitado
+                                ? Colors.white38
+                                : c.esLocal
                                 ? const Color(0xFF5EEAD4)
                                 : ColoresApp.principalMarca,
                           ),
@@ -500,7 +558,9 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                                   style: GoogleFonts.baloo2(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w800,
-                                    color: Colors.white,
+                                    color: c.habilitado
+                                        ? Colors.white
+                                        : Colors.white54,
                                   ),
                                 ),
                                 Text(
@@ -508,7 +568,9 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                                   style: GoogleFonts.baloo2(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.white54,
+                                    color: c.habilitado
+                                        ? Colors.white54
+                                        : Colors.white38,
                                   ),
                                 ),
                               ],
@@ -520,51 +582,54 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                   },
                 ),
               ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(12, 8, 12, bottomGap + 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: CupertinoTextField(
-                      controller: _ctrl,
-                      focusNode: _focus,
-                      placeholder: 'Escribí… Tocá @ para mencionar',
-                      placeholderStyle: TextStyle(
-                        color: ColoresApp.textoSecundario.withValues(
-                          alpha: 0.75,
-                        ),
-                      ),
-                      style: const TextStyle(color: Colors.white),
-                      minLines: 1,
-                      maxLines: 4,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.07),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      onSubmitted: (_) => _enviar(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  CupertinoButton(
-                    padding: const EdgeInsets.all(12),
-                    color: ColoresApp.principalMarca,
-                    borderRadius: BorderRadius.circular(16),
-                    onPressed: _enviando ? null : _enviar,
-                    child: _enviando
-                        ? const CupertinoActivityIndicator(color: Colors.white)
-                        : const Icon(
-                            CupertinoIcons.paperplane_fill,
-                            color: Colors.white,
-                            size: 19,
+            if (_plan.chatDisponible)
+              Padding(
+                padding: EdgeInsets.fromLTRB(12, 8, 12, bottomGap + 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: CupertinoTextField(
+                        controller: _ctrl,
+                        focusNode: _focus,
+                        placeholder: 'Escribí… Tocá @ para mencionar',
+                        placeholderStyle: TextStyle(
+                          color: ColoresApp.textoSecundario.withValues(
+                            alpha: 0.75,
                           ),
-                  ),
-                ],
+                        ),
+                        style: const TextStyle(color: Colors.white),
+                        minLines: 1,
+                        maxLines: 4,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.07),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        onSubmitted: (_) => _enviar(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    CupertinoButton(
+                      padding: const EdgeInsets.all(12),
+                      color: ColoresApp.principalMarca,
+                      borderRadius: BorderRadius.circular(16),
+                      onPressed: _enviando ? null : _enviar,
+                      child: _enviando
+                          ? const CupertinoActivityIndicator(
+                              color: Colors.white,
+                            )
+                          : const Icon(
+                              CupertinoIcons.paperplane_fill,
+                              color: Colors.white,
+                              size: 19,
+                            ),
+                    ),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -573,10 +638,10 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
 
   String? _nombreAutor(PlanMensaje m) {
     if (m.esSistema) return null;
-    if (m.esLocal) return widget.plan.nombreLocal;
+    if (m.esLocal) return _plan.nombreLocal;
     if (m.idAutor == _miUid) return 'Vos';
-    if (m.idAutor == widget.plan.idOrganizador) {
-      return widget.plan.nombreOrganizador;
+    if (m.idAutor == _plan.idOrganizador) {
+      return _plan.nombreOrganizador;
     }
     return m.idAutor == null ? 'Alguien' : _nombresAutores[m.idAutor!] ?? '...';
   }
@@ -588,11 +653,13 @@ class _CandidatoMencion {
     required this.label,
     required this.subtitulo,
     required this.esLocal,
+    this.habilitado = true,
   });
   final String handle;
   final String label;
   final String subtitulo;
   final bool esLocal;
+  final bool habilitado;
 }
 
 /// Paleta estilo WhatsApp: colores fuertes y de buen contraste sobre fondo

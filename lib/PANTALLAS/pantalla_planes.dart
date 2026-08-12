@@ -145,14 +145,22 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
   }
 
   Future<void> _crearPlan() async {
-    final creado = await Navigator.of(context, rootNavigator: true).push<bool>(
+    final idPlan = await Navigator.of(context, rootNavigator: true).push<String>(
       CupertinoPageRoute(
         fullscreenDialog: true,
         builder: (_) => const PantallaCrearPlan(),
       ),
     );
-    if (creado == true) {
+    if (idPlan != null && mounted) {
       await _cargar(reset: true);
+      if (!mounted) return;
+      final changed = await Navigator.of(context, rootNavigator: true).push<bool>(
+        CupertinoPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => PantallaVerPlan(idPlan: idPlan),
+        ),
+      );
+      if (changed == true) await _cargar(reset: true);
     }
   }
 
@@ -205,6 +213,9 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
                       cupoUsados: estado == 'aceptado'
                           ? p.cupoUsados + res.cantidad
                           : p.cupoUsados,
+                      personasAceptadas: estado == 'aceptado'
+                          ? p.personasAceptadas + res.cantidad
+                          : p.personasAceptadas,
                     )
                   : p,
             )
@@ -225,8 +236,9 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
   Future<String?> _elegirIdentidadUnion(PlanComunidad plan) async {
     final squads = await _srv.misSquads();
     if (!mounted) return '__cancel__';
+    if (squads.isEmpty) return '';
     final accion = plan.modoLista == 'manual' ? 'solicitar' : 'unirte';
-    return showCupertinoModalPopup<String>(
+    final idSquad = await showCupertinoModalPopup<String>(
       context: context,
       builder: (ctx) => Material(
         color: Colors.transparent,
@@ -297,6 +309,34 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
         ),
       ),
     );
+    if (idSquad == null || idSquad == '__cancel__') return '__cancel__';
+    final squad = squads.firstWhere(
+      (s) => s.idGrupo == idSquad,
+      orElse: () => squads.first,
+    );
+    final confirmar = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('Ir con ${squad.nombre}'),
+        content: Text(
+          'Vas a sumar a ${squad.cantidadMiembros} '
+          '${squad.cantidadMiembros == 1 ? 'persona' : 'personas'} '
+          'al plan.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ir con squad'),
+          ),
+        ],
+      ),
+    );
+    return confirmar == true ? idSquad : '__cancel__';
   }
 
   void _toast(String texto) {
@@ -778,7 +818,7 @@ class _CardPlan extends StatelessWidget {
     return Opacity(
       opacity: desactivada ? 0.52 : 1,
       child: GestureDetector(
-        onTap: onTap,
+        onTap: desactivada ? null : onTap,
         child: Container(
           constraints: const BoxConstraints(minHeight: 188),
           decoration: BoxDecoration(
@@ -824,7 +864,7 @@ class _CardPlan extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(child: _AutoresPlanLine(plan: plan)),
-                        if (onCompartir != null) ...[
+                        if (onCompartir != null && !desactivada) ...[
                           const SizedBox(width: 6),
                           GestureDetector(
                             onTap: onCompartir,
@@ -836,7 +876,9 @@ class _CardPlan extends StatelessWidget {
                           ),
                         ],
                         const SizedBox(width: 8),
-                        if (plan.soyModerador)
+                        if (desactivada)
+                          const _FinalizadoBadge()
+                        else if (plan.soyModerador)
                           const _MiniBadge('Sos admin')
                         else
                           _EstadoBadge(plan: plan),
@@ -911,7 +953,9 @@ class _CardPlan extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 9),
-                    if (plan.soyMiembro)
+                    if (desactivada)
+                      const _BotonGlassDeshabilitado(texto: 'Finalizado')
+                    else if (plan.soyMiembro)
                       _BotonGlass(texto: 'Ver plan', onTap: onTap)
                     else
                       Row(
@@ -977,6 +1021,8 @@ class _BotonPlan extends StatelessWidget {
         ? 'Ya estás'
         : plan.soyPendiente
         ? 'Pendiente'
+        : !plan.ingresoAbierto
+        ? 'Cerrado'
         : plan.cupoLleno
         ? 'Lleno'
         : plan.modoLista == 'manual'
@@ -1035,6 +1081,30 @@ class _BotonGlass extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BotonGlassDeshabilitado extends StatelessWidget {
+  const _BotonGlassDeshabilitado({required this.texto});
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 30,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+    ),
+    child: Text(
+      texto,
+      style: GoogleFonts.baloo2(
+        fontSize: 12.5,
+        fontWeight: FontWeight.w900,
+        color: Colors.white70,
+      ),
+    ),
+  );
 }
 
 class _AutoresPlanLine extends StatelessWidget {
@@ -1168,6 +1238,28 @@ class _EstadoBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+class _FinalizadoBadge extends StatelessWidget {
+  const _FinalizadoBadge();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: 0.52),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+    ),
+    child: Text(
+      'Finalizado',
+      style: GoogleFonts.baloo2(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w900,
+        color: Colors.white70,
+      ),
+    ),
+  );
 }
 
 class _MiniBadgePersonas extends StatelessWidget {
