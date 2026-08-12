@@ -31,7 +31,9 @@ class ServicioImpresiones {
   static final ServicioImpresiones instancia = ServicioImpresiones._();
 
   static const _intervaloMinimo = Duration(seconds: 30);
-  static const _uuidPerfilSentinel = '00000000-0000-0000-0000-000000000000';
+  /// Sentinel cuando no hay evento (perfil / card de local en cartelera).
+  static const uuidSinEvento = '00000000-0000-0000-0000-000000000000';
+  static const _uuidPerfilSentinel = uuidSinEvento;
   static const _maxHistorialSesion = 1000;
 
   final Map<String, int> _pendientes = {};

@@ -52,7 +52,6 @@ import '../core/ubicaciones_data.dart';
 import '../widgets/avatar_local.dart';
 import '../widgets/cards_cartelera.dart';
 import '../widgets/card_local_cartelera.dart';
-import '../widgets/detector_impresion_local_cartelera.dart';
 import '../widgets/carrusel_auto_scroll.dart';
 import '../widgets/detector_impresion_cartelera.dart';
 import '../widgets/fernecito_loader.dart';
@@ -2149,9 +2148,12 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
             onTap: () => _irALocalCartelera(local),
           );
         }
+        // Misma mecánica que eventos: ~10% visible → 1 vista (card_local).
         if (local.localId.isNotEmpty) {
-          card = DetectorImpresionLocalCartelera(
+          card = DetectorImpresionCartelera(
             idLocal: local.localId,
+            idEvento: ServicioImpresiones.uuidSinEvento,
+            seccion: SeccionesImpresion.cardLocal,
             child: card,
           );
         }
@@ -2305,8 +2307,10 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
                   onTap: () => _irALocalCartelera(local),
                 );
                 if (local.localId.isNotEmpty) {
-                  card = DetectorImpresionLocalCartelera(
+                  card = DetectorImpresionCartelera(
                     idLocal: local.localId,
+                    idEvento: ServicioImpresiones.uuidSinEvento,
+                    seccion: SeccionesImpresion.cardLocal,
                     child: card,
                   );
                 }
