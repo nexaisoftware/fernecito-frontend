@@ -1133,19 +1133,29 @@ class _PedidoBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final estado = plan.beneficioEstado;
+    final confirmado = estado == 'aceptado' || estado == 'contraoferta';
     final desc = () {
-      if (estado == 'aceptado') {
-        final oferta = (plan.beneficioLocal ?? plan.pedidoBeneficio ?? '')
-            .trim();
+      if (confirmado) {
+        final oferta =
+            (plan.beneficioLocal ?? plan.beneficioContraoferta ?? '').trim();
+        final pedido = (plan.pedidoBeneficio ?? '').trim();
+        final contra = (plan.beneficioContraoferta ?? '').trim();
         if (oferta.isNotEmpty) {
-          return '¡Se puso la 10! ${plan.nombreLocal} aceptó "$oferta"';
+          if (pedido.isNotEmpty &&
+              contra.isNotEmpty &&
+              contra.toLowerCase() != pedido.toLowerCase()) {
+            return '${plan.nombreLocal} ofreció otra cosa: "$oferta"';
+          }
+          if (pedido.isNotEmpty) {
+            return '¡Se puso la 10! ${plan.nombreLocal} aceptó "$oferta"';
+          }
+          return 'Promo si te unís: "$oferta"';
         }
       }
-      if (estado == 'contraoferta') {
-        final oferta = (plan.beneficioContraoferta ?? '').trim();
-        if (oferta.isNotEmpty) {
-          return 'Oferta del local (pendiente): "$oferta"';
-        }
+      if (estado == 'pedido') {
+        final p = (plan.pedidoBeneficio ?? '').trim();
+        if (p.isEmpty) return 'El local todavía no respondió.';
+        return 'Aún no aceptado: "$p"';
       }
       return (plan.pedidoBeneficio ?? '').trim();
     }();
@@ -1169,10 +1179,10 @@ class _PedidoBox extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  estado == 'aceptado'
+                  confirmado
                       ? 'Beneficio del local'
-                      : estado == 'contraoferta'
-                      ? 'Oferta del local (legacy)'
+                      : estado == 'pedido'
+                      ? 'Pedido al local (sin aceptar)'
                       : 'Pedido al local',
                   style: GoogleFonts.baloo2(
                     fontSize: 14,
@@ -1358,9 +1368,9 @@ class _BadgeEstadoPedido extends StatelessWidget {
   Widget build(BuildContext context) {
     final (texto, color) = switch (estado) {
       'aceptado' => ('Aceptado', const Color(0xFF34D399)),
-      'rechazado' => ('Rechazado', const Color(0xFFF87171)),
-      'contraoferta' => ('Oferta pendiente', const Color(0xFF60A5FA)),
-      'pedido' => ('Pedido pendiente', const Color(0xFFF5A623)),
+      'rechazado' => ('Ignorado', const Color(0xFFF87171)),
+      'contraoferta' => ('Aceptado', const Color(0xFF34D399)),
+      'pedido' => ('Aún no aceptado', const Color(0xFFF5A623)),
       _ => ('Sin pedido', Colors.white54),
     };
     return Container(

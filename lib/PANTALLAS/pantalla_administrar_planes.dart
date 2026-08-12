@@ -1044,10 +1044,10 @@ class _PedidoBox extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  estado == 'aceptado'
+                  (estado == 'aceptado' || estado == 'contraoferta')
                       ? 'Beneficio del local'
-                      : estado == 'contraoferta'
-                      ? 'Oferta del local (legacy)'
+                      : estado == 'pedido'
+                      ? 'Pedido al local (sin aceptar)'
                       : 'Pedido al local',
                   style: GoogleFonts.baloo2(
                     fontSize: 13.5,
@@ -1059,10 +1059,23 @@ class _PedidoBox extends StatelessWidget {
               _BadgeEstadoPedido(estado: estado),
             ],
           ),
-          if ((plan.pedidoBeneficio ?? '').trim().isNotEmpty) ...[
+          if ((plan.beneficioLocal ?? '').trim().isNotEmpty &&
+              (estado == 'aceptado' || estado == 'contraoferta')) ...[
             const SizedBox(height: 8),
             Text(
-              plan.pedidoBeneficio!.trim(),
+              plan.beneficioLocal!.trim(),
+              style: GoogleFonts.baloo2(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
+          ] else if ((plan.pedidoBeneficio ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              estado == 'pedido'
+                  ? 'Aún no aceptado: ${plan.pedidoBeneficio!.trim()}'
+                  : plan.pedidoBeneficio!.trim(),
               style: GoogleFonts.baloo2(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w700,
@@ -1070,11 +1083,14 @@ class _PedidoBox extends StatelessWidget {
               ),
             ),
           ],
-          if (estado == 'contraoferta' &&
-              (plan.beneficioContraoferta ?? '').trim().isNotEmpty) ...[
+          if ((estado == 'aceptado' || estado == 'contraoferta') &&
+              (plan.beneficioContraoferta ?? '').trim().isNotEmpty &&
+              (plan.pedidoBeneficio ?? '').trim().isNotEmpty &&
+              plan.beneficioContraoferta!.trim().toLowerCase() !=
+                  plan.pedidoBeneficio!.trim().toLowerCase()) ...[
             const SizedBox(height: 6),
             Text(
-              'Contraoferta: ${plan.beneficioContraoferta!.trim()}',
+              'El local ofreció otra cosa (en vez del pedido original).',
               style: GoogleFonts.baloo2(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
@@ -1115,9 +1131,9 @@ class _BadgeEstadoPedido extends StatelessWidget {
   Widget build(BuildContext context) {
     final (texto, color) = switch (estado) {
       'aceptado' => ('Aceptado', const Color(0xFF34D399)),
-      'rechazado' => ('Rechazado', const Color(0xFFF87171)),
-      'contraoferta' => ('Oferta pendiente', const Color(0xFF60A5FA)),
-      'pedido' => ('Pedido pendiente', const Color(0xFFF5A623)),
+      'rechazado' => ('Ignorado', const Color(0xFFF87171)),
+      'contraoferta' => ('Aceptado', const Color(0xFF34D399)),
+      'pedido' => ('Aún no aceptado', const Color(0xFFF5A623)),
       _ => ('Sin pedido', Colors.white54),
     };
     return Container(

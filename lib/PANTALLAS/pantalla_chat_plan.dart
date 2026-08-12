@@ -60,22 +60,21 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
 
   String? get _textoBannerBeneficio {
     final estado = _plan.beneficioEstado;
+    // One-shot: aceptar/cambiar quedan en 'aceptado'. 'contraoferta' es legacy.
+    if (estado != 'aceptado' && estado != 'contraoferta') return null;
     final oferta = (_plan.beneficioLocal ?? _plan.beneficioContraoferta)?.trim();
-    if (estado == 'aceptado') {
-      if (oferta == null || oferta.isEmpty) return null;
-      // Hubo pedido del grupo → “se puso la 10”; si no, promo del local.
-      if ((_plan.pedidoBeneficio ?? '').trim().isNotEmpty) {
-        return 'El local se puso la 10 con: $oferta';
-      }
-      return 'Promo del local: $oferta';
+    if (oferta == null || oferta.isEmpty) return null;
+    final pedido = (_plan.pedidoBeneficio ?? '').trim();
+    final contra = (_plan.beneficioContraoferta ?? '').trim();
+    if (pedido.isNotEmpty &&
+        contra.isNotEmpty &&
+        contra.toLowerCase() != pedido.toLowerCase()) {
+      return 'El local ofreció otra cosa: $oferta';
     }
-    // Legacy: contraoferta pendiente (ya no debería ocurrir con flujo one-shot).
-    if (estado == 'contraoferta') {
-      final c = (_plan.beneficioContraoferta ?? '').trim();
-      if (c.isEmpty) return null;
-      return 'Oferta del local (pendiente): $c';
+    if (pedido.isNotEmpty) {
+      return 'El local se puso la 10 con: $oferta';
     }
-    return null;
+    return 'Promo del local: $oferta';
   }
 
   @override
