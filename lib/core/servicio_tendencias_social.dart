@@ -14,19 +14,19 @@ class ServicioTendenciasSocial {
     Set<String> ciudades = const {},
     String? provincia,
     int dias = 7,
-    int limite = 5,
+    int limite = 10,
   }) async {
     try {
-      // Ranking semanal: puntaje base (completitud de perfil) + interacciones
-      // de los últimos 7 días (vistas/clicks de flyers, visitas, likes,
-      // reseñas y flyers activos).
+      // Top N entre las ciudades activas del usuario (manual o inteligente).
+      // Backend: top 5 por ciudad materializado cada 3h + merge por score.
+      // Score = puntos_base (perfil fijo) + métricas últimos 7 días.
       final response = await rpcConReintento(
         () => ServicioSupabase().cliente.rpc(
         'social_locales_ranking_semanal',
         params: {
           'p_ciudades': ciudades.isEmpty ? null : ciudades.toList(),
           'p_provincia': provincia,
-          'p_limite': limite,
+          'p_limite': limite.clamp(1, 10),
         },
       ),
         etiqueta: 'tendencias_locales',

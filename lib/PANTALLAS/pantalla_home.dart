@@ -2225,16 +2225,11 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     );
   }
 
+  /// El RPC ya filtró por ciudades activas (+ alias). No re-filtrar por string
+  /// exacto: "Córdoba" vs "Córdoba capital" vaciaba la sección.
   List<Map<String, dynamic>> _localesPopularesFiltrados() {
-    if (_ciudadesActivas.isEmpty) return const [];
-    return _locales
-        .where((l) {
-          final c = l['ciudad']?.toString().trim();
-          if (c == null || c.isEmpty) return false;
-          return _ciudadesActivas.contains(c);
-        })
-        .take(5)
-        .toList();
+    if (_locales.isEmpty) return const [];
+    return _locales.take(5).toList(growable: false);
   }
 
   // ---- Sección TOP 5 LOCALES TENDENCIA ----
