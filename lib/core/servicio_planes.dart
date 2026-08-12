@@ -39,6 +39,7 @@ class PlanComunidad {
     this.colorHex = '#C084FC',
     this.permiteSquads = true,
     this.edadMinima,
+    this.contactoTitulo,
     this.contactoAnfitrion,
     this.contactoModo = 'contactar',
     this.beneficioLocal,
@@ -80,6 +81,7 @@ class PlanComunidad {
   final String colorHex;
   final bool permiteSquads;
   final int? edadMinima;
+  final String? contactoTitulo;
   final String? contactoAnfitrion;
   final String contactoModo; // contactar | colaborar
   final String? beneficioLocal;
@@ -106,9 +108,7 @@ class PlanComunidad {
       beneficioEstado == 'contraoferta';
 
   bool get puedePedirBeneficio =>
-      soyModerador &&
-      (beneficioEstado == 'ninguno' || beneficioEstado == 'rechazado') &&
-      !hayPedidoActivo;
+      soyModerador && beneficioEstado == 'ninguno' && !hayPedidoActivo;
 
   String? get fotoLocalUrl => ServicioSupabase().urlAvatarLocal(fotoLocal);
   String? get fotoOrganizadorUrl {
@@ -147,6 +147,7 @@ class PlanComunidad {
     String? pedidoBeneficio,
     int? pedidoVotos,
     int? personasAceptadas,
+    String? contactoTitulo,
   }) => PlanComunidad(
     id: id,
     titulo: titulo,
@@ -176,6 +177,7 @@ class PlanComunidad {
     colorHex: colorHex,
     permiteSquads: permiteSquads,
     edadMinima: edadMinima,
+    contactoTitulo: contactoTitulo ?? this.contactoTitulo,
     contactoAnfitrion: contactoAnfitrion,
     contactoModo: contactoModo,
     beneficioLocal: beneficioLocal,
@@ -197,6 +199,11 @@ class PlanComunidad {
 
     int? n(dynamic v) =>
         v is num ? v.toInt() : int.tryParse(v?.toString() ?? '');
+
+    final beneficioEstadoRaw = m['beneficio_estado']?.toString() ?? 'ninguno';
+    final beneficioEstado = beneficioEstadoRaw == 'rechazado'
+        ? 'ninguno'
+        : beneficioEstadoRaw;
 
     return PlanComunidad(
       id: m['id']?.toString() ?? '',
@@ -227,12 +234,13 @@ class PlanComunidad {
       colorHex: m['color_hex']?.toString() ?? '#C084FC',
       permiteSquads: m['permite_squads'] != false,
       edadMinima: n(m['edad_minima']),
+      contactoTitulo: m['contacto_titulo']?.toString(),
       contactoAnfitrion: m['contacto_anfitrion']?.toString(),
       contactoModo: m['contacto_modo']?.toString() == 'colaborar'
           ? 'colaborar'
           : 'contactar',
       beneficioLocal: m['beneficio_local']?.toString(),
-      beneficioEstado: m['beneficio_estado']?.toString() ?? 'ninguno',
+      beneficioEstado: beneficioEstado,
       beneficioContraoferta: m['beneficio_contraoferta']?.toString(),
       pedidoBeneficio: m['pedido_beneficio']?.toString(),
       pedidoVotos: n(m['pedido_votos']) ?? 0,
@@ -496,8 +504,10 @@ class ServicioPlanes {
     int? cupoMax,
     String tipoOrganizador = 'usuario',
     String? idSquad,
+    String? contactoTitulo,
     String? contactoAnfitrion,
     String contactoModo = 'contactar',
+    String? pedidoBeneficio,
     String? portadaPath,
     String colorHex = '#C084FC',
     bool permiteSquads = true,
@@ -515,10 +525,12 @@ class ServicioPlanes {
         'p_cupo_max': cupoMax,
         'p_tipo_organizador': tipoOrganizador,
         if (idSquad != null) 'p_id_squad': idSquad,
+        'p_contacto_titulo': contactoTitulo,
         'p_contacto_anfitrion': contactoAnfitrion,
         'p_contacto_modo': contactoModo == 'colaborar'
             ? 'colaborar'
             : 'contactar',
+        'p_pedido_beneficio': pedidoBeneficio,
         'p_portada_path': portadaPath,
         'p_color_hex': colorHex,
         'p_permite_squads': permiteSquads,
@@ -848,6 +860,7 @@ class ServicioPlanes {
     int? cupoMax,
     bool sinCupo = false,
     bool? ingresoAbierto,
+    String? contactoTitulo,
     String? contactoAnfitrion,
     String? contactoModo,
     bool limpiarContacto = false,
@@ -863,6 +876,7 @@ class ServicioPlanes {
         'p_cupo_max': cupoMax,
         'p_sin_cupo': sinCupo,
         'p_ingreso_abierto': ingresoAbierto,
+        'p_contacto_titulo': contactoTitulo,
         'p_contacto_anfitrion': contactoAnfitrion,
         'p_contacto_modo': contactoModo,
         'p_limpiar_contacto': limpiarContacto,

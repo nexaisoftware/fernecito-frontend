@@ -62,7 +62,8 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
     final estado = _plan.beneficioEstado;
     // One-shot: aceptar/cambiar quedan en 'aceptado'. 'contraoferta' es legacy.
     if (estado != 'aceptado' && estado != 'contraoferta') return null;
-    final oferta = (_plan.beneficioLocal ?? _plan.beneficioContraoferta)?.trim();
+    final oferta = (_plan.beneficioLocal ?? _plan.beneficioContraoferta)
+        ?.trim();
     if (oferta == null || oferta.isEmpty) return null;
     final pedido = (_plan.pedidoBeneficio ?? '').trim();
     final contra = (_plan.beneficioContraoferta ?? '').trim();
@@ -742,6 +743,7 @@ class _BurbujaMensaje extends StatelessWidget {
         ),
         margin: const EdgeInsets.symmetric(vertical: 5),
         padding: const EdgeInsets.fromLTRB(13, 9, 13, 10),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: local
               ? const Color(0xFF14B8A6).withValues(alpha: 0.18)
@@ -749,10 +751,10 @@ class _BurbujaMensaje extends StatelessWidget {
               ? Colors.white.withValues(alpha: 0.12)
               : Colors.white.withValues(alpha: 0.065),
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(22),
-            topRight: const Radius.circular(22),
-            bottomLeft: Radius.circular(esMio ? 22 : 8),
-            bottomRight: Radius.circular(esMio ? 8 : 22),
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(esMio ? 16 : 7),
+            bottomRight: Radius.circular(esMio ? 7 : 16),
           ),
           border: local
               ? Border.all(

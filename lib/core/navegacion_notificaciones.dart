@@ -179,8 +179,7 @@ Future<bool> abrirEventoDesdeNotificacion(Notificacion n) async {
 }
 
 Future<bool> abrirPlanDesdeNotificacion(Notificacion n) async {
-  final idPlan =
-      n.ctaIdRef?.trim() ?? n.payload?['id_plan']?.toString().trim();
+  final idPlan = n.ctaIdRef?.trim() ?? n.payload?['id_plan']?.toString().trim();
   final accion =
       n.payload?['accion']?.toString() ??
       (n.tipo == 'plan_aceptado'
@@ -189,21 +188,30 @@ Future<bool> abrirPlanDesdeNotificacion(Notificacion n) async {
                 ? 'hub'
                 : 'detalle'));
 
-  // Cancelado / eliminado (o sin id): volver al hub de planes.
-  if (accion == 'hub' || idPlan == null || idPlan.isEmpty) {
+  Future<void> abrirHubPlanes() async {
     await _push(
       CupertinoPageRoute(
         fullscreenDialog: true,
         builder: (_) => const PantallaPlanes(),
       ),
     );
+  }
+
+  // Cancelado / eliminado (o sin id): volver al hub de planes.
+  if (accion == 'hub' || idPlan == null || idPlan.isEmpty) {
+    await abrirHubPlanes();
+    return true;
+  }
+
+  final res = await ServicioPlanes().detalle(idPlan);
+  final plan = res.detalle?.plan;
+  if (plan == null || !plan.estaAbierto) {
+    await abrirHubPlanes();
     return true;
   }
 
   if (accion == 'chat') {
-    final res = await ServicioPlanes().detalle(idPlan);
-    final plan = res.detalle?.plan;
-    if (plan != null && plan.chatDisponible) {
+    if (plan.chatDisponible) {
       await _push(
         CupertinoPageRoute(builder: (_) => PantallaChatPlan(plan: plan)),
       );
@@ -214,7 +222,7 @@ Future<bool> abrirPlanDesdeNotificacion(Notificacion n) async {
   await _push(
     CupertinoPageRoute(
       fullscreenDialog: true,
-      builder: (_) => PantallaVerPlan(idPlan: idPlan),
+      builder: (_) => PantallaVerPlan(idPlan: idPlan, inicial: plan),
     ),
   );
   return true;

@@ -39,12 +39,21 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
     setState(() => _cargando = true);
     final res = await _srv.hub(limit: 40, modo: 'mis');
     if (!mounted) return;
-    final administrables = res.items.where((p) => p.soyModerador).toList();
+    final administrables = res.items
+        .where((p) => p.soyModerador && p.estaAbierto)
+        .toList();
+    final seleccionadoSigue =
+        _seleccionadoId != null &&
+        administrables.any((p) => p.id == _seleccionadoId);
     setState(() {
       _planes = administrables;
       _cargando = false;
+      if (!seleccionadoSigue) {
+        _seleccionadoId = null;
+        _detalle = null;
+      }
     });
-    if (_seleccionadoId != null) unawaited(_abrir(_seleccionadoId!));
+    if (seleccionadoSigue) unawaited(_abrir(_seleccionadoId!));
   }
 
   Future<void> _abrir(String id) async {
@@ -241,7 +250,7 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
     final pedido = await showCupertinoDialog<String>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Pedirle algo al local'),
+        title: const Text('Pedir beneficio al local'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10),
           child: CupertinoTextField(
@@ -389,65 +398,59 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
   }
 
   Future<void> _editarContacto(PlanComunidad p) async {
-    var modo = p.contactoModo == 'colaborar' ? 'colaborar' : 'contactar';
-    final ctrl = TextEditingController(text: p.contactoAnfitrion ?? '');
+    final tituloCtrl = TextEditingController(text: p.contactoTitulo ?? '');
+    final valorCtrl = TextEditingController(text: p.contactoAnfitrion ?? '');
     final guardado = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => CupertinoAlertDialog(
-          title: const Text('Contacto del organizador'),
-          content: Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Column(
-              children: [
-                CupertinoSegmentedControl<String>(
-                  groupValue: modo,
-                  children: const {
-                    'contactar': Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('Contactar', style: TextStyle(fontSize: 12)),
-                    ),
-                    'colaborar': Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('Colaborar', style: TextStyle(fontSize: 12)),
-                    ),
-                  },
-                  onValueChanged: (v) => setLocal(() => modo = v),
-                ),
-                const SizedBox(height: 10),
-                CupertinoTextField(
-                  controller: ctrl,
-                  maxLength: 80,
-                  placeholder: modo == 'colaborar'
-                      ? 'ej: link o alias'
-                      : 'ej un whatsapp o instagram',
-                ),
-              ],
-            ),
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('Contacto del organizador'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            children: [
+              CupertinoTextField(
+                controller: tituloCtrl,
+                maxLength: 50,
+                placeholder: 'Mensaje visible',
+              ),
+              const SizedBox(height: 10),
+              CupertinoTextField(
+                controller: valorCtrl,
+                maxLength: 80,
+                placeholder: 'Link, WhatsApp, alias o @',
+              ),
+            ],
           ),
-          actions: [
-            CupertinoDialogAction(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar'),
-            ),
-            CupertinoDialogAction(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Guardar'),
-            ),
-          ],
         ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Guardar'),
+          ),
+        ],
       ),
     );
-    final texto = ctrl.text.trim();
-    ctrl.dispose();
+    final titulo = tituloCtrl.text.trim();
+    final valor = valorCtrl.text.trim();
+    tituloCtrl.dispose();
+    valorCtrl.dispose();
     if (guardado != true) return;
+    if (titulo.isNotEmpty && valor.isEmpty) {
+      _toast('Agregá el link, alias o contacto que se va a copiar.');
+      return;
+    }
     setState(() => _guardando = true);
     try {
       final ok = await _srv.actualizarBasico(
         idPlan: p.id,
-        contactoAnfitrion: texto.isEmpty ? null : texto,
-        contactoModo: modo,
-        limpiarContacto: texto.isEmpty,
+        contactoTitulo: titulo.isEmpty ? null : titulo,
+        contactoAnfitrion: valor.isEmpty ? null : valor,
+        contactoModo: 'contactar',
+        limpiarContacto: titulo.isEmpty && valor.isEmpty,
       );
       if (!mounted) return;
       if (!ok) {
@@ -576,6 +579,12 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
                             if (seleccionado == null)
                               const Center(
                                 child: FernecitoLoader.inline(size: 22),
+                              )
+                            else if (!seleccionado.estaAbierto)
+                              const _InfoBox(
+                                titulo: 'Plan archivado',
+                                texto:
+                                    'Este plan ya finalizó y no se puede editar desde administración.',
                               )
                             else
                               _PanelEditar(
@@ -750,9 +759,8 @@ class _PanelEditar extends StatelessWidget {
     final miembros = detalle.miembros
         .where((m) => m.estado == 'aceptado' && m.rol != 'organizador')
         .toList(growable: false);
-    final contactoLabel = plan.contactoModo == 'colaborar'
-        ? 'Colaborar'
-        : 'Contactar';
+    final contactoTitulo = (plan.contactoTitulo ?? '').trim();
+    final contactoValor = (plan.contactoAnfitrion ?? '').trim();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -812,10 +820,12 @@ class _PanelEditar extends StatelessWidget {
         const SizedBox(height: 8),
         _EditRow(
           icono: CupertinoIcons.chat_bubble_2,
-          label: contactoLabel,
-          valor: (plan.contactoAnfitrion ?? '').trim().isEmpty
+          label: 'Contacto',
+          valor: contactoValor.isEmpty
               ? 'Sin dato · tocá para editar'
-              : plan.contactoAnfitrion!,
+              : contactoTitulo.isEmpty
+              ? contactoValor
+              : '$contactoTitulo · $contactoValor',
           onTap: onContacto,
         ),
         const SizedBox(height: 14),
@@ -829,12 +839,11 @@ class _PanelEditar extends StatelessWidget {
           destacado: pendientes > 0,
         ),
         const SizedBox(height: 14),
-        if (plan.beneficioEstado == 'ninguno' ||
-            plan.beneficioEstado == 'rechazado')
+        if (plan.beneficioEstado == 'ninguno')
           _EditRow(
             icono: CupertinoIcons.gift,
-            label: 'Pedirle algo al local',
-            valor: 'Pedir un beneficio para el grupo',
+            label: 'Pedir beneficio',
+            valor: 'Pedir beneficio para el grupo',
             onTap: onPedirAlLocal,
           )
         else
@@ -1044,11 +1053,7 @@ class _PedidoBox extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  (estado == 'aceptado' || estado == 'contraoferta')
-                      ? 'Beneficio del local'
-                      : estado == 'pedido'
-                      ? 'Pedido al local (sin aceptar)'
-                      : 'Pedido al local',
+                  'Pedir beneficio',
                   style: GoogleFonts.baloo2(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w900,
@@ -1131,7 +1136,6 @@ class _BadgeEstadoPedido extends StatelessWidget {
   Widget build(BuildContext context) {
     final (texto, color) = switch (estado) {
       'aceptado' => ('Aceptado', const Color(0xFF34D399)),
-      'rechazado' => ('Ignorado', const Color(0xFFF87171)),
       'contraoferta' => ('Aceptado', const Color(0xFF34D399)),
       'pedido' => ('Aún no aceptado', const Color(0xFFF5A623)),
       _ => ('Sin pedido', Colors.white54),

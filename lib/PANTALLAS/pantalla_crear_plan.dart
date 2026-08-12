@@ -61,6 +61,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
   int? _cupo;
   int? _edadMinima;
   bool _permiteSquads = true;
+  String? _contactoTitulo;
   String? _contacto;
   String _contactoModo = 'contactar';
   String? _pedidoBeneficio;
@@ -195,6 +196,24 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         _irA(_PasoPlan.descripcionPreview);
         break;
       case _PasoPlan.contacto:
+        if (_contactoTitulo == null) {
+          if (v.length > 50) {
+            _toast('El texto de la card puede tener hasta 50 caracteres.');
+            return;
+          }
+          _contactoTitulo = v;
+          _usuarioTexto(v);
+          await _bot([
+            'Perfecto. Ahora pasame el valor: link, WhatsApp, alias o @.',
+            'Si es link lo vamos a abrir; si no, se copia para que la gente lo use.',
+          ]);
+          _focus.requestFocus();
+          break;
+        }
+        if (v.length > 80) {
+          _toast('El contacto puede tener hasta 80 caracteres.');
+          return;
+        }
         _contacto = v;
         _usuarioTexto(v);
         await _preguntarBeneficio();
@@ -202,6 +221,10 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
       case _PasoPlan.beneficio:
         if (v.length < 3) {
           _toast('El pedido tiene que tener al menos 3 caracteres.');
+          return;
+        }
+        if (v.length > 120) {
+          _toast('El pedido puede tener hasta 120 caracteres.');
           return;
         }
         _pedidoBeneficio = v;
@@ -431,15 +454,18 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
     );
     await _bot([
       'Último detalle opcional 📲',
-      'Elegí **contactar organizador** (WhatsApp/IG) o **colaborar** (link o alias).',
-      'Solo una opción. Si no hace falta, saltealo.',
+      'Podés dejar una card de contacto o apoyo: donación, grupo de WhatsApp, Instagram, alias, link de reservas o lo que ayude al plan.',
+      'Primero escribí el **texto visible** de la card (ej: Colaborá con el creador / Seguime en IG).',
+      'Si no hace falta, saltealo.',
     ]);
+    _contactoModo = 'contactar';
     _irA(_PasoPlan.contacto);
     _focus.requestFocus();
   }
 
   Future<void> _saltearContacto() async {
     if (_procesando || _botEscribiendo) return;
+    _contactoTitulo = null;
     _contacto = null;
     _usuarioTexto('Sin contacto opcional');
     await _preguntarBeneficio();
@@ -448,7 +474,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
   Future<void> _preguntarBeneficio() async {
     await _bot([
       'Última opción antes del resumen 🎁',
-      '¿Querés pedirle algo al local para el grupo?',
+      '¿Querés **pedir beneficio al local** para el grupo?',
     ]);
     _irA(_PasoPlan.beneficio);
     _focus.requestFocus();
@@ -507,6 +533,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         );
       }
       portada ??= _presetAsset;
+      final pedido = _pedidoBeneficio?.trim();
       final id = await _srv.crear(
         titulo: _titulo,
         descripcion: _descripcion,
@@ -517,8 +544,10 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         cupoMax: _cupo,
         tipoOrganizador: _tipoOrganizador,
         idSquad: _tipoOrganizador == 'squad' ? _idSquad : null,
-        contactoAnfitrion: _contacto,
+        contactoTitulo: _contactoTitulo?.trim(),
+        contactoAnfitrion: _contacto?.trim(),
         contactoModo: _contactoModo,
+        pedidoBeneficio: pedido == null || pedido.isEmpty ? null : pedido,
         portadaPath: portada,
         colorHex: '#111111',
         permiteSquads: _permiteSquads,
@@ -535,21 +564,10 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         return;
       }
       _idPlanCreado = id;
-      var pedidoEnviado = true;
-      final pedido = _pedidoBeneficio?.trim();
-      if (pedido != null && pedido.isNotEmpty) {
-        try {
-          pedidoEnviado = await _srv.pedidoLocal(id, pedido);
-        } catch (_) {
-          pedidoEnviado = false;
-        }
-      }
       await _bot([
         '¡Listo! Plan publicado 🍻',
-        pedidoEnviado && pedido != null && pedido.isNotEmpty
+        pedido != null && pedido.isNotEmpty
             ? 'También le pedimos al local: "$pedido".'
-            : pedido != null && pedido.isNotEmpty
-            ? 'El plan quedó publicado, pero no pudimos enviar el pedido al local.'
             : 'Ya está en la cartelera para que la comunidad se sume.',
       ]);
       if (!mounted) return;
@@ -976,34 +994,13 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _OpcionBarraPlan(
-                    texto: 'Contactar',
-                    icono: CupertinoIcons.chat_bubble_2,
-                    primario: _contactoModo == 'contactar',
-                    onTap: () => setState(() => _contactoModo = 'contactar'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _OpcionBarraPlan(
-                    texto: 'Colaborar',
-                    icono: CupertinoIcons.link,
-                    primario: _contactoModo == 'colaborar',
-                    onTap: () => setState(() => _contactoModo = 'colaborar'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
             _InputTextoPlan(
               controller: _input,
               focus: _focus,
-              hint: _contactoModo == 'colaborar'
-                  ? 'ej: link o alias'
-                  : 'ej un whatsapp o instagram',
+              hint: _contactoTitulo == null
+                  ? 'Texto de la card (ej: Seguime en IG)'
+                  : 'Link, WhatsApp, alias o @',
+              maxLength: _contactoTitulo == null ? 50 : 80,
               onSend: _onTexto,
             ),
             const SizedBox(height: 8),
@@ -1023,6 +1020,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
               controller: _input,
               focus: _focus,
               hint: 'Ej: 2x1 en tragos para el grupo',
+              maxLength: 120,
               maxLines: 3,
               onSend: _onTexto,
             ),
@@ -1049,8 +1047,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
               ingreso: _modo == 'manual' ? 'Con aprobación' : 'Entrada libre',
               cupo: _cupo == null ? 'Sin cupo' : '${_cupo!} cupos',
               organizador: _nombreOrganizador,
+              contactoTitulo: _contactoTitulo,
               contacto: _contacto,
-              contactoModo: _contactoModo,
               pedidoBeneficio: _pedidoBeneficio,
             ),
             const SizedBox(height: 8),
@@ -1356,6 +1354,7 @@ class _InputTextoPlan extends StatelessWidget {
     required this.hint,
     required this.onSend,
     this.maxLines = 1,
+    this.maxLength,
   });
 
   final TextEditingController controller;
@@ -1363,6 +1362,7 @@ class _InputTextoPlan extends StatelessWidget {
   final String hint;
   final VoidCallback onSend;
   final int maxLines;
+  final int? maxLength;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -1374,6 +1374,7 @@ class _InputTextoPlan extends StatelessWidget {
           focusNode: focus,
           placeholder: hint,
           maxLines: maxLines,
+          maxLength: maxLength,
           style: const TextStyle(color: Colors.white),
           placeholderStyle: TextStyle(
             color: ColoresApp.textoSecundario.withValues(alpha: 0.72),
@@ -1652,8 +1653,8 @@ class _ResumenPlanCard extends StatelessWidget {
     required this.ingreso,
     required this.cupo,
     required this.organizador,
+    this.contactoTitulo,
     this.contacto,
-    this.contactoModo = 'contactar',
     this.pedidoBeneficio,
   });
 
@@ -1665,8 +1666,8 @@ class _ResumenPlanCard extends StatelessWidget {
   final String ingreso;
   final String cupo;
   final String organizador;
+  final String? contactoTitulo;
   final String? contacto;
-  final String contactoModo;
   final String? pedidoBeneficio;
 
   @override
@@ -1711,12 +1712,10 @@ class _ResumenPlanCard extends StatelessWidget {
             _PillPlan(cupo),
             if ((contacto ?? '').trim().isNotEmpty)
               _PillPlan(
-                contactoModo == 'colaborar'
-                    ? 'Colaborar: ${contacto!.trim()}'
-                    : 'Contactar: ${contacto!.trim()}',
+                '${(contactoTitulo ?? '').trim().isEmpty ? 'Contacto' : contactoTitulo!.trim()}: ${contacto!.trim()}',
               ),
             if ((pedidoBeneficio ?? '').trim().isNotEmpty)
-              _PillPlan('Pedir al local: ${pedidoBeneficio!.trim()}'),
+              _PillPlan('Pedir beneficio al local: ${pedidoBeneficio!.trim()}'),
           ],
         ),
       ],

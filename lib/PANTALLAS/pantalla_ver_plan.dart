@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/compartir_evento.dart' show origenCompartirDesdeContexto;
 import '../core/compartir_plan.dart';
 import '../core/constants.dart';
+import '../core/lanzador_externo.dart';
 import '../core/servicio_planes.dart';
 import '../widgets/fernecito_loader.dart';
 import 'pantalla_chat_plan.dart';
@@ -244,7 +245,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     final pedido = await showCupertinoDialog<String>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Pedirle algo al local'),
+        title: const Text('Pedir beneficio al local'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10),
           child: CupertinoTextField(
@@ -424,10 +425,35 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     );
   }
 
+  Uri? _uriContacto(String texto) {
+    final raw = texto.trim();
+    if (raw.isEmpty) return null;
+    final lower = raw.toLowerCase();
+    final pareceUrl =
+        lower.startsWith('http://') ||
+        lower.startsWith('https://') ||
+        lower.startsWith('wa.me/') ||
+        lower.startsWith('www.wa.me/') ||
+        lower.startsWith('instagram.com/') ||
+        lower.startsWith('www.instagram.com/');
+    if (!pareceUrl) return null;
+    final normalizada =
+        lower.startsWith('http://') || lower.startsWith('https://')
+        ? raw
+        : 'https://$raw';
+    return Uri.tryParse(normalizada);
+  }
+
   Future<void> _copiarContacto(String texto) async {
     await Clipboard.setData(ClipboardData(text: texto));
     if (!mounted) return;
     _toast('Copiado al portapapeles');
+  }
+
+  Future<void> _abrirContacto(String texto) async {
+    final uri = _uriContacto(texto);
+    if (uri != null && await lanzarExternoConFallback(uri)) return;
+    await _copiarContacto(texto);
   }
 
   Future<void> _localAceptarPedido() async {
@@ -457,7 +483,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     final texto = await showCupertinoDialog<String>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('Proponer otra cosa'),
+        title: const Text('Proponer otro beneficio'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10),
           child: CupertinoTextField(
@@ -572,6 +598,75 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
       );
     }
 
+    if (plan.estaFinalizado) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          Navigator.of(context).pop(_changed);
+        },
+        child: CupertinoPageScaffold(
+          backgroundColor: ColoresApp.fondoPrincipal,
+          navigationBar: CupertinoNavigationBar(
+            backgroundColor: Colors.transparent,
+            border: null,
+            leading: CupertinoNavigationBarBackButton(
+              color: ColoresApp.principalMarca,
+              onPressed: () => Navigator.pop(context, _changed),
+            ),
+          ),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    CupertinoIcons.archivebox,
+                    size: 42,
+                    color: ColoresApp.principalMarca,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Plan archivado',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.baloo2(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      color: ColoresApp.textoPrincipal,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Este plan ya finalizó y no tiene acciones disponibles.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.baloo2(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: ColoresApp.textoSecundario,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  CupertinoButton(
+                    color: ColoresApp.principalMarca,
+                    borderRadius: BorderRadius.circular(14),
+                    onPressed: () => Navigator.pop(context, _changed),
+                    child: Text(
+                      'Volver',
+                      style: GoogleFonts.baloo2(
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final portada = plan.portadaUrl;
     final color = _parseColor(plan.colorHex);
     final detalle = _detalle;
@@ -587,6 +682,10 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
         !(detalle?.yaVotePedido ?? false);
     final soyLocal = plan.miEstado == 'local';
     final localPuedeResponder = soyLocal && plan.beneficioEstado == 'pedido';
+    final contactoValor = (plan.contactoAnfitrion ?? '').trim();
+    final contactoTitulo = (plan.contactoTitulo ?? '').trim().isEmpty
+        ? 'Contacto del organizador'
+        : plan.contactoTitulo!.trim();
 
     return PopScope(
       canPop: false,
@@ -705,26 +804,66 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _Badge('${plan.personasAceptadas} personas'),
-                      _Badge('inicio ${_fmt(plan.fechaInicio)}'),
-                      if (plan.fechaFin != null)
-                        _Badge('fin ${_fmt(plan.fechaFin!)}'),
-                      _Badge(
-                        plan.modoLista == 'manual'
-                            ? 'requiere aprobación'
-                            : 'entrada libre',
-                      ),
+                  _MetaPlanRow(
+                    items: [
+                      '${plan.personasAceptadas} personas',
+                      'inicio ${_fmt(plan.fechaInicio)}',
+                      if (plan.fechaFin != null) 'fin ${_fmt(plan.fechaFin!)}',
+                      plan.modoLista == 'manual'
+                          ? 'requiere aprobación'
+                          : 'entrada libre',
                       if (plan.cupoMax != null)
-                        _Badge('${plan.cupoUsados}/${plan.cupoMax} cupos'),
-                      if (plan.edadMinima != null)
-                        _Badge('+${plan.edadMinima}'),
-                      if (plan.soyModerador) const _Badge('Sos admin'),
+                        '${plan.cupoUsados}/${plan.cupoMax} cupos',
+                      if (plan.edadMinima != null) '+${plan.edadMinima}',
+                      if (plan.soyModerador) 'Sos admin',
                     ],
                   ),
+                  const SizedBox(height: 16),
+                  if (plan.chatDisponible)
+                    _ActionButton(
+                      texto: 'Chat del plan',
+                      onTap: () =>
+                          Navigator.of(context, rootNavigator: true).push(
+                            CupertinoPageRoute(
+                              fullscreenDialog: true,
+                              builder: (_) => PantallaChatPlan(plan: plan),
+                            ),
+                          ),
+                    )
+                  else if (plan.puedeUnirse)
+                    _ActionButton(
+                      texto: plan.modoLista == 'manual'
+                          ? 'Solicitar unirme'
+                          : 'Unirme al plan',
+                      cargando: _uniendo,
+                      onTap: _unirse,
+                    )
+                  else if (plan.soyMiembro)
+                    _EresParteRow(
+                      esAdmin: plan.soyModerador,
+                      onSalir: plan.soyModerador ? null : _salirDelPlan,
+                    )
+                  else
+                    _InfoBox(
+                      titulo: plan.soyPendiente
+                          ? 'Solicitud pendiente'
+                          : plan.miEstado == 'expulsado'
+                          ? 'Ya no podés entrar'
+                          : plan.cupoLleno
+                          ? 'Cupo completo'
+                          : !plan.ingresoAbierto
+                          ? 'Ingreso cerrado'
+                          : 'No disponible',
+                      texto: plan.soyPendiente
+                          ? 'El admin tiene que aprobar tu solicitud.'
+                          : plan.miEstado == 'expulsado'
+                          ? 'Te expulsaron de este plan.'
+                          : plan.cupoLleno
+                          ? 'No quedan lugares disponibles.'
+                          : !plan.ingresoAbierto
+                          ? 'El admin cerró el ingreso de personas.'
+                          : 'Este plan no acepta nuevas solicitudes.',
+                    ),
                   if (hayPedido) ...[
                     const SizedBox(height: 14),
                     _PedidoBox(
@@ -744,50 +883,14 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                       onTap: _pedirAlLocal,
                     ),
                   ],
-                  if ((plan.contactoAnfitrion ?? '').trim().isNotEmpty) ...[
+                  if (contactoValor.isNotEmpty) ...[
                     const SizedBox(height: 14),
-                    _ContactoChip(
-                      texto: plan.contactoAnfitrion!,
-                      modo: plan.contactoModo,
-                      onTap: () => _copiarContacto(plan.contactoAnfitrion!),
+                    _ContactoCard(
+                      titulo: contactoTitulo,
+                      valor: contactoValor,
+                      onTap: () => _abrirContacto(contactoValor),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: GestureDetector(
-                      onTap: _compartir,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              CupertinoIcons.share,
-                              size: 14,
-                              color: Colors.white70,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Compartir plan',
-                              style: GoogleFonts.baloo2(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white.withValues(alpha: 0.9),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
                   if (plan.soyModerador && pendientes > 0) ...[
                     const SizedBox(height: 14),
                     _FilaSolicitudesPendientes(
@@ -795,7 +898,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                       onTap: _abrirSolicitudes,
                     ),
                   ],
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
@@ -816,72 +919,14 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: plan.chatDisponible
-                            ? _ActionButton(
-                                texto: 'Chat del plan',
-                                onTap: () =>
-                                    Navigator.of(
-                                      context,
-                                      rootNavigator: true,
-                                    ).push(
-                                      CupertinoPageRoute(
-                                        fullscreenDialog: true,
-                                        builder: (_) =>
-                                            PantallaChatPlan(plan: plan),
-                                      ),
-                                    ),
-                              )
-                            : (!plan.estaFinalizado &&
-                                  !plan.soyMiembro &&
-                                  plan.puedeUnirse)
-                            ? _ActionButton(
-                                texto: 'Unite para chatear',
-                                secundario: true,
-                                onTap: _unirse,
-                              )
-                            : const SizedBox.shrink(),
+                        child: _TextActionButton(
+                          icono: CupertinoIcons.share,
+                          texto: 'Compartir',
+                          onTap: _compartir,
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  if (plan.puedeUnirse)
-                    _ActionButton(
-                      texto: plan.modoLista == 'manual'
-                          ? 'Solicitar unirme'
-                          : 'Unirme al plan',
-                      cargando: _uniendo,
-                      onTap: _unirse,
-                    )
-                  else if (plan.soyMiembro && !plan.estaFinalizado)
-                    _EresParteRow(
-                      esAdmin: plan.soyModerador,
-                      onSalir: plan.soyModerador ? null : _salirDelPlan,
-                    )
-                  else
-                    _InfoBox(
-                      titulo: plan.estaFinalizado
-                          ? 'Plan finalizado'
-                          : plan.soyPendiente
-                          ? 'Solicitud pendiente'
-                          : plan.miEstado == 'expulsado'
-                          ? 'Ya no podés entrar'
-                          : plan.cupoLleno
-                          ? 'Cupo completo'
-                          : !plan.ingresoAbierto
-                          ? 'Ingreso cerrado'
-                          : 'No disponible',
-                      texto: plan.estaFinalizado
-                          ? 'Este plan queda guardado como historial.'
-                          : plan.soyPendiente
-                          ? 'El admin tiene que aprobar tu solicitud.'
-                          : plan.miEstado == 'expulsado'
-                          ? 'Te expulsaron de este plan.'
-                          : plan.cupoLleno
-                          ? 'No quedan lugares disponibles.'
-                          : !plan.ingresoAbierto
-                          ? 'El admin cerró el ingreso de personas.'
-                          : 'Este plan no acepta nuevas solicitudes.',
-                    ),
                   if (plan.soyModerador) ...[
                     const SizedBox(height: 8),
                     _ActionButton(
@@ -997,38 +1042,70 @@ class _Badge extends StatelessWidget {
   );
 }
 
-class _ContactoChip extends StatelessWidget {
-  const _ContactoChip({
-    required this.texto,
-    this.modo = 'contactar',
-    this.onTap,
-  });
-  final String texto;
-  final String modo;
+class _MetaPlanRow extends StatelessWidget {
+  const _MetaPlanRow({required this.items});
+  final List<String> items;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.055),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          Text(
+            items[i],
+            style: GoogleFonts.baloo2(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: ColoresApp.textoSecundario,
+            ),
+          ),
+          if (i != items.length - 1)
+            Text(
+              '·',
+              style: GoogleFonts.baloo2(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: Colors.white.withValues(alpha: 0.28),
+              ),
+            ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _ContactoCard extends StatelessWidget {
+  const _ContactoCard({required this.titulo, required this.valor, this.onTap});
+  final String titulo;
+  final String valor;
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
-    final titulo = modo == 'colaborar'
-        ? 'Colaborar con organizador'
-        : 'Contactar organizador';
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
+          color: Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
           children: [
             Icon(
-              modo == 'colaborar'
-                  ? CupertinoIcons.link
-                  : CupertinoIcons.chat_bubble_2,
-              size: 13,
+              CupertinoIcons.link,
+              size: 18,
               color: ColoresApp.principalMarca,
             ),
-            const SizedBox(width: 7),
+            const SizedBox(width: 11),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1036,19 +1113,20 @@ class _ContactoChip extends StatelessWidget {
                   Text(
                     titulo,
                     style: GoogleFonts.baloo2(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: ColoresApp.textoSecundario,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: ColoresApp.textoPrincipal,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
-                    texto,
+                    valor,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.baloo2(
-                      fontSize: 12.5,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white.withValues(alpha: 0.9),
+                      color: ColoresApp.textoSecundario,
                     ),
                   ),
                 ],
@@ -1056,8 +1134,8 @@ class _ContactoChip extends StatelessWidget {
             ),
             if (onTap != null)
               Icon(
-                CupertinoIcons.doc_on_doc,
-                size: 14,
+                CupertinoIcons.arrow_up_right,
+                size: 16,
                 color: Colors.white.withValues(alpha: 0.45),
               ),
           ],
@@ -1065,6 +1143,38 @@ class _ContactoChip extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TextActionButton extends StatelessWidget {
+  const _TextActionButton({
+    required this.icono,
+    required this.texto,
+    required this.onTap,
+  });
+  final IconData icono;
+  final String texto;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => CupertinoButton(
+    padding: const EdgeInsets.symmetric(vertical: 9),
+    onPressed: onTap,
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icono, size: 15, color: Colors.white.withValues(alpha: 0.72)),
+        const SizedBox(width: 6),
+        Text(
+          texto,
+          style: GoogleFonts.baloo2(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: Colors.white.withValues(alpha: 0.82),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _FilaPedirAlLocal extends StatelessWidget {
@@ -1087,7 +1197,7 @@ class _FilaPedirAlLocal extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Pedirle algo al local',
+              'Pedir beneficio',
               style: GoogleFonts.baloo2(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w900,
@@ -1136,8 +1246,8 @@ class _PedidoBox extends StatelessWidget {
     final confirmado = estado == 'aceptado' || estado == 'contraoferta';
     final desc = () {
       if (confirmado) {
-        final oferta =
-            (plan.beneficioLocal ?? plan.beneficioContraoferta ?? '').trim();
+        final oferta = (plan.beneficioLocal ?? plan.beneficioContraoferta ?? '')
+            .trim();
         final pedido = (plan.pedidoBeneficio ?? '').trim();
         final contra = (plan.beneficioContraoferta ?? '').trim();
         if (oferta.isNotEmpty) {
@@ -1179,11 +1289,7 @@ class _PedidoBox extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  confirmado
-                      ? 'Beneficio del local'
-                      : estado == 'pedido'
-                      ? 'Pedido al local (sin aceptar)'
-                      : 'Pedido al local',
+                  'Pedir beneficio',
                   style: GoogleFonts.baloo2(
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
@@ -1276,9 +1382,11 @@ class _PedidoBox extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        'Aceptar',
+                        'Aceptar beneficio',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.baloo2(
-                          fontSize: 13,
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w900,
                           color: const Color(0xFF34D399),
                         ),
@@ -1298,9 +1406,11 @@ class _PedidoBox extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        'Cambiar',
+                        'Proponer otro beneficio',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.baloo2(
-                          fontSize: 13,
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
                         ),
@@ -1368,7 +1478,6 @@ class _BadgeEstadoPedido extends StatelessWidget {
   Widget build(BuildContext context) {
     final (texto, color) = switch (estado) {
       'aceptado' => ('Aceptado', const Color(0xFF34D399)),
-      'rechazado' => ('Ignorado', const Color(0xFFF87171)),
       'contraoferta' => ('Aceptado', const Color(0xFF34D399)),
       'pedido' => ('Aún no aceptado', const Color(0xFFF5A623)),
       _ => ('Sin pedido', Colors.white54),

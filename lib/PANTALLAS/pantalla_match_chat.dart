@@ -455,7 +455,10 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
     final esMio = m.idAutor == _miUid;
     final nombre = _nombresAutores[m.idAutor];
     final mostrarAutor =
-        !esMio && widget.match.otro.esSquad && nombre != null && nombre != '...';
+        !esMio &&
+        widget.match.otro.esSquad &&
+        nombre != null &&
+        nombre != '...';
     return Align(
       alignment: esMio ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -464,14 +467,15 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
         ),
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           // Contraparte = color del theme; el mío = gris más claro.
           color: esMio ? const Color(0xFF3A3A40) : ColoresApp.principalMarca,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(17),
-            topRight: const Radius.circular(17),
-            bottomLeft: Radius.circular(esMio ? 17 : 5),
-            bottomRight: Radius.circular(esMio ? 5 : 17),
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(esMio ? 16 : 7),
+            bottomRight: Radius.circular(esMio ? 7 : 16),
           ),
         ),
         child: Column(
