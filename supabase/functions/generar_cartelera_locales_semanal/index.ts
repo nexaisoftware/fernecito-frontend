@@ -3,12 +3,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const MAX_POR_CIUDAD = 12;
 const MAX_FOTOS_CARD = 4;
-const BATCH_IA_MS = 350;
 
 const TEXTOS_FALLBACK = [
-  "Un lugar ideal para sumar a tu próxima salida.",
-  "Conocé este local y armá tu plan para esta semana.",
-  "Buena opción para salir, comer algo y compartir con amigos.",
+  "Un lugar de tu ciudad para descubrir esta semana.",
+  "¿Ya lo conocés? Puede ser tu próxima salida.",
+  "Buena excusa para cortar la rutina y salir un rato.",
+  "Sumalo a tu lista de lugares para conocer.",
+  "Si pinta moverse, este lugar puede entrar en el plan.",
+  "Un rincón de la ciudad que merece una visita.",
+  "Ideal para una salida simple y distinta.",
+  "Los buenos momentos también empiezan en lugares así.",
 ];
 
 type LocalRow = {
@@ -23,6 +27,7 @@ type LocalRow = {
   foto_local_4: string | null;
   foto_local_5: string | null;
   rubro: unknown;
+  horarios_json: unknown;
   ciudad: string | null;
   provincia: string | null;
   local_verificado: boolean | null;
@@ -36,7 +41,11 @@ type LocalRow = {
 type ContextoLocal = {
   eventos: string[];
   promos: string[];
-  carta: string[];
+};
+
+type LocalConScore = {
+  local: LocalRow;
+  score: number;
 };
 
 function argentinaWeekBounds(d = new Date()): { inicio: string; fin: string } {
@@ -106,7 +115,6 @@ function recolectarFotos(sb: ReturnType<typeof createClient>, local: LocalRow): 
     publicUrl(sb, "fotos_locales", local.foto_local_3),
     publicUrl(sb, "fotos_locales", local.foto_local_4),
     publicUrl(sb, "fotos_locales", local.foto_local_5),
-    publicUrl(sb, "perfiles-locales", local.foto_perfil_url),
   ].filter((u): u is string => !!u && u.trim().length > 0);
   const unicas = [...new Set(candidatas)];
   return shuffle(unicas).slice(0, MAX_FOTOS_CARD);
@@ -123,113 +131,204 @@ function planActivo(plan: string | null): boolean {
   return p.length > 0 && !["gratis", "free", "none", "trial"].includes(p);
 }
 
-async function cargarContexto(
+async function cargarContextosSemana(
   sb: ReturnType<typeof createClient>,
-  localId: string,
-): Promise<ContextoLocal> {
-  const ctx: ContextoLocal = { eventos: [], promos: [], carta: [] };
+  localIds: string[],
+  inicio: string,
+  fin: string,
+): Promise<Map<string, ContextoLocal>> {
+  const mapa = new Map<string, ContextoLocal>();
+  for (const id of localIds) mapa.set(id, { eventos: [], promos: [] });
+  if (localIds.length === 0) return mapa;
+
+  const inicioTs = `${inicio}T00:00:00-03:00`;
+  const finTs = `${fin}T23:59:59-03:00`;
+
   try {
     const { data: eventos } = await sb
       .from("eventos")
-      .select("titulo_evento, tipo_evento, fecha_inicio")
-      .eq("id_local", localId)
+      .select("id_local, titulo_evento, fecha_inicio, fecha_fin")
+      .in("id_local", localIds)
       .eq("estado_publicacion", "publicado")
-      .or("fecha_fin_publicacion.gt.now(),fecha_fin_publicacion.is.null")
+      .lte("fecha_inicio", finTs)
+      .or(`fecha_fin.gte.${inicioTs},fecha_fin.is.null`)
       .order("fecha_inicio", { ascending: true })
-      .limit(5);
+      .limit(localIds.length * 3);
     for (const e of eventos ?? []) {
+      const localId = (e.id_local as string)?.trim();
       const t = (e.titulo_evento as string)?.trim();
-      if (t) ctx.eventos.push(t);
+      if (localId && t) mapa.get(localId)?.eventos.push(t);
     }
   } catch (_) { /* noop */ }
 
   try {
     const { data: promos } = await sb
       .from("promociones")
-      .select("titulo_promocion, descripcion_promocion")
-      .eq("id_local", localId)
+      .select("id_local, titulo_promocion, descripcion_promocion, fecha_inicio, fecha_fin")
+      .in("id_local", localIds)
       .eq("estado_promocion", "activa")
-      .or("fecha_fin.gt.now(),fecha_fin.is.null")
-      .limit(3);
+      .lte("fecha_inicio", finTs)
+      .gte("fecha_fin", inicioTs)
+      .limit(localIds.length * 3);
     for (const p of promos ?? []) {
+      const localId = (p.id_local as string)?.trim();
       const t = ((p.titulo_promocion as string) || (p.descripcion_promocion as string) || "").trim();
-      if (t) ctx.promos.push(t);
+      if (localId && t) mapa.get(localId)?.promos.push(t);
     }
   } catch (_) { /* noop */ }
 
-  try {
-    const { data: carta } = await sb
-      .from("locales_carta_items")
-      .select("nombre, categoria")
-      .eq("id_local", localId)
-      .eq("activo", true)
-      .limit(6);
-    for (const c of carta ?? []) {
-      const n = (c.nombre as string)?.trim();
-      if (n) ctx.carta.push(n);
-    }
-  } catch (_) { /* noop */ }
-
-  return ctx;
+  return mapa;
 }
 
-async function generarTextoIa(
-  local: LocalRow,
-  ctx: ContextoLocal,
-  fechasCtx: string,
-): Promise<string> {
-  const nombre = (local.nombre_local ?? "este local").trim();
-  const rubro = rubroTexto(local.rubro);
-  const desc = (local.descripcion_local ?? "").trim().slice(0, 400);
-  const prompt = `Sos copywriter de Fernecito (app de salidas). Escribí UNA frase corta (100-160 caracteres) para invitar a visitar un local.
-Tono: marketinero, buena onda, argentino, sin exagerar ni prometer descuentos/horarios inventados.
-${fechasCtx ? `Contexto de fechas de la semana: ${fechasCtx}.` : ""}
-Local: ${nombre}
-Rubro: ${rubro || "salida"}
-Descripción: ${desc || "sin descripción"}
-Eventos activos confirmados: ${ctx.eventos.join("; ") || "ninguno"}
-Promos confirmadas: ${ctx.promos.join("; ") || "ninguna"}
-Ítems de carta destacados: ${ctx.carta.slice(0, 5).join("; ") || "ninguno"}
-Reglas: no inventar 2x1, happy hour ni eventos que no estén listados. Podés mencionar eventos/carta solo si están en la lista.
-Respondé SOLO con la frase, sin comillas.`;
+function resumirHorarios(horarios: unknown): string {
+  if (!horarios) return "";
+  const raw = typeof horarios === "string" ? horarios : JSON.stringify(horarios);
+  return raw.replace(/\s+/g, " ").slice(0, 180);
+}
 
-  const xaiKey = Deno.env.get("XAI_API_KEY");
+function fallbackTexto(local: LocalRow, index: number): string {
+  const nombre = (local.nombre_local ?? "").trim();
+  const base = TEXTOS_FALLBACK[index % TEXTOS_FALLBACK.length];
+  if (!nombre) return base;
+  if (index % 3 === 0) return limitarTextoCard(`${nombre}: ${base.charAt(0).toLowerCase()}${base.slice(1)}`);
+  return base;
+}
+
+function extraerJsonObjeto(raw: string): Record<string, unknown> | null {
+  const limpio = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  try {
+    const parsed = JSON.parse(limpio);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch (_) {
+    const desde = limpio.indexOf("{");
+    const hasta = limpio.lastIndexOf("}");
+    if (desde < 0 || hasta <= desde) return null;
+    try {
+      const parsed = JSON.parse(limpio.slice(desde, hasta + 1));
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+async function generarTextosIaCiudad(
+  items: LocalConScore[],
+  contextos: Map<string, ContextoLocal>,
+  fechasCtx: string,
+  inicio: string,
+  fin: string,
+): Promise<Map<string, string>> {
+  const resultado = new Map<string, string>();
+  for (let i = 0; i < items.length; i++) {
+    resultado.set(items[i].local.id, fallbackTexto(items[i].local, i));
+  }
+
+  const locales = items.map(({ local, score }) => {
+    const ctx = contextos.get(local.id) ?? { eventos: [], promos: [] };
+    return {
+      id: local.id,
+      nombre: (local.nombre_local ?? "Local").trim(),
+      rubro: rubroTexto(local.rubro),
+      descripcion: (local.descripcion_local ?? "").replace(/\s+/g, " ").trim().slice(0, 220),
+      horarios: resumirHorarios(local.horarios_json),
+      eventos_semana: ctx.eventos.slice(0, 2),
+      promos_semana: ctx.promos.slice(0, 2),
+      score: Math.round(score),
+    };
+  });
+
+  const prompt = `Generá micro-copies para cards de locales de Fernecito, app argentina para descubrir salidas.
+Semana: ${inicio} a ${fin}. Fechas especiales: ${fechasCtx || "ninguna"}.
+
+Locales JSON:
+${JSON.stringify(locales)}
+
+Devolvé SOLO un JSON objeto con esta forma exacta:
+{"items":[{"id":"uuid-del-local","texto":"frase"}]}
+
+Reglas estrictas:
+- Un item por cada local recibido, usando el mismo id.
+- Cada texto: 45 a 95 caracteres ideal, máximo 105.
+- Español argentino, simpático, fresco, con idea de salida.
+- Variá los comienzos. Evitá repetir "Armá tu plan", "Vení a", "Che" y "Pasate por".
+- No uses más de 2 textos con la misma primera palabra.
+- Destacá una sola cosa fuerte: descripción, promo/evento de esta semana, rubro u ocasión.
+- No inventes descuentos, comida, tragos, horarios, teléfonos, ranking ni eventos.
+- Si mencionás promo/evento, debe estar en promos_semana/eventos_semana.
+- No digas "el mejor", "famoso" ni promesas absolutas.
+- Sin hashtags, sin comillas, sin saltos de línea dentro del texto.`;
+
+  const xaiKey = Deno.env.get("XAI_API_KEY") ?? Deno.env.get("api_key_de_grok");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
   const apiKey = xaiKey || openaiKey;
-  if (!apiKey) return TEXTOS_FALLBACK[Math.floor(Math.random() * TEXTOS_FALLBACK.length)];
+  if (!apiKey) return resultado;
 
   const baseUrl = xaiKey ? "https://api.x.ai/v1/chat/completions" : "https://api.openai.com/v1/chat/completions";
-  const model = xaiKey ? (Deno.env.get("XAI_MODEL") ?? "grok-2-latest") : (Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini");
+  const model = xaiKey ? (Deno.env.get("XAI_MODEL") ?? "grok-3-mini") : (Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini");
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
     const res = await fetch(baseUrl, {
       method: "POST",
+      signal: controller.signal,
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model,
-        temperature: 0.85,
-        max_tokens: 120,
+        temperature: 0.7,
+        max_tokens: 650,
+        response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: "Respondé solo con el texto final, una sola línea." },
+          { role: "system", content: "Sos un copywriter breve. Respondés únicamente JSON válido, sin markdown." },
           { role: "user", content: prompt },
         ],
       }),
     });
+    clearTimeout(timeout);
     if (!res.ok) throw new Error(`IA ${res.status}`);
     const data = await res.json();
     const text = (data?.choices?.[0]?.message?.content ?? "").trim().replace(/^["']|["']$/g, "");
-    if (text.length >= 20 && text.length <= 200) return text;
+    const parsed = extraerJsonObjeto(text);
+    const arr = Array.isArray(parsed?.items) ? parsed!.items : [];
+    for (const item of arr) {
+      if (!item || typeof item !== "object") continue;
+      const id = String((item as Record<string, unknown>).id ?? "").trim();
+      const texto = String((item as Record<string, unknown>).texto ?? "").trim();
+      if (!id || texto.length < 16) continue;
+      if (!resultado.has(id)) continue;
+      resultado.set(id, limitarTextoCard(texto));
+    }
   } catch (e) {
-    console.warn("IA fallback:", e);
+    console.warn("IA batch fallback:", e);
   }
-  return TEXTOS_FALLBACK[Math.floor(Math.random() * TEXTOS_FALLBACK.length)];
+  return resultado;
 }
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+function limitarTextoCard(texto: string, max = 108): string {
+  const limpio = texto.replace(/\s+/g, " ").trim();
+  if (limpio.length <= max) return limpio;
+  const corte = limpio.slice(0, max - 1);
+  const ultimoEspacio = corte.lastIndexOf(" ");
+  const base = ultimoEspacio > 80 ? corte.slice(0, ultimoEspacio) : corte;
+  return `${base.replace(/[.,;:!?¡¿-]+$/g, "").trim()}…`;
+}
+
+function jwtRole(token: string): string {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return "";
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload.padEnd(payload.length + ((4 - payload.length % 4) % 4), "=");
+    const json = atob(padded);
+    const data = JSON.parse(json);
+    return String(data?.role ?? "");
+  } catch (_) {
+    return "";
+  }
 }
 
 Deno.serve(async (req) => {
@@ -242,11 +341,12 @@ Deno.serve(async (req) => {
     });
   }
 
-  const cronSecret = Deno.env.get("CARTELERA_CRON_SECRET");
+  const cronSecret = Deno.env.get("CARTELERA_CRON_SECRET") ?? Deno.env.get("CRON_SECRET");
   const authHeader = req.headers.get("authorization") ?? "";
   const cronHeader = req.headers.get("x-cron-secret") ?? "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const isService = authHeader === `Bearer ${serviceKey}`;
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  const isService = authHeader === `Bearer ${serviceKey}` || jwtRole(bearer) === "service_role";
   const isCron = cronSecret && cronHeader === cronSecret;
   if (!isService && !isCron) {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
@@ -291,7 +391,7 @@ Deno.serve(async (req) => {
       .select(
         "id, nombre_local, descripcion_local, foto_perfil_url, url_foto_banner, " +
         "foto_local_1, foto_local_2, foto_local_3, foto_local_4, foto_local_5, " +
-        "rubro, ciudad, provincia, local_verificado, es_pionero, " +
+        "rubro, horarios_json, ciudad, provincia, local_verificado, es_pionero, " +
         "calificacion_promedio, calificacion_cantidad, plan_suscripcion, estado_cuenta",
       )
       .eq("estado_cuenta", "activa")
@@ -299,17 +399,34 @@ Deno.serve(async (req) => {
 
     if (errLocales || !locales?.length) continue;
 
-    const scored: { local: LocalRow; score: number }[] = [];
+    const scored: LocalConScore[] = [];
+    // Preferir score = puntos_base (fijo) + métricas semanales del cache.
+    const { data: rankingRows } = await sb
+      .from("locales_ranking_cache")
+      .select("id_local, score, puntos_base, puntos_semana")
+      .in("id_local", (locales as LocalRow[]).map((l) => l.id));
+    const rankingMap = new Map<string, number>();
+    for (const r of rankingRows ?? []) {
+      rankingMap.set(String(r.id_local), Number(r.score) || 0);
+    }
     for (const l of locales as LocalRow[]) {
-      const { data: score, error: errScore } = await sb.rpc("calcular_score_perfil_local", {
-        p_local_id: l.id,
-      });
-      if (errScore) continue;
-      scored.push({ local: l, score: Number(score) || 0 });
+      let score = rankingMap.get(l.id);
+      if (score == null) {
+        const { data: baseScore, error: errScore } = await sb.rpc(
+          "calcular_score_perfil_local",
+          { p_local_id: l.id },
+        );
+        if (errScore) continue;
+        score = Number(baseScore) || 0;
+      }
+      scored.push({ local: l, score });
     }
 
     scored.sort((a, b) => b.score - a.score);
     const top = scored.slice(0, MAX_POR_CIUDAD);
+    const topIds = top.map((t) => t.local.id);
+    const contextos = await cargarContextosSemana(sb, topIds, inicio, fin);
+    const textosPorLocal = await generarTextosIaCiudad(top, contextos, fechasCtx, inicio, fin);
 
     await sb
       .from("cartelera_local_cards")
@@ -320,8 +437,7 @@ Deno.serve(async (req) => {
 
     let pos = 1;
     for (const { local, score } of top) {
-      const ctx = await cargarContexto(sb, local.id);
-      const texto = await generarTextoIa(local, ctx, fechasCtx);
+      const texto = textosPorLocal.get(local.id) ?? fallbackTexto(local, pos);
       const fotos = recolectarFotos(sb, local);
       const avatar = publicUrl(sb, "perfiles-locales", local.foto_perfil_url);
 
@@ -356,7 +472,6 @@ Deno.serve(async (req) => {
         generados++;
         pos++;
       }
-      await sleep(BATCH_IA_MS);
     }
   }
 

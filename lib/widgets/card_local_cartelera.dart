@@ -156,39 +156,45 @@ class _CardLocalCarteleraState extends State<CardLocalCartelera> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            l.nombreLocal,
+                          RichText(
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.baloo2(
-                              color: Colors.white,
-                              fontSize: nombreSize,
-                              fontWeight: FontWeight.w800,
-                              height: 1.05,
+                            text: TextSpan(
+                              text: l.nombreLocal,
+                              style: GoogleFonts.baloo2(
+                                color: Colors.white,
+                                fontSize: nombreSize,
+                                fontWeight: FontWeight.w800,
+                                height: 1.05,
+                              ),
+                              children: [
+                                if (l.esPionero || l.esVerificado)
+                                  WidgetSpan(
+                                    alignment: PlaceholderAlignment.middle,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 3),
+                                      child: Icon(
+                                        CupertinoIcons.checkmark_seal_fill,
+                                        size: _estiloGrande ? 15 : 13,
+                                        color: l.esPionero
+                                            ? CardLocalPopular.doradoPionero
+                                            : ColoresApp.principalMarca,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                           if (l.tieneResenas) ...[
                             const SizedBox(height: 4),
                             _RatingLocal(
                               promedio: l.ratingPromedio!,
-                              cantidad: l.cantidadResenas,
                               compacto: !_estiloGrande,
                             ),
                           ],
                         ],
                       ),
                     ),
-                    if (l.esPionero || l.esVerificado)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 4, bottom: 2),
-                        child: Icon(
-                          CupertinoIcons.checkmark_seal_fill,
-                          size: _estiloGrande ? 16 : 14,
-                          color: l.esPionero
-                              ? CardLocalPopular.doradoPionero
-                              : ColoresApp.principalMarca,
-                        ),
-                      ),
                   ],
                 ),
                 if (l.textoIa.trim().isNotEmpty) ...[
@@ -261,6 +267,9 @@ class _FondoLocal extends StatelessWidget {
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      alignment: Alignment.center,
       fadeInDuration: Duration.zero,
       fadeOutDuration: Duration.zero,
       placeholder: (_, __) => Container(color: ColoresApp.fondoSuperficie),
@@ -286,12 +295,12 @@ class _GradienteLocal extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Colors.black.withOpacity(0.28),
-              Colors.transparent,
-              Colors.transparent,
-              Colors.black.withOpacity(0.88),
+              Colors.black.withOpacity(0.18),
+              Colors.black.withOpacity(0.04),
+              Colors.black.withOpacity(0.42),
+              Colors.black.withOpacity(0.94),
             ],
-            stops: const [0, 0.22, 0.5, 1.0],
+            stops: const [0, 0.34, 0.62, 1.0],
           ),
         ),
       ),
@@ -302,12 +311,10 @@ class _GradienteLocal extends StatelessWidget {
 class _RatingLocal extends StatelessWidget {
   const _RatingLocal({
     required this.promedio,
-    required this.cantidad,
     this.compacto = false,
   });
 
   final double promedio;
-  final int cantidad;
   final bool compacto;
 
   @override
@@ -326,7 +333,7 @@ class _RatingLocal extends StatelessWidget {
         }),
         const SizedBox(width: 4),
         Text(
-          '${promedio.toStringAsFixed(1)} ($cantidad)',
+          promedio.toStringAsFixed(1),
           style: GoogleFonts.baloo2(
             color: Colors.white.withOpacity(0.9),
             fontSize: compacto ? 10.5 : 11.5,

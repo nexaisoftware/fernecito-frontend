@@ -3,9 +3,10 @@ library;
 import 'package:flutter/widgets.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
+import '../core/secciones_impresion.dart';
 import '../core/servicio_impresiones.dart';
 
-/// Cuenta visita al perfil cuando la card de local entra al viewport.
+/// Cuenta exposición de la card de local (no visita real al perfil).
 class DetectorImpresionLocalCartelera extends StatefulWidget {
   const DetectorImpresionLocalCartelera({
     super.key,
@@ -29,8 +30,9 @@ class _DetectorImpresionLocalCarteleraState
   void _onVisibility(VisibilityInfo info) {
     if (info.visibleFraction >= 0.1 && !_visibleRegistrada) {
       _visibleRegistrada = true;
-      ServicioImpresiones.instancia.registrarVisitaPerfil(
+      ServicioImpresiones.instancia.registrar(
         idLocal: widget.idLocal,
+        seccion: SeccionesImpresion.cardLocal,
       );
       return;
     }

@@ -50,8 +50,12 @@ class ServicioImpresiones {
     _timer = null;
   }
 
+  static bool _esSinEvento(String seccion) =>
+      seccion == SeccionesImpresion.perfilLocal ||
+      seccion == SeccionesImpresion.cardLocal;
+
   String _clave(String idLocal, String? idEvento, String seccion) {
-    final ev = seccion == SeccionesImpresion.perfilLocal
+    final ev = _esSinEvento(seccion)
         ? _uuidPerfilSentinel
         : (idEvento ?? '');
     return '$idLocal|$ev|$seccion';
@@ -66,7 +70,8 @@ class ServicioImpresiones {
     final local = idLocal.trim();
     if (local.isEmpty || delta <= 0) return;
     if (ServicioSupabase().usuarioActual == null) return;
-    if (seccion != SeccionesImpresion.perfilLocal &&
+    // perfil_local / card_local: no requieren idEvento (sentinel en backend).
+    if (!_esSinEvento(seccion) &&
         (idEvento == null || idEvento.trim().isEmpty)) {
       return;
     }
@@ -140,10 +145,10 @@ class ServicioImpresiones {
         final idLocal = partes[0];
         final idEventoRaw = partes.length > 1 ? partes[1] : '';
         final seccion = partes.length > 2 ? partes[2] : '';
-        final esPerfil = seccion == SeccionesImpresion.perfilLocal;
+        final sinEvento = _esSinEvento(seccion);
         return {
           'id_local': idLocal,
-          if (!esPerfil && idEventoRaw.isNotEmpty) 'id_evento': idEventoRaw,
+          if (!sinEvento && idEventoRaw.isNotEmpty) 'id_evento': idEventoRaw,
           'seccion': seccion,
           'delta': e.value,
         };

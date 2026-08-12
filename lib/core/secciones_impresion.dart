@@ -10,4 +10,6 @@ abstract final class SeccionesImpresion {
   static const gratis = 'gratis';
   static const perfilLocal = 'perfil_local';
   static const clickEvento = 'click_evento';
+  /// Exposición de card de local en cartelera (no es visita real al perfil).
+  static const cardLocal = 'card_local';
 }
