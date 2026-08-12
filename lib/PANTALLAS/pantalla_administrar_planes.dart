@@ -895,7 +895,9 @@ class _PanelEditar extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFDC2626).withValues(alpha: 0.18),
+                          color: const Color(
+                            0xFFDC2626,
+                          ).withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(

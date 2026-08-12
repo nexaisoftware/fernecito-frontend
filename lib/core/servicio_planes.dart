@@ -127,9 +127,7 @@ class PlanComunidad {
   bool get soyPendiente => miEstado == 'pendiente';
   bool get estaAbierto => estado == 'abierto';
   bool get estaFinalizado =>
-      estado == 'cancelado' ||
-      estado == 'finalizado' ||
-      estado == 'eliminado';
+      estado == 'cancelado' || estado == 'finalizado' || estado == 'eliminado';
   bool get cupoLleno => cupoMax != null && cupoUsados >= cupoMax!;
   bool get puedeUnirse =>
       estaAbierto &&
@@ -149,49 +147,47 @@ class PlanComunidad {
     String? pedidoBeneficio,
     int? pedidoVotos,
     int? personasAceptadas,
-  }) =>
-      PlanComunidad(
-        id: id,
-        titulo: titulo,
-        descripcion: descripcion,
-        ciudad: ciudad,
-        fechaInicio: fechaInicio,
-        modoLista: modoLista,
-        cupoUsados: cupoUsados ?? this.cupoUsados,
-        idLocal: idLocal,
-        nombreLocal: nombreLocal,
-        idOrganizador: idOrganizador,
-        nombreOrganizador: nombreOrganizador,
-        tipoOrganizador: tipoOrganizador,
-        provincia: provincia,
-        fechaFin: fechaFin,
-        expiraEn: expiraEn,
-        cupoMax: cupoMax,
-        idSquad: idSquad,
-        nombreSquad: nombreSquad,
-        fotoLocal: fotoLocal,
-        fotoOrganizador: fotoOrganizador,
-        miEstado: miEstado ?? this.miEstado,
-        estado: estado ?? this.estado,
-        creadorTipo: creadorTipo,
-        idCreadorLocal: idCreadorLocal,
-        portadaPath: portadaPath,
-        colorHex: colorHex,
-        permiteSquads: permiteSquads,
-        edadMinima: edadMinima,
-        contactoAnfitrion: contactoAnfitrion,
-        contactoModo: contactoModo,
-        beneficioLocal: beneficioLocal,
-        beneficioEstado: beneficioEstado ?? this.beneficioEstado,
-        beneficioContraoferta:
-            beneficioContraoferta ?? this.beneficioContraoferta,
-        pedidoBeneficio: pedidoBeneficio ?? this.pedidoBeneficio,
-        pedidoVotos: pedidoVotos ?? this.pedidoVotos,
-        soyModerador: soyModerador,
-        esPlanLocal: esPlanLocal,
-        personasAceptadas: personasAceptadas ?? this.personasAceptadas,
-        ingresoAbierto: ingresoAbierto ?? this.ingresoAbierto,
-      );
+  }) => PlanComunidad(
+    id: id,
+    titulo: titulo,
+    descripcion: descripcion,
+    ciudad: ciudad,
+    fechaInicio: fechaInicio,
+    modoLista: modoLista,
+    cupoUsados: cupoUsados ?? this.cupoUsados,
+    idLocal: idLocal,
+    nombreLocal: nombreLocal,
+    idOrganizador: idOrganizador,
+    nombreOrganizador: nombreOrganizador,
+    tipoOrganizador: tipoOrganizador,
+    provincia: provincia,
+    fechaFin: fechaFin,
+    expiraEn: expiraEn,
+    cupoMax: cupoMax,
+    idSquad: idSquad,
+    nombreSquad: nombreSquad,
+    fotoLocal: fotoLocal,
+    fotoOrganizador: fotoOrganizador,
+    miEstado: miEstado ?? this.miEstado,
+    estado: estado ?? this.estado,
+    creadorTipo: creadorTipo,
+    idCreadorLocal: idCreadorLocal,
+    portadaPath: portadaPath,
+    colorHex: colorHex,
+    permiteSquads: permiteSquads,
+    edadMinima: edadMinima,
+    contactoAnfitrion: contactoAnfitrion,
+    contactoModo: contactoModo,
+    beneficioLocal: beneficioLocal,
+    beneficioEstado: beneficioEstado ?? this.beneficioEstado,
+    beneficioContraoferta: beneficioContraoferta ?? this.beneficioContraoferta,
+    pedidoBeneficio: pedidoBeneficio ?? this.pedidoBeneficio,
+    pedidoVotos: pedidoVotos ?? this.pedidoVotos,
+    soyModerador: soyModerador,
+    esPlanLocal: esPlanLocal,
+    personasAceptadas: personasAceptadas ?? this.personasAceptadas,
+    ingresoAbierto: ingresoAbierto ?? this.ingresoAbierto,
+  );
 
   factory PlanComunidad.fromMap(Map<String, dynamic> m) {
     DateTime? dt(dynamic v) {
@@ -486,10 +482,7 @@ class ServicioPlanes {
       );
     } catch (e) {
       debugPrint('⚠️ planes_detalle: $e');
-      return (
-        detalle: null,
-        error: mensajeError(e, accion: 'abrir el plan'),
-      );
+      return (detalle: null, error: mensajeError(e, accion: 'abrir el plan'));
     }
   }
 
@@ -523,7 +516,9 @@ class ServicioPlanes {
         'p_tipo_organizador': tipoOrganizador,
         if (idSquad != null) 'p_id_squad': idSquad,
         'p_contacto_anfitrion': contactoAnfitrion,
-        'p_contacto_modo': contactoModo == 'colaborar' ? 'colaborar' : 'contactar',
+        'p_contacto_modo': contactoModo == 'colaborar'
+            ? 'colaborar'
+            : 'contactar',
         'p_portada_path': portadaPath,
         'p_color_hex': colorHex,
         'p_permite_squads': permiteSquads,

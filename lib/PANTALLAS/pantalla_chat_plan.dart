@@ -15,9 +15,10 @@ import '../widgets/fernecito_loader.dart';
 
 /// Handle @ para etiquetar al local del plan.
 String handleMencionLocal(String? nombreLocal) {
-  final cleaned = (nombreLocal ?? '')
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9._]+'), '');
+  final cleaned = (nombreLocal ?? '').toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9._]+'),
+    '',
+  );
   if (cleaned.length >= 2) {
     return cleaned.length > 32 ? cleaned.substring(0, 32) : cleaned;
   }
@@ -59,10 +60,11 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
 
   String? get _textoBannerBeneficio {
     final estado = _plan.beneficioEstado;
-    final oferta = (estado == 'contraoferta'
-            ? _plan.beneficioContraoferta
-            : _plan.beneficioLocal)
-        ?.trim();
+    final oferta =
+        (estado == 'contraoferta'
+                ? _plan.beneficioContraoferta
+                : _plan.beneficioLocal)
+            ?.trim();
     if (oferta == null || oferta.isEmpty) return null;
     if (estado == 'contraoferta') {
       return 'Oferta del local (pendiente): $oferta';
@@ -203,8 +205,8 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
       setState(() {
         _nombresAutores[id] =
             (row?['nombre']?.toString().trim().isNotEmpty ?? false)
-                ? row!['nombre'].toString().trim()
-                : (row?['username']?.toString() ?? 'Alguien');
+            ? row!['nombre'].toString().trim()
+            : (row?['username']?.toString() ?? 'Alguien');
       });
     } catch (_) {
       _nombresAutores.remove(id);
@@ -235,8 +237,7 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
       return;
     }
     final before = text.substring(0, cursor);
-    final match =
-        RegExp(r'(^|[\s])@([A-Za-z0-9._]{0,32})$').firstMatch(before);
+    final match = RegExp(r'(^|[\s])@([A-Za-z0-9._]{0,32})$').firstMatch(before);
     if (match == null) {
       if (_queryMencion != null) {
         setState(() {
@@ -307,8 +308,9 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
     final nuevo = '$before$insertion$after';
     _ctrl.value = TextEditingValue(
       text: nuevo,
-      selection:
-          TextSelection.collapsed(offset: before.length + insertion.length),
+      selection: TextSelection.collapsed(
+        offset: before.length + insertion.length,
+      ),
     );
     setState(() {
       _queryMencion = null;
@@ -742,8 +744,8 @@ class _BurbujaMensaje extends StatelessWidget {
           color: local
               ? const Color(0xFF14B8A6).withValues(alpha: 0.18)
               : esMio
-                  ? Colors.white.withValues(alpha: 0.12)
-                  : Colors.white.withValues(alpha: 0.065),
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.065),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(22),
             topRight: const Radius.circular(22),
@@ -852,19 +854,19 @@ class _BadgeChat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.24),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          texto,
-          style: GoogleFonts.baloo2(
-            fontSize: 9,
-            height: 1,
-            fontWeight: FontWeight.w900,
-            color: Colors.white,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.24),
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Text(
+      texto,
+      style: GoogleFonts.baloo2(
+        fontSize: 9,
+        height: 1,
+        fontWeight: FontWeight.w900,
+        color: Colors.white,
+      ),
+    ),
+  );
 }

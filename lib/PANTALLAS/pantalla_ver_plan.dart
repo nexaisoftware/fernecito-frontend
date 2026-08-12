@@ -435,10 +435,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     if (plan == null) return;
     setState(() => _pedidoOcupado = true);
     try {
-      final ok = await _srv.pedidoResponder(
-        idPlan: plan.id,
-        accion: 'aceptar',
-      );
+      final ok = await _srv.pedidoResponder(idPlan: plan.id, accion: 'aceptar');
       if (!mounted) return;
       if (!ok) {
         _toast('No se pudo aceptar.');
@@ -589,9 +586,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
         (plan.soyMiembro || plan.soyModerador) &&
         !(detalle?.yaVotePedido ?? false);
     final soyLocal = plan.miEstado == 'local';
-    final localPuedeResponder =
-        soyLocal &&
-        plan.beneficioEstado == 'pedido';
+    final localPuedeResponder = soyLocal && plan.beneficioEstado == 'pedido';
 
     return PopScope(
       canPop: false,
@@ -824,16 +819,17 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                         child: plan.chatDisponible
                             ? _ActionButton(
                                 texto: 'Chat del plan',
-                                onTap: () => Navigator.of(
-                                  context,
-                                  rootNavigator: true,
-                                ).push(
-                                  CupertinoPageRoute(
-                                    fullscreenDialog: true,
-                                    builder: (_) =>
-                                        PantallaChatPlan(plan: plan),
-                                  ),
-                                ),
+                                onTap: () =>
+                                    Navigator.of(
+                                      context,
+                                      rootNavigator: true,
+                                    ).push(
+                                      CupertinoPageRoute(
+                                        fullscreenDialog: true,
+                                        builder: (_) =>
+                                            PantallaChatPlan(plan: plan),
+                                      ),
+                                    ),
                               )
                             : (!plan.estaFinalizado &&
                                   !plan.soyMiembro &&
@@ -949,7 +945,10 @@ class _Avatar extends StatelessWidget {
                 errorWidget: (_, _, _) => ColoredBox(
                   color: const Color(0xFF2B2B2B),
                   child: Center(
-                    child: Text(ini, style: const TextStyle(color: Colors.white)),
+                    child: Text(
+                      ini,
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
               )

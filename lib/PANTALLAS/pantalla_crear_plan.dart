@@ -490,9 +490,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
       _paso = _PasoPlan.guardando;
     });
     _usuarioTexto('Publicar plan');
-    await _bot([
-      'Publicando tu plan…',
-    ]);
+    await _bot(['Publicando tu plan…']);
     setState(() => _procesando = true);
     try {
       String? portada;

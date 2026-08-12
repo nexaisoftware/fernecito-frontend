@@ -145,21 +145,23 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
   }
 
   Future<void> _crearPlan() async {
-    final idPlan = await Navigator.of(context, rootNavigator: true).push<String>(
-      CupertinoPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => const PantallaCrearPlan(),
-      ),
-    );
+    final idPlan = await Navigator.of(context, rootNavigator: true)
+        .push<String>(
+          CupertinoPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => const PantallaCrearPlan(),
+          ),
+        );
     if (idPlan != null && mounted) {
       await _cargar(reset: true);
       if (!mounted) return;
-      final changed = await Navigator.of(context, rootNavigator: true).push<bool>(
-        CupertinoPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => PantallaVerPlan(idPlan: idPlan),
-        ),
-      );
+      final changed = await Navigator.of(context, rootNavigator: true)
+          .push<bool>(
+            CupertinoPageRoute(
+              fullscreenDialog: true,
+              builder: (_) => PantallaVerPlan(idPlan: idPlan),
+            ),
+          );
       if (changed == true) await _cargar(reset: true);
     }
   }
@@ -572,8 +574,9 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
                               nombreLocal: plan.nombreLocal,
                               ciudad: plan.ciudad,
                               fechaInicio: plan.fechaInicio,
-                              sharePositionOrigin:
-                                  origenCompartirDesdeContexto(context),
+                              sharePositionOrigin: origenCompartirDesdeContexto(
+                                context,
+                              ),
                               feedbackContext: context,
                             ),
                           );
