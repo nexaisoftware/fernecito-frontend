@@ -1,0 +1,50 @@
+library;
+
+import 'package:flutter/widgets.dart';
+import 'package:visibility_detector/visibility_detector.dart';
+
+import '../core/servicio_impresiones.dart';
+
+/// Cuenta visita al perfil cuando la card de local entra al viewport.
+class DetectorImpresionLocalCartelera extends StatefulWidget {
+  const DetectorImpresionLocalCartelera({
+    super.key,
+    required this.idLocal,
+    required this.child,
+  });
+
+  final String idLocal;
+  final Widget child;
+
+  @override
+  State<DetectorImpresionLocalCartelera> createState() =>
+      _DetectorImpresionLocalCarteleraState();
+}
+
+class _DetectorImpresionLocalCarteleraState
+    extends State<DetectorImpresionLocalCartelera> {
+  final Key _visibilityKey = UniqueKey();
+  bool _visibleRegistrada = false;
+
+  void _onVisibility(VisibilityInfo info) {
+    if (info.visibleFraction >= 0.1 && !_visibleRegistrada) {
+      _visibleRegistrada = true;
+      ServicioImpresiones.instancia.registrarVisitaPerfil(
+        idLocal: widget.idLocal,
+      );
+      return;
+    }
+    if (info.visibleFraction <= 0.01) {
+      _visibleRegistrada = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return VisibilityDetector(
+      key: _visibilityKey,
+      onVisibilityChanged: _onVisibility,
+      child: widget.child,
+    );
+  }
+}

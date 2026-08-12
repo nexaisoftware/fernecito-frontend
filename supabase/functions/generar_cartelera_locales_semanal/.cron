@@ -1,0 +1,9 @@
+# Cron semanal: lunes 06:00 America/Argentina/Cordoba
+# Configurar en Supabase Dashboard → Edge Functions → generar_cartelera_locales_semanal → Schedules
+# O vía SQL con pg_cron + pg_net (requiere extensión habilitada en el proyecto).
+
+# Ejemplo de schedule (ajustar URL y secret en secrets del proyecto):
+# 0 9 * * 1  → 06:00 ART (UTC-3) los lunes
+
+[functions.generar_cartelera_locales_semanal]
+verify_jwt = false

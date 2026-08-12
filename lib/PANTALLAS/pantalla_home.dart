@@ -35,6 +35,9 @@ import '../core/jerarquias_data.dart';
 import '../core/secciones_impresion.dart';
 import '../core/servicio_estado_cuenta.dart';
 import '../core/servicio_impresiones.dart';
+import '../core/servicio_cartelera_locales.dart';
+import '../core/mezcla_cartelera_locales.dart';
+import '../models/local_cartelera_card.dart';
 import '../core/servicio_notificaciones_usuarios.dart';
 import '../core/servicio_perfil_usuario.dart';
 import '../core/navegacion_evento_compartido.dart';
@@ -49,6 +52,8 @@ import '../core/tema_fernecito.dart';
 import '../core/ubicaciones_data.dart';
 import '../widgets/avatar_local.dart';
 import '../widgets/cards_cartelera.dart';
+import '../widgets/card_local_cartelera.dart';
+import '../widgets/detector_impresion_local_cartelera.dart';
 import '../widgets/carrusel_auto_scroll.dart';
 import '../widgets/detector_impresion_cartelera.dart';
 import '../widgets/fernecito_loader.dart';
@@ -832,6 +837,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   // ---- Datos crudos (de Supabase) ----
   List<Map<String, dynamic>> _eventos = const [];
   List<Map<String, dynamic>> _locales = const [];
+  List<LocalCarteleraCard> _poolLocalesCartelera = const [];
 
   // ---- Filtros ----
   String _query = '';
@@ -1089,8 +1095,13 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
               const <String, Map<String, dynamic>>{},
             )
           : _obtenerLocalesPorIds(sb, idsLocales);
-      // Lugares populares (Q4) arranca EN PARALELO con lo anterior.
+      // Lugares populares (Q4) y pool semanal de locales cartelera en paralelo.
       final localesPopFut = _cargarLocalesPopulares(sb, idsLocales);
+      final poolLocalesFut = _ciudadesActivas.isEmpty
+          ? Future<List<LocalCarteleraCard>>.value(const [])
+          : ServicioCarteleraLocales.instancia.obtenerPorCiudades(
+              _ciudadesActivas,
+            );
       final localesPorId = await localesPorIdFut;
 
       final eventos = rows
@@ -1167,11 +1178,13 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           .toList();
 
       final locales = await localesPopFut;
+      final poolLocales = await poolLocalesFut;
 
       if (!mounted) return;
       setState(() {
         _eventos = eventos;
         _locales = locales;
+        _poolLocalesCartelera = poolLocales;
         _cargando = false;
         _seedShuffle = DateTime.now().millisecondsSinceEpoch;
       });
@@ -1553,7 +1566,19 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           principal: res.ciudadPrincipal,
         );
       }
+      await _recargarPoolLocales();
     }
+  }
+
+  Future<void> _recargarPoolLocales() async {
+    if (_ciudadesActivas.isEmpty) {
+      if (mounted) setState(() => _poolLocalesCartelera = const []);
+      return;
+    }
+    final pool = await ServicioCarteleraLocales.instancia.obtenerPorCiudades(
+      _ciudadesActivas,
+    );
+    if (mounted) setState(() => _poolLocalesCartelera = pool);
   }
 
   Future<void> _abrirTopUltraStories() async {
@@ -1608,6 +1633,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       _ciudadesActivas = Set<String>.from(res.ciudades);
       _carteleraInteligente = res.carteleraInteligente;
     });
+    await _recargarPoolLocales();
   }
 
   void _irAEvento(String idEvento) {
@@ -1642,6 +1668,18 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           avatarUrl: local['avatar']?.toString() ?? '',
           nombreLocal: local['nombre']?.toString() ?? 'Local',
           idLocal: local['idLocal']?.toString(),
+        ),
+      ),
+    );
+  }
+
+  void _irALocalCartelera(LocalCarteleraCard local) {
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) => PantallaLocalPerfil(
+          avatarUrl: local.avatarUrl ?? '',
+          nombreLocal: local.nombreLocal,
+          idLocal: local.localId,
         ),
       ),
     );
@@ -1721,6 +1759,37 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     final normales = _porJerarquia(filtrados, JerarquiasData.normal.slug);
     final gratis = _porJerarquia(filtrados, JerarquiasData.gratis.slug);
     final localesPop = _localesPopularesFiltrados();
+
+    final conteosEventos = <String, int>{
+      'top': topsTotales.length,
+      JerarquiasData.recomendadoFernecito.slug: recos.length,
+      JerarquiasData.normal.slug: normales.length,
+      JerarquiasData.gratis.slug: gratis.length,
+    };
+    final localesPorSeccion = MezclaCarteleraLocales.necesitaRelleno(conteosEventos)
+        ? MezclaCarteleraLocales.distribuir(
+            pool: _poolLocalesCartelera,
+            conteosEventos: conteosEventos,
+            seed: _seedShuffle,
+          )
+        : const <String, List<LocalCarteleraCard>>{};
+
+    final topsConLocales = MezclaCarteleraLocales.appendLocales(
+      topsTotales,
+      localesPorSeccion['top'],
+    );
+    final recosConLocales = MezclaCarteleraLocales.appendLocales(
+      recos,
+      localesPorSeccion[JerarquiasData.recomendadoFernecito.slug],
+    );
+    final normalesConLocales = MezclaCarteleraLocales.appendLocales(
+      normales,
+      localesPorSeccion[JerarquiasData.normal.slug],
+    );
+    final gratisConLocales = MezclaCarteleraLocales.appendLocales(
+      gratis,
+      localesPorSeccion[JerarquiasData.gratis.slug],
+    );
     // El badge de stories solo aparece si hay top_ultra en la(s) ciudad(es)
     // seleccionada(s) — consistente con que las stories ahora filtran por ciudad.
     final tieneTopUltra = _eventos
@@ -1746,23 +1815,23 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
             ),
           ),
         ),
-      // TOP (incluye top_ultra)
-      if (topsTotales.isNotEmpty)
+      // TOP (incluye top_ultra; locales solo si <10 eventos en la sección)
+      if (topsConLocales.isNotEmpty)
         _buildSeccionCarruseles(
           titulo: JerarquiasData.top.labelSeccion,
           icono: JerarquiasData.top.icono,
-          eventos: topsTotales,
+          eventos: topsConLocales,
           porFila: CapacidadCartelera.topPorFila,
           variante: _Variante.grande,
           sentidoBase: false, // TOP: hacia la derecha
           seccionDeEvento: _seccionImpresionCartelera,
         ),
       // RECOMENDADO FERNECITO
-      if (recos.isNotEmpty)
+      if (recosConLocales.isNotEmpty)
         _buildSeccionCarruseles(
           titulo: JerarquiasData.recomendadoFernecito.labelSeccion,
           icono: CupertinoIcons.hand_thumbsup_fill,
-          eventos: recos,
+          eventos: recosConLocales,
           porFila: CapacidadCartelera.recomendadoPorFila,
           variante: _Variante.mediano,
           sentidoBase:
@@ -1772,11 +1841,11 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       // LUGARES POPULARES (entre recomendado y normal)
       if (localesPop.isNotEmpty) _buildSeccionLocalesPopulares(localesPop),
       // NORMAL (Destacados en tu ciudad)
-      if (normales.isNotEmpty)
+      if (normalesConLocales.isNotEmpty)
         _buildSeccionCarruseles(
           titulo: JerarquiasData.normal.labelSeccion,
           icono: JerarquiasData.normal.icono,
-          eventos: normales,
+          eventos: normalesConLocales,
           porFila: CapacidadCartelera.normalPorFila,
           variante: _Variante.mediano,
           sentidoBase: false, // base derecha, alterna por fila
@@ -1784,12 +1853,14 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           seccionFija: SeccionesImpresion.normal,
         ),
       // GRID GRATIS
-      if (gratis.isNotEmpty) _buildSeccionGratisGrid(eventos: gratis),
+      if (gratisConLocales.isNotEmpty)
+        _buildSeccionGratisGrid(eventos: gratisConLocales),
       // Empty state si nada
-      if (topsTotales.isEmpty &&
-          recos.isEmpty &&
-          normales.isEmpty &&
-          gratis.isEmpty)
+      if (topsConLocales.isEmpty &&
+          recosConLocales.isEmpty &&
+          normalesConLocales.isEmpty &&
+          gratisConLocales.isEmpty &&
+          localesPop.isEmpty)
         _buildEmptyState(),
       SliverPadding(
         padding: EdgeInsets.only(
@@ -2025,6 +2096,34 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
 
     Widget cardAt(BuildContext ctx, int i) {
       final raw = fila[i];
+      if (LocalCarteleraCard.esItemLocal(raw)) {
+        final local = LocalCarteleraCard.desdeItemCartelera(raw);
+        if (local == null) return const SizedBox.shrink();
+        Widget card;
+        if (esGrande) {
+          card = CardLocalCartelera(
+            local: local,
+            ancho: ancho,
+            variante: VarianteCardLocalCartelera.grande,
+            onTap: () => _irALocalCartelera(local),
+          );
+        } else {
+          card = CardLocalCartelera(
+            local: local,
+            ancho: ancho,
+            variante: VarianteCardLocalCartelera.mediano,
+            onTap: () => _irALocalCartelera(local),
+          );
+        }
+        if (local.localId.isNotEmpty) {
+          card = DetectorImpresionLocalCartelera(
+            idLocal: local.localId,
+            child: card,
+          );
+        }
+        return RepaintBoundary(child: card);
+      }
+
       final ev = _aEventoCartelera(raw);
       final idLocal = raw['idLocal']?.toString() ?? '';
       final seccion =
@@ -2184,6 +2283,22 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
             ),
             delegate: SliverChildBuilderDelegate((ctx, i) {
               final raw = eventos[i];
+              if (LocalCarteleraCard.esItemLocal(raw)) {
+                final local = LocalCarteleraCard.desdeItemCartelera(raw);
+                if (local == null) return const SizedBox.shrink();
+                Widget card = CardLocalCartelera(
+                  local: local,
+                  variante: VarianteCardLocalCartelera.grid,
+                  onTap: () => _irALocalCartelera(local),
+                );
+                if (local.localId.isNotEmpty) {
+                  card = DetectorImpresionLocalCartelera(
+                    idLocal: local.localId,
+                    child: card,
+                  );
+                }
+                return RepaintBoundary(child: card);
+              }
               final ev = _aEventoCartelera(raw);
               final idLocal = raw['idLocal']?.toString() ?? '';
               Widget card = CardEventoGrid(
