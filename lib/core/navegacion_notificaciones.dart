@@ -380,6 +380,8 @@ Future<bool> navegarDesdeNotificacion(
     case 'plan_eliminado':
     case 'plan_pedido_local':
     case 'plan_pedido_respuesta':
+    case 'plan_mencion':
+    case 'plan_mensaje':
       return abrirPlanDesdeNotificacion(n);
     case 'rompehielo_recibido':
     case 'rompehielo_respondido':
