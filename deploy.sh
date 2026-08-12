@@ -40,11 +40,23 @@ flutter build web --release --base-href / --no-wasm-dry-run \
 
 echo "==> [1b/3] deploy_id en build/web/version.json"
 python3 - <<'PY'
-import json, os, subprocess, time
+import json, os, re, subprocess, time
+from pathlib import Path
 
-path = "build/web/version.json"
-with open(path, encoding="utf-8") as f:
-    data = json.load(f)
+path = Path("build/web/version.json")
+if path.exists():
+    data = json.loads(path.read_text(encoding="utf-8"))
+else:
+    pub = Path("pubspec.yaml").read_text(encoding="utf-8")
+    m = re.search(r"^version:\s*(\d+\.\d+\.\d+)\+(\d+)", pub, re.M)
+    ver, build = (m.group(1), m.group(2)) if m else ("0.0.0", "0")
+    data = {
+        "app_name": "fernecito_frontend",
+        "version": ver,
+        "build_number": build,
+        "package_name": "fernecito_frontend",
+        "deploy_id": "pending-local",
+    }
 
 git_ref = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "").strip()
 if not git_ref:
@@ -56,8 +68,7 @@ if not git_ref:
         git_ref = "local"
 
 data["deploy_id"] = f"{git_ref[:12]}-{int(time.time())}"
-with open(path, "w", encoding="utf-8") as f:
-    json.dump(data, f, separators=(",", ":"))
+path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
 PY
 
 echo "==> [2/3] preparando Vercel: api + build/web/vercel.json"
