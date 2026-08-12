@@ -390,14 +390,23 @@ class _PantallaSocialHubState extends State<PantallaSocial>
 }
 
 class PantallaAmigosSquads extends StatefulWidget {
-  const PantallaAmigosSquads({super.key});
+  const PantallaAmigosSquads({super.key, this.initialTab = 0});
+
+  /// 0 → amigos, 1 → squads. Lo usan notificaciones/deep-links.
+  final int initialTab;
 
   @override
   State<PantallaAmigosSquads> createState() => _PantallaAmigosSquadsState();
 }
 
 class _PantallaAmigosSquadsState extends State<PantallaAmigosSquads> {
-  int _indice = 0;
+  late int _indice;
+
+  @override
+  void initState() {
+    super.initState();
+    _indice = widget.initialTab.clamp(0, 1);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -690,7 +699,9 @@ class _LocalTendenciaItem extends StatelessWidget {
                         color: acento,
                         boxShadow: [
                           BoxShadow(
-                            color: acento.withValues(alpha: esPodio ? 0.36 : 0.24),
+                            color: acento.withValues(
+                              alpha: esPodio ? 0.36 : 0.24,
+                            ),
                             blurRadius: esPodio ? 9 : 7,
                           ),
                         ],
