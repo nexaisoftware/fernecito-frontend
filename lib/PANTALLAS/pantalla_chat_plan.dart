@@ -60,19 +60,22 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
 
   String? get _textoBannerBeneficio {
     final estado = _plan.beneficioEstado;
-    final oferta =
-        (estado == 'contraoferta'
-                ? _plan.beneficioContraoferta
-                : _plan.beneficioLocal)
-            ?.trim();
-    if (oferta == null || oferta.isEmpty) return null;
+    final oferta = (_plan.beneficioLocal ?? _plan.beneficioContraoferta)?.trim();
+    if (estado == 'aceptado') {
+      if (oferta == null || oferta.isEmpty) return null;
+      // Hubo pedido del grupo → “se puso la 10”; si no, promo del local.
+      if ((_plan.pedidoBeneficio ?? '').trim().isNotEmpty) {
+        return 'El local se puso la 10 con: $oferta';
+      }
+      return 'Promo del local: $oferta';
+    }
+    // Legacy: contraoferta pendiente (ya no debería ocurrir con flujo one-shot).
     if (estado == 'contraoferta') {
-      return 'Oferta del local (pendiente): $oferta';
+      final c = (_plan.beneficioContraoferta ?? '').trim();
+      if (c.isEmpty) return null;
+      return 'Oferta del local (pendiente): $c';
     }
-    if ((_plan.pedidoBeneficio ?? '').trim().isNotEmpty) {
-      return 'El local se puso la 10 con: $oferta';
-    }
-    return 'Promo del local: $oferta';
+    return null;
   }
 
   @override
