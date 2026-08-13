@@ -27,7 +27,8 @@ import 'avatar_local.dart';
 
 import 'fernecito_loader.dart';
 
-export 'fernecito_loader.dart' show LoaderIconosAnimado, LoaderMapaIconosAnimado;
+export 'fernecito_loader.dart'
+    show LoaderIconosAnimado, LoaderMapaIconosAnimado;
 
 import 'social_ui.dart';
 
@@ -56,10 +57,7 @@ Color _colorTinteCallesMapa(Color tema) {
 
 ColorFilter _filtroCallesMapaTematizado(Color tema) {
   final tinte = _colorTinteCallesMapa(tema);
-  return ColorFilter.mode(
-    tinte.withValues(alpha: 0.40),
-    BlendMode.overlay,
-  );
+  return ColorFilter.mode(tinte.withValues(alpha: 0.40), BlendMode.overlay);
 }
 
 /// Tiles oscuros con calles y vías teñidas al color del tema activo.
@@ -124,33 +122,19 @@ class PinUbicacionUsuario extends StatelessWidget {
 /// Ícono de mapa con pulso suave (misma idea que el like del perfil local).
 
 class IconoMapaCarteleraAnimado extends StatefulWidget {
-
-  const IconoMapaCarteleraAnimado({
-
-    super.key,
-
-    this.size = 24,
-
-    this.onTap,
-
-  });
+  const IconoMapaCarteleraAnimado({super.key, this.size = 24, this.onTap});
 
   final double size;
 
   final VoidCallback? onTap;
 
   @override
-
   State<IconoMapaCarteleraAnimado> createState() =>
-
       _IconoMapaCarteleraAnimadoState();
-
 }
 
 class _IconoMapaCarteleraAnimadoState extends State<IconoMapaCarteleraAnimado>
-
     with SingleTickerProviderStateMixin {
-
   late final AnimationController _controller;
 
   late final Animation<double> _scale;
@@ -158,79 +142,61 @@ class _IconoMapaCarteleraAnimadoState extends State<IconoMapaCarteleraAnimado>
   bool _pulsoArmado = false;
 
   @override
-
   void initState() {
-
     super.initState();
 
     _controller = AnimationController(
-
       vsync: this,
 
       duration: const Duration(milliseconds: 360),
-
     );
 
-    _scale = TweenSequence<double>([
+    _scale = TweenSequence<double>(
+      [
+        TweenSequenceItem(tween: Tween(begin: 1, end: 1.18), weight: 30),
 
-      TweenSequenceItem(tween: Tween(begin: 1, end: 1.18), weight: 30),
+        TweenSequenceItem(tween: Tween(begin: 1.18, end: 0.94), weight: 24),
 
-      TweenSequenceItem(tween: Tween(begin: 1.18, end: 0.94), weight: 24),
+        TweenSequenceItem(tween: Tween(begin: 0.94, end: 1.08), weight: 22),
 
-      TweenSequenceItem(tween: Tween(begin: 0.94, end: 1.08), weight: 22),
-
-      TweenSequenceItem(tween: Tween(begin: 1.08, end: 1), weight: 24),
-
-    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+        TweenSequenceItem(tween: Tween(begin: 1.08, end: 1), weight: 24),
+      ],
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _iniciarPulso());
-
   }
 
   Future<void> _iniciarPulso() async {
-
     if (_pulsoArmado) return;
 
     _pulsoArmado = true;
 
     while (mounted) {
-
       await Future<void>.delayed(const Duration(seconds: 3));
 
       if (!mounted || _controller.isAnimating) continue;
 
       await _controller.forward(from: 0);
-
     }
-
   }
 
   @override
-
   void dispose() {
-
     _controller.dispose();
 
     super.dispose();
-
   }
 
   @override
-
   Widget build(BuildContext context) {
-
     final icono = ValueListenableBuilder<Color>(
-
       valueListenable: TemaFernecito.instancia.colorActual,
 
       builder: (context, accent, _) {
-
         return ScaleTransition(
-
           scale: _scale,
 
           child: Icon(
-
             CupertinoIcons.map,
 
             size: widget.size,
@@ -238,23 +204,17 @@ class _IconoMapaCarteleraAnimadoState extends State<IconoMapaCarteleraAnimado>
             color: accent,
 
             shadows: [
-
               Shadow(
+                color: Colors.black.withValues(alpha: 0.22),
 
-                color: accent.withValues(alpha: 0.35),
+                blurRadius: 2.5,
 
-                blurRadius: 10,
-
+                offset: const Offset(0, 1),
               ),
-
             ],
-
           ),
-
         );
-
       },
-
     );
 
     final onTap = widget.onTap;
@@ -262,15 +222,12 @@ class _IconoMapaCarteleraAnimadoState extends State<IconoMapaCarteleraAnimado>
     if (onTap == null) return icono;
 
     return GestureDetector(
-
       onTap: onTap,
 
       behavior: HitTestBehavior.opaque,
 
       child: icono,
-
     );
-
   }
 }
 
@@ -290,8 +247,7 @@ class IconoCentrarUbicacionMapa extends StatelessWidget {
     return ValueListenableBuilder<Color>(
       valueListenable: TemaFernecito.instancia.colorActual,
       builder: (context, accent, _) {
-        final color =
-            activo ? accent : ColoresApp.textoSecundario;
+        final color = activo ? accent : ColoresApp.textoSecundario;
         return Icon(Icons.my_location, size: size, color: color);
       },
     );
@@ -352,15 +308,12 @@ class BotonUbicacionMapa extends StatelessWidget {
 /// Switch flotante Locales / Eventos.
 
 class MapaSwitchModo extends StatelessWidget {
-
   const MapaSwitchModo({
-
     super.key,
 
     required this.indice,
 
     required this.onChanged,
-
   });
 
   final int indice;
@@ -372,49 +325,35 @@ class MapaSwitchModo extends StatelessWidget {
   static const _radio = 50.0;
 
   @override
-
   Widget build(BuildContext context) {
-
     return ValueListenableBuilder<Color>(
-
       valueListenable: TemaFernecito.instancia.colorActual,
 
       builder: (context, accent, _) {
-
         return DecoratedBox(
-
           decoration: BoxDecoration(
-
             borderRadius: BorderRadius.circular(_radio),
 
             boxShadow: [
-
               BoxShadow(
-
                 color: accent.withValues(alpha: 0.16),
 
                 blurRadius: 16,
 
                 spreadRadius: 0,
-
               ),
 
               BoxShadow(
-
                 color: Colors.black.withValues(alpha: 0.38),
 
                 blurRadius: 14,
 
                 offset: const Offset(0, 5),
-
               ),
-
             ],
-
           ),
 
           child: ToggleSegmentadoSocial(
-
             opciones: const ['Locales', 'Eventos'],
 
             indice: indice,
@@ -432,25 +371,17 @@ class MapaSwitchModo extends StatelessWidget {
             sinBorde: true,
 
             centrar: false,
-
           ),
-
         );
-
       },
-
     );
-
   }
-
 }
 
 /// Pin circular con avatar de local.
 
 class PinAvatarLocalMapa extends StatelessWidget {
-
   const PinAvatarLocalMapa({
-
     super.key,
 
     required this.imageUrl,
@@ -460,7 +391,6 @@ class PinAvatarLocalMapa extends StatelessWidget {
     required this.seleccionado,
 
     this.size = 52,
-
   });
 
   final String? imageUrl;
@@ -472,11 +402,8 @@ class PinAvatarLocalMapa extends StatelessWidget {
   final double size;
 
   @override
-
   Widget build(BuildContext context) {
-
     return AnimatedScale(
-
       scale: seleccionado ? 1.12 : 1.0,
 
       duration: const Duration(milliseconds: 220),
@@ -484,7 +411,6 @@ class PinAvatarLocalMapa extends StatelessWidget {
       curve: Curves.easeOutCubic,
 
       child: AvatarLocal(
-
         imageUrl: imageUrl,
 
         size: size,
@@ -496,33 +422,23 @@ class PinAvatarLocalMapa extends StatelessWidget {
         borderWidth: seleccionado ? 2.6 : null,
 
         boxShadow: [
-
           BoxShadow(
-
             color: Colors.black.withValues(alpha: seleccionado ? 0.45 : 0.30),
 
             blurRadius: seleccionado ? 14 : 8,
 
             offset: const Offset(0, 3),
-
           ),
-
         ],
-
       ),
-
     );
-
   }
-
 }
 
 /// Pin rectangular con flyer de evento.
 
 class PinFlyerEventoMapa extends StatelessWidget {
-
   const PinFlyerEventoMapa({
-
     super.key,
 
     required this.flyerUrl,
@@ -534,7 +450,6 @@ class PinFlyerEventoMapa extends StatelessWidget {
     this.ancho = 48,
 
     this.alto = 64,
-
   });
 
   final String? flyerUrl;
@@ -548,17 +463,12 @@ class PinFlyerEventoMapa extends StatelessWidget {
   final double alto;
 
   @override
-
   Widget build(BuildContext context) {
-
     return ValueListenableBuilder<Color>(
-
       valueListenable: TemaFernecito.instancia.colorActual,
 
       builder: (context, accent, _) {
-
         return AnimatedScale(
-
           scale: seleccionado ? 1.1 : 1.0,
 
           duration: const Duration(milliseconds: 220),
@@ -566,207 +476,141 @@ class PinFlyerEventoMapa extends StatelessWidget {
           curve: Curves.easeOutCubic,
 
           child: Stack(
-
             clipBehavior: Clip.none,
 
             children: [
-
               Container(
-
                 width: ancho,
 
                 height: alto,
 
                 decoration: BoxDecoration(
-
                   borderRadius: BorderRadius.circular(10),
 
                   boxShadow: [
-
                     if (seleccionado)
-
                       BoxShadow(
-
                         color: accent.withValues(alpha: 0.35),
 
                         blurRadius: 14,
 
                         spreadRadius: 1,
-
                       ),
 
                     BoxShadow(
-
                       color: Colors.black.withValues(alpha: 0.42),
 
                       blurRadius: 10,
 
                       offset: const Offset(0, 4),
-
                     ),
-
                   ],
-
                 ),
 
                 child: ClipRRect(
-
                   borderRadius: BorderRadius.circular(10),
 
                   child: _imagenFlyer(flyerUrl),
-
                 ),
-
               ),
 
               if (tienePromo)
-
-                const Positioned(
-
-                  top: -5,
-
-                  right: -5,
-
-                  child: _BadgePromoMapa(),
-
-                ),
-
+                const Positioned(top: -5, right: -5, child: _BadgePromoMapa()),
             ],
-
           ),
-
         );
-
       },
-
     );
-
   }
 
   Widget _imagenFlyer(String? url) {
-
     final u = url?.trim() ?? '';
 
     if (u.isEmpty) {
-
       return ColoredBox(
-
         color: ColoresApp.fondoSuperficie,
 
         child: Icon(
-
           CupertinoIcons.ticket_fill,
 
           color: ColoresApp.textoSecundario,
 
           size: alto * 0.38,
-
         ),
-
       );
-
     }
 
     if (u.startsWith('assets/')) {
-
       return Image.asset(u, fit: BoxFit.cover);
-
     }
 
     return CachedNetworkImage(
-
       imageUrl: u,
 
       fit: BoxFit.cover,
 
       placeholder: (_, __) => const ColoredBox(
-
         color: ColoresApp.fondoSuperficie,
 
         child: FernecitoLoaderCentro(size: 16),
-
       ),
 
       errorWidget: (_, __, ___) => ColoredBox(
-
         color: ColoresApp.fondoSuperficie,
 
         child: Icon(
-
           CupertinoIcons.ticket_fill,
 
           color: ColoresApp.textoSecundario,
 
           size: alto * 0.38,
-
         ),
-
       ),
-
     );
-
   }
-
 }
 
 class _BadgePromoMapa extends StatelessWidget {
-
   const _BadgePromoMapa();
 
   @override
-
   Widget build(BuildContext context) {
-
     return Container(
-
       width: 20,
 
       height: 20,
 
       decoration: BoxDecoration(
-
         color: ColoresApp.flashPromo,
 
         shape: BoxShape.circle,
 
         boxShadow: [
-
           BoxShadow(
-
             color: Colors.black.withValues(alpha: 0.35),
 
             blurRadius: 6,
 
             offset: const Offset(0, 2),
-
           ),
-
         ],
-
       ),
 
       child: const Icon(
-
         CupertinoIcons.gift_fill,
 
         size: 11,
 
         color: Color(0xFF1A1A1A),
-
       ),
-
     );
-
   }
-
 }
 
 /// Card glass flotante con info del pin seleccionado.
 
 class MapaCardInfoFlotante extends StatelessWidget {
-
   const MapaCardInfoFlotante({
-
     super.key,
 
     required this.visible,
@@ -778,7 +622,6 @@ class MapaCardInfoFlotante extends StatelessWidget {
     this.posicionUsuario,
 
     this.onVerDetalle,
-
   });
 
   final bool visible;
@@ -792,9 +635,7 @@ class MapaCardInfoFlotante extends StatelessWidget {
   final VoidCallback? onVerDetalle;
 
   @override
-
   Widget build(BuildContext context) {
-
     final hayLocal = local != null;
 
     final hayEvento = evento != null;
@@ -802,7 +643,6 @@ class MapaCardInfoFlotante extends StatelessWidget {
     final mostrar = visible && (hayLocal || hayEvento);
 
     return AnimatedSlide(
-
       duration: const Duration(milliseconds: 280),
 
       curve: Curves.easeOutCubic,
@@ -810,71 +650,54 @@ class MapaCardInfoFlotante extends StatelessWidget {
       offset: mostrar ? Offset.zero : const Offset(0, -0.12),
 
       child: AnimatedOpacity(
-
         duration: const Duration(milliseconds: 220),
 
         opacity: mostrar ? 1 : 0,
 
         child: IgnorePointer(
-
           ignoring: !mostrar,
 
           child: mostrar
-
               ? Column(
-
                   mainAxisSize: MainAxisSize.min,
 
                   crossAxisAlignment: CrossAxisAlignment.stretch,
 
                   children: [
-
                     GestureDetector(
-
                       onTap: onVerDetalle,
 
                       behavior: HitTestBehavior.opaque,
 
                       child: ClipRRect(
-
                         borderRadius: BorderRadius.circular(18),
 
                         child: BackdropFilter(
-
                           filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
 
                           child: DecoratedBox(
-
                             decoration: BoxDecoration(
-
                               gradient: LinearGradient(
-
                                 begin: Alignment.topLeft,
 
                                 end: Alignment.bottomRight,
 
                                 colors: [
+                                  const Color(
+                                    0xFF1E1E22,
+                                  ).withValues(alpha: 0.82),
 
-                                  const Color(0xFF1E1E22)
-
-                                      .withValues(alpha: 0.82),
-
-                                  const Color(0xFF111114)
-
-                                      .withValues(alpha: 0.92),
-
+                                  const Color(
+                                    0xFF111114,
+                                  ).withValues(alpha: 0.92),
                                 ],
-
                               ),
 
                               borderRadius: BorderRadius.circular(18),
-
                             ),
 
                             child: Padding(
-
                               padding: const EdgeInsets.fromLTRB(
-
                                 12,
 
                                 10,
@@ -882,69 +705,45 @@ class MapaCardInfoFlotante extends StatelessWidget {
                                 12,
 
                                 10,
-
                               ),
 
                               child: Row(
-
                                 crossAxisAlignment: CrossAxisAlignment.start,
 
                                 children: [
-
                                   _miniatura(),
 
                                   const SizedBox(width: 12),
 
                                   Expanded(child: _textos(context)),
-
                                 ],
-
                               ),
-
                             ),
-
                           ),
-
                         ),
-
                       ),
-
                     ),
 
                     if (_textoDistancia() != null) ...[
-
                       const SizedBox(height: 8),
 
                       _BadgeDistanciaMapa(
-
                         texto: _textoDistancia()!,
 
                         grande: true,
-
                       ),
-
                     ],
-
                   ],
-
                 )
-
               : const SizedBox.shrink(),
-
         ),
-
       ),
-
     );
-
   }
 
   Widget _miniatura() {
-
     if (evento != null) {
-
       return PinFlyerEventoMapa(
-
         flyerUrl: evento!.flyerUrl,
 
         seleccionado: true,
@@ -954,13 +753,10 @@ class MapaCardInfoFlotante extends StatelessWidget {
         ancho: 64,
 
         alto: 86,
-
       );
-
     }
 
     return PinAvatarLocalMapa(
-
       imageUrl: local?.avatarUrl,
 
       esPionero: local?.esPionero ?? false,
@@ -968,27 +764,20 @@ class MapaCardInfoFlotante extends StatelessWidget {
       seleccionado: true,
 
       size: 54,
-
     );
-
   }
 
   Widget _textos(BuildContext context) {
-
     if (evento != null) {
-
       final e = evento!;
 
       return Column(
-
         mainAxisSize: MainAxisSize.min,
 
         crossAxisAlignment: CrossAxisAlignment.start,
 
         children: [
-
           Text(
-
             e.titulo,
 
             maxLines: 2,
@@ -996,7 +785,6 @@ class MapaCardInfoFlotante extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
 
             style: GoogleFonts.baloo2(
-
               fontSize: 15,
 
               fontWeight: FontWeight.w800,
@@ -1004,15 +792,12 @@ class MapaCardInfoFlotante extends StatelessWidget {
               color: ColoresApp.textoPrincipal,
 
               height: 1.1,
-
             ),
-
           ),
 
           const SizedBox(height: 3),
 
           Text(
-
             e.nombreLocal,
 
             maxLines: 1,
@@ -1020,53 +805,40 @@ class MapaCardInfoFlotante extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
 
             style: GoogleFonts.baloo2(
-
               fontSize: 12.5,
 
               fontWeight: FontWeight.w700,
 
               color: ColoresApp.principalMarca,
-
             ),
-
           ),
 
           if (e.fechaInicio != null) ...[
-
             const SizedBox(height: 4),
 
             Text(
-
               _formatearFecha(e.fechaInicio!),
 
               style: GoogleFonts.baloo2(
-
                 fontSize: 11.5,
 
                 fontWeight: FontWeight.w700,
 
                 color: ColoresApp.textoSecundario,
-
               ),
-
             ),
-
           ],
 
           if (e.tienePromo == true) ...[
-
             const SizedBox(height: 6),
 
             const _ChipPromoCard(),
-
           ],
 
           if ((e.descripcion ?? '').trim().isNotEmpty) ...[
-
             const SizedBox(height: 5),
 
             Text(
-
               e.descripcion!.trim(),
 
               maxLines: 2,
@@ -1074,39 +846,28 @@ class MapaCardInfoFlotante extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
 
               style: GoogleFonts.baloo2(
-
                 fontSize: 11.5,
 
                 color: ColoresApp.textoSecundario,
 
                 height: 1.2,
-
               ),
-
             ),
-
           ],
-
         ],
-
       );
-
     }
 
     if (local != null) {
-
       final l = local!;
 
       return Column(
-
         mainAxisSize: MainAxisSize.min,
 
         crossAxisAlignment: CrossAxisAlignment.start,
 
         children: [
-
           Text(
-
             l.nombre,
 
             maxLines: 2,
@@ -1114,7 +875,6 @@ class MapaCardInfoFlotante extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
 
             style: GoogleFonts.baloo2(
-
               fontSize: 15,
 
               fontWeight: FontWeight.w800,
@@ -1122,15 +882,12 @@ class MapaCardInfoFlotante extends StatelessWidget {
               color: ColoresApp.textoPrincipal,
 
               height: 1.1,
-
             ),
-
           ),
 
           const SizedBox(height: 4),
 
           Text(
-
             [l.ciudad, l.provincia].where((s) => s.isNotEmpty).join(' · '),
 
             maxLines: 1,
@@ -1138,21 +895,16 @@ class MapaCardInfoFlotante extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
 
             style: GoogleFonts.baloo2(
-
               fontSize: 11.5,
 
               color: ColoresApp.textoSecundario,
-
             ),
-
           ),
 
           if ((l.descripcion ?? '').trim().isNotEmpty) ...[
-
             const SizedBox(height: 5),
 
             Text(
-
               l.descripcion!.trim(),
 
               maxLines: 2,
@@ -1160,27 +912,19 @@ class MapaCardInfoFlotante extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
 
               style: GoogleFonts.baloo2(
-
                 fontSize: 11.5,
 
                 color: ColoresApp.textoSecundario,
 
                 height: 1.2,
-
               ),
-
             ),
-
           ],
-
         ],
-
       );
-
     }
 
     return const SizedBox.shrink();
-
   }
 
   String? _textoDistancia() {
@@ -1190,17 +934,24 @@ class MapaCardInfoFlotante extends StatelessWidget {
   }
 
   String _formatearFecha(DateTime f) {
-
     final local = f.toLocal();
 
     final dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
     final meses = [
+      'Ene',
+      'Feb',
+      'Mar',
+      'Abr',
+      'May',
+      'Jun',
 
-      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-
-      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
-
+      'Jul',
+      'Ago',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dic',
     ];
 
     final dia = dias[local.weekday - 1];
@@ -1212,16 +963,11 @@ class MapaCardInfoFlotante extends StatelessWidget {
     final mm = local.minute.toString().padLeft(2, '0');
 
     return '$dia ${local.day} $mes · $hh:$mm';
-
   }
-
 }
 
 class _BadgeDistanciaMapa extends StatelessWidget {
-  const _BadgeDistanciaMapa({
-    required this.texto,
-    this.grande = false,
-  });
+  const _BadgeDistanciaMapa({required this.texto, this.grande = false});
 
   final String texto;
   final bool grande;
@@ -1255,11 +1001,7 @@ class _BadgeDistanciaMapa extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.my_location,
-                  size: grande ? 16 : 11,
-                  color: accent,
-                ),
+                Icon(Icons.my_location, size: grande ? 16 : 11, color: accent),
                 SizedBox(width: grande ? 8 : 4),
                 Text(
                   texto,
@@ -1280,52 +1022,30 @@ class _BadgeDistanciaMapa extends StatelessWidget {
 }
 
 class _ChipPromoCard extends StatelessWidget {
-
   const _ChipPromoCard();
 
   @override
-
   Widget build(BuildContext context) {
-
     return Row(
-
       mainAxisSize: MainAxisSize.min,
 
       children: [
-
-        Icon(
-
-          CupertinoIcons.gift_fill,
-
-          size: 13,
-
-          color: ColoresApp.flashPromo,
-
-        ),
+        Icon(CupertinoIcons.gift_fill, size: 13, color: ColoresApp.flashPromo),
 
         const SizedBox(width: 5),
 
         Text(
-
           'Promo activa',
 
           style: GoogleFonts.baloo2(
-
             fontSize: 11.5,
 
             fontWeight: FontWeight.w800,
 
             color: ColoresApp.flashPromo,
-
           ),
-
         ),
-
       ],
-
     );
-
   }
-
 }
-
