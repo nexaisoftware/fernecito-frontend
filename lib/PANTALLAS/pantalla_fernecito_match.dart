@@ -2882,11 +2882,14 @@ class _TarjetaPendiente extends StatelessWidget {
   }
 
   Widget _ph() => Container(
-    color: const Color(0xFF2A2A2A),
+    color: _colorSolidoDesdeSeed(card.idGrupo ?? card.idUsuario ?? card.idPlan),
     alignment: Alignment.center,
     child: Text(
       card.esSquad ? '👥' : '🙋',
-      style: const TextStyle(fontSize: 64),
+      style: TextStyle(
+        fontSize: 64,
+        color: Colors.white.withValues(alpha: 0.55),
+      ),
     ),
   );
 }
