@@ -72,8 +72,14 @@ class MatchCard {
   final List<String> avataresMiembros;
 
   bool get esSquad => tipo == 'squad';
-  String? get fotoUrl => ServicioSupabase().urlAvatar(fotoPath);
-  String? get lugarFotoUrl => ServicioSupabase().urlAvatar(lugarFoto);
+
+  /// Usuario → bucket avatars; squad → portada en squad-banners.
+  String? get fotoUrl => esSquad
+      ? ServicioSupabase().urlPortadaSquad(fotoPath)
+      : ServicioSupabase().urlAvatar(fotoPath);
+
+  String? get lugarFotoUrl => ServicioSupabase().urlAvatarLocal(lugarFoto) ??
+      ServicioSupabase().urlAvatar(lugarFoto);
 
   /// URLs listas para [StackAvataresSquad].
   List<String> get avataresMiembrosUrls => avataresMiembros

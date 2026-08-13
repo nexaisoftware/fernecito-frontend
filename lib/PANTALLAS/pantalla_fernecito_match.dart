@@ -1723,13 +1723,13 @@ class _MatchCardVisual extends StatelessWidget {
     final alto = MediaQuery.sizeOf(context).height * 0.58;
     final foto = card.fotoUrl;
     final urlsSquad = card.avataresMiembrosUrls;
-    final esSquadStack = card.esSquad && urlsSquad.isNotEmpty;
+    final esSquad = card.esSquad;
     return SizedBox(
       width: ancho,
       height: alto,
       child: Column(
         children: [
-          // ─── Foto con nombre/edad encima ───
+          // ─── Banner/foto con stack + nombre encima ───
           Expanded(
             child: Container(
               width: double.infinity,
@@ -1809,7 +1809,7 @@ class _MatchCardVisual extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (esSquadStack) ...[
+                        if (esSquad) ...[
                           StackAvataresSquad(
                             avatares: urlsSquad,
                             totalExtra: card.miembrosParaStack,
@@ -1819,7 +1819,7 @@ class _MatchCardVisual extends StatelessWidget {
                           const SizedBox(height: 8),
                         ],
                         Text(
-                          card.esSquad
+                          esSquad
                               ? '$_nombreCorto${card.miembros != null ? ' · ${card.miembros} 👥' : ''}'
                               : '$_nombreCorto${card.edad != null ? ', ${card.edad}' : ''}',
                           maxLines: 1,
@@ -1830,7 +1830,7 @@ class _MatchCardVisual extends StatelessWidget {
                             fontSize: 24,
                           ),
                         ),
-                        if (card.esSquad && card.edadPromedio != null)
+                        if (esSquad && card.edadPromedio != null)
                           Text(
                             'Edad prom.: ${card.edadPromedio}'
                             '${(card.hombres ?? 0) + (card.mujeres ?? 0) > 0 ? ' · ${card.hombres ?? 0}🙋‍♂️ ${card.mujeres ?? 0}🙋‍♀️' : ''}',
@@ -1848,7 +1848,7 @@ class _MatchCardVisual extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          // ─── Card de info: plan + lugar (blanca, letras oscuras) ───
+          // ─── Debajo: plan + lugar ───
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1866,8 +1866,6 @@ class _MatchCardVisual extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Una sola frase: "Charlar y tomar algo en Patio Güemes"
-                // (mismo tipo y peso de letra) + avatar del local al final.
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -1891,7 +1889,6 @@ class _MatchCardVisual extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 3),
-                // El cuándo, debajo y más chico.
                 Text(
                   card.cuandoEtiqueta,
                   style: GoogleFonts.baloo2(
@@ -1908,14 +1905,39 @@ class _MatchCardVisual extends StatelessWidget {
     );
   }
 
-  Widget _placeholder() => Container(
-    color: const Color(0xFF2A2A2A),
-    alignment: Alignment.center,
-    child: Text(
-      card.esSquad ? '👥' : '🙋',
-      style: const TextStyle(fontSize: 64),
-    ),
-  );
+  /// Sin banner: color sólido estable por squad/usuario (no gris fijo).
+  Widget _placeholder() {
+    final seed = card.idGrupo ?? card.idUsuario ?? card.idPlan;
+    return Container(
+      color: _colorSolidoDesdeSeed(seed),
+      alignment: Alignment.center,
+      child: Text(
+        card.esSquad ? '👥' : '🙋',
+        style: TextStyle(
+          fontSize: 64,
+          color: Colors.white.withValues(alpha: 0.55),
+        ),
+      ),
+    );
+  }
+}
+
+Color _colorSolidoDesdeSeed(String seed) {
+  const palette = <Color>[
+    Color(0xFF2D6A4F),
+    Color(0xFF1D3557),
+    Color(0xFF9B2226),
+    Color(0xFF6A4C93),
+    Color(0xFFBC6C25),
+    Color(0xFF0077B6),
+    Color(0xFF3A5A40),
+    Color(0xFF6D597A),
+  ];
+  var h = 0;
+  for (final c in seed.codeUnits) {
+    h = (h * 31 + c) & 0x7fffffff;
+  }
+  return palette[h % palette.length];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2648,11 +2670,11 @@ class _TarjetaPendiente extends StatelessWidget {
     final ancho = MediaQuery.sizeOf(context).width * 0.86;
     final recopa = esRecopa;
     final urlsSquad = card.avataresMiembrosUrls;
-    final esSquadStack = card.esSquad && urlsSquad.isNotEmpty;
+    final esSquad = card.esSquad;
     final datos = [
       if (card.edad != null) '${card.edad} años',
       if (_genero.isNotEmpty) _genero,
-      if (card.esSquad && card.miembros != null) '${card.miembros} personas',
+      if (esSquad && card.miembros != null) '${card.miembros} personas',
     ].join(' · ');
 
     return Center(
@@ -2741,7 +2763,7 @@ class _TarjetaPendiente extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (esSquadStack) ...[
+                          if (esSquad) ...[
                             StackAvataresSquad(
                               avatares: urlsSquad,
                               totalExtra: card.miembrosParaStack,
@@ -2751,7 +2773,7 @@ class _TarjetaPendiente extends StatelessWidget {
                             const SizedBox(height: 8),
                           ],
                           Text(
-                            card.esSquad
+                            esSquad
                                 ? card.nombre
                                 : card.nombre.split(RegExp(r'\s+')).first,
                             maxLines: 1,
