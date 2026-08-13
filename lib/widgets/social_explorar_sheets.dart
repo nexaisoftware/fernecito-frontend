@@ -22,7 +22,7 @@ import 'filtro_ubicaciones_sheet.dart';
 import 'fernecito_loader.dart';
 import 'social_ui.dart';
 
-const int _kExplorarPagina = 27;
+const int _kExplorarPagina = 30;
 
 /// Layout grilla personas en explorar.
 abstract final class _LayoutGridPersonasExplorar {
@@ -392,30 +392,47 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
 
   Future<void> _cargar({required bool inicial}) async {
     if (_ciudades.isEmpty) return;
-    if (!inicial && (!_hayMas || _cargandoMas)) return;
+    if (!inicial && (!_hayMas || _cargandoMas || _cargando)) return;
     if (inicial) {
       setState(() => _cargando = true);
     } else {
       setState(() => _cargandoMas = true);
     }
-    final pagina = await _srv.explorarCiudades(
-      ciudades: _ciudades,
-      provincia: _provincia,
-      offset: inicial ? 0 : _personas.length,
-      limit: _kExplorarPagina,
-    );
-    if (!mounted) return;
-    setState(() {
-      if (inicial) {
-        _personas = pagina.items;
-        _errorCarga = pagina.error;
-      } else {
-        _personas = [..._personas, ...pagina.items];
-      }
-      _hayMas = pagina.hayMas;
-      _cargando = false;
-      _cargandoMas = false;
-    });
+    try {
+      final pagina = await _srv.explorarCiudades(
+        ciudades: _ciudades,
+        provincia: _provincia,
+        offset: inicial ? 0 : _personas.length,
+        limit: _kExplorarPagina,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (inicial) {
+          _personas = pagina.items;
+          _errorCarga = pagina.error;
+        } else {
+          final ids = _personas.map((p) => p.idUsuario).toSet();
+          _personas = [
+            ..._personas,
+            ...pagina.items.where((p) => !ids.contains(p.idUsuario)),
+          ];
+        }
+        _hayMas = pagina.hayMas;
+        _cargando = false;
+        _cargandoMas = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        if (inicial) {
+          _errorCarga =
+              'No se pudo cargar. Deslizá hacia arriba para reintentar.';
+          _personas = [];
+        }
+        _cargando = false;
+        _cargandoMas = false;
+      });
+    }
   }
 
   Widget _buildEmbebido(
@@ -762,6 +779,7 @@ class ExplorarSquadsContenido extends StatefulWidget {
 
 class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
   final ServicioSquads _srv = ServicioSquads();
+  final ScrollController _scroll = ScrollController();
   String _provincia = UbicacionesData.provinciaPorDefecto;
   Set<String> _ciudades = {UbicacionesData.ciudadPorDefecto};
 
@@ -794,6 +812,7 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScrollFin);
     PreferenciasCartelera.instancia.cambios.addListener(
       _sincronizarPreferenciasAhora,
     );
@@ -805,7 +824,17 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
     PreferenciasCartelera.instancia.cambios.removeListener(
       _sincronizarPreferenciasAhora,
     );
+    _scroll.removeListener(_onScrollFin);
+    _scroll.dispose();
     super.dispose();
+  }
+
+  void _onScrollFin() {
+    if (!_hayMas || _cargandoMas || _cargando) return;
+    if (!_scroll.hasClients) return;
+    if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 160) {
+      _cargar(inicial: false);
+    }
   }
 
   @override
@@ -952,25 +981,42 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
 
   Future<void> _cargar({required bool inicial}) async {
     if (_ciudades.isEmpty) return;
+    if (!inicial && (_cargandoMas || !_hayMas)) return;
     setState(() => inicial ? _cargando = true : _cargandoMas = true);
-    final pagina = await _srv.explorarCiudades(
-      ciudades: _ciudades,
-      provincia: _provincia,
-      offset: inicial ? 0 : _squads.length,
-      limit: inicial ? 40 : 20,
-    );
-    if (!mounted) return;
-    setState(() {
-      if (inicial) {
-        _squads = pagina.items;
-        _errorCarga = pagina.error;
-      } else {
-        _squads = [..._squads, ...pagina.items];
-      }
-      _hayMas = pagina.hayMas;
-      _cargando = false;
-      _cargandoMas = false;
-    });
+    try {
+      final pagina = await _srv.explorarCiudades(
+        ciudades: _ciudades,
+        provincia: _provincia,
+        offset: inicial ? 0 : _squads.length,
+        limit: _kExplorarPagina,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (inicial) {
+          _squads = pagina.items;
+          _errorCarga = pagina.error;
+        } else {
+          final ids = _squads.map((s) => s.idGrupo).toSet();
+          _squads = [
+            ..._squads,
+            ...pagina.items.where((s) => !ids.contains(s.idGrupo)),
+          ];
+        }
+        _hayMas = pagina.hayMas;
+        _cargando = false;
+        _cargandoMas = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        if (inicial) {
+          _errorCarga = 'No se pudo cargar. Deslizá hacia arriba para reintentar.';
+          _squads = [];
+        }
+        _cargando = false;
+        _cargandoMas = false;
+      });
+    }
   }
 
   Widget _buildSquadsEmbebido(
@@ -1013,6 +1059,7 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
         else
           Expanded(
             child: CustomScrollView(
+              controller: _scroll,
               physics: const BouncingScrollPhysics(),
               slivers: [
                 SliverPadding(
@@ -1039,26 +1086,11 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
                     }, childCount: _squads.length),
                   ),
                 ),
-                if (_hayMas)
-                  SliverToBoxAdapter(
+                if (_cargandoMas)
+                  const SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                      child: CupertinoButton(
-                        color: ColoresApp.fondoSuperficie,
-                        borderRadius: BorderRadius.circular(14),
-                        onPressed: _cargandoMas
-                            ? null
-                            : () => _cargar(inicial: false),
-                        child: _cargandoMas
-                            ? const FernecitoLoader.inline(size: 16)
-                            : Text(
-                                'Ver más squads',
-                                style: GoogleFonts.baloo2(
-                                  fontWeight: FontWeight.w800,
-                                  color: ColoresApp.principalMarca,
-                                ),
-                              ),
-                      ),
+                      padding: EdgeInsets.symmetric(vertical: 14),
+                      child: Center(child: FernecitoLoader.inline(size: 18)),
                     ),
                   ),
                 SliverToBoxAdapter(
@@ -1127,6 +1159,7 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
         else
           Expanded(
             child: CustomScrollView(
+              controller: _scroll,
               physics: const BouncingScrollPhysics(),
               slivers: [
                 SliverPadding(
@@ -1153,7 +1186,7 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
                     }, childCount: _squads.length),
                   ),
                 ),
-                if (_hayMas)
+                if (_cargandoMas)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: EdgeInsets.fromLTRB(
@@ -1164,22 +1197,7 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
                             ? 24
                             : MediaQuery.paddingOf(context).bottom + 16,
                       ),
-                      child: CupertinoButton(
-                        color: ColoresApp.fondoSuperficie,
-                        borderRadius: BorderRadius.circular(14),
-                        onPressed: _cargandoMas
-                            ? null
-                            : () => _cargar(inicial: false),
-                        child: _cargandoMas
-                            ? const FernecitoLoader.inline(size: 16)
-                            : Text(
-                                'Ver más squads',
-                                style: GoogleFonts.baloo2(
-                                  fontWeight: FontWeight.w800,
-                                  color: ColoresApp.principalMarca,
-                                ),
-                              ),
-                      ),
+                      child: const Center(child: FernecitoLoader.inline(size: 18)),
                     ),
                   ),
               ],

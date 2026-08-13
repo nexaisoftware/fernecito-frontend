@@ -117,6 +117,10 @@ class PantallaSocial extends StatefulWidget {
   final Set<String>? ciudadesIniciales;
   final bool? carteleraInteligenteInicial;
 
+  /// Si no es null, tras montar el hub abre Amigos & squads en esa pestaña
+  /// (0 = amigos, 1 = squads). Usado por notificaciones/push.
+  final int? abrirAmigosSquadsTab;
+
   /// Compatibilidad: 0 → amigos, 1 → squads (desde notificaciones antiguas).
   const PantallaSocial({
     super.key,
@@ -125,6 +129,7 @@ class PantallaSocial extends StatefulWidget {
     this.provinciaInicial,
     this.ciudadesIniciales,
     this.carteleraInteligenteInicial,
+    this.abrirAmigosSquadsTab,
     @Deprecated('Usar vista') this.initialTabIndex = 0,
   });
 
@@ -152,10 +157,28 @@ class _PantallaSocialHubState extends State<PantallaSocial>
       vsync: this,
       duration: const Duration(milliseconds: 1050),
     )..repeat(reverse: true);
-    if (widget.vista == SocialVista.explorar && !widget.mostrarVolver) {
+    // El tab Social siempre es el hub nuevo (nunca el legacy con Explorar).
+    if (!_debeDelegarFueraDelHub) {
       _cargarHub();
+      final tab = widget.abrirAmigosSquadsTab ??
+          (widget.vista == SocialVista.amigos
+              ? 0
+              : widget.vista == SocialVista.squads
+                  ? 1
+                  : null);
+      if (tab != null && !widget.mostrarVolver) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _abrir(PantallaAmigosSquads(initialTab: tab));
+        });
+      }
     }
   }
+
+  /// Entradas deep-link que no deben renderizar el hub en este State.
+  bool get _debeDelegarFueraDelHub =>
+      widget.mostrarVolver &&
+      (widget.vista == SocialVista.amigos || widget.vista == SocialVista.squads);
 
   @override
   void dispose() {
@@ -166,28 +189,33 @@ class _PantallaSocialHubState extends State<PantallaSocial>
   Future<void> _cargarHub() async {
     await PreferenciasCartelera.instancia.cargar();
     final prefs = PreferenciasCartelera.instancia;
-    final resultados = await Future.wait<dynamic>([
-      _amigos.listar(),
-      _squads.invitaciones(),
-      _tendencias.listarLocales(
-        ciudades: prefs.ciudadesActivas,
-        provincia: prefs.provinciaActiva,
-        dias: 7,
-        limite: 6,
-      ),
-    ]);
-    if (!mounted) return;
-    final amistades = resultados[0] as AmistadesData;
-    final invitaciones = resultados[1] as List<SquadResumen>;
-    setState(() {
-      _novedadesSociales =
-          amistades.recibidas.length +
-          invitaciones
-              .where((item) => item.origenPendiente != 'solicitud')
-              .length;
-      _locales = resultados[2] as List<LocalTendenciaSocial>;
-      _cargandoTendencias = false;
-    });
+    try {
+      final resultados = await Future.wait<dynamic>([
+        _amigos.listar(),
+        _squads.invitaciones(),
+        _tendencias.listarLocales(
+          ciudades: prefs.ciudadesActivas,
+          provincia: prefs.provinciaActiva,
+          dias: 7,
+          limite: 6,
+        ),
+      ]);
+      if (!mounted) return;
+      final amistades = resultados[0] as AmistadesData;
+      final invitaciones = resultados[1] as List<SquadResumen>;
+      setState(() {
+        _novedadesSociales =
+            amistades.recibidas.length +
+            invitaciones
+                .where((item) => item.origenPendiente != 'solicitud')
+                .length;
+        _locales = resultados[2] as List<LocalTendenciaSocial>;
+        _cargandoTendencias = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _cargandoTendencias = false);
+    }
   }
 
   void _abrir(Widget pantalla) {
@@ -198,27 +226,36 @@ class _PantallaSocialHubState extends State<PantallaSocial>
 
   @override
   Widget build(BuildContext context) {
-    // Conserva los deep-links existentes de notificaciones y perfiles.
-    if (widget.vista == SocialVista.explorar && widget.mostrarVolver) {
-      return PantallaExplorarSocial(
-        provinciaInicial: widget.provinciaInicial,
-        ciudadesIniciales: widget.ciudadesIniciales,
-        carteleraInteligenteInicial: widget.carteleraInteligenteInicial,
-      );
-    }
-    if (widget.vista != SocialVista.explorar) {
-      return PantallaSocialLegacy(
-        vista: widget.vista,
-        mostrarVolver: widget.mostrarVolver,
-        provinciaInicial: widget.provinciaInicial,
-        ciudadesIniciales: widget.ciudadesIniciales,
-        carteleraInteligenteInicial: widget.carteleraInteligenteInicial,
+    // Deep-link Amigos/Squads con stack propio → pantalla dedicada (no legacy).
+    if (widget.mostrarVolver &&
+        (widget.vista == SocialVista.amigos ||
+            widget.vista == SocialVista.squads)) {
+      return PantallaAmigosSquads(
+        initialTab: widget.vista == SocialVista.squads ? 1 : 0,
       );
     }
 
+    // Hub Social (tab o push con volver).
     final bottom = reservaInferiorSocialEmbebido(context);
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
+      navigationBar: widget.mostrarVolver
+          ? CupertinoNavigationBar(
+              backgroundColor: Colors.transparent,
+              border: null,
+              leading: CupertinoNavigationBarBackButton(
+                color: ColoresApp.principalMarca,
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              middle: Text(
+                'Social',
+                style: GoogleFonts.baloo2(
+                  fontWeight: FontWeight.w800,
+                  color: ColoresApp.textoPrincipal,
+                ),
+              ),
+            )
+          : null,
       child: SafeArea(
         top: false,
         bottom: false,
@@ -228,14 +265,16 @@ class _PantallaSocialHubState extends State<PantallaSocial>
             SliverPadding(
               padding: EdgeInsets.fromLTRB(
                 16,
-                MediaQuery.paddingOf(context).top + 14,
+                MediaQuery.paddingOf(context).top + (widget.mostrarVolver ? 52 : 14),
                 16,
                 bottom,
               ),
               sliver: SliverList.list(
                 children: [
-                  _encabezadoHub(),
-                  const SizedBox(height: 12),
+                  if (!widget.mostrarVolver) ...[
+                    _encabezadoHub(),
+                    const SizedBox(height: 12),
+                  ],
                   _seccionTendencias(),
                   const SizedBox(height: 14),
                   _CardDestinoSocial(
@@ -257,7 +296,15 @@ class _PantallaSocialHubState extends State<PantallaSocial>
                     descripcion: 'Juntadas de la comunidad para conocer gente.',
                     asset: 'assets/imagenes/social_hub/planes.webp',
                     etiqueta: 'Nuevo',
-                    onTap: () => _abrir(const PantallaPlanes()),
+                    // Root navigator: escapa del shell de tabs (como Match).
+                    onTap: () => Navigator.of(context, rootNavigator: true)
+                        .push(
+                          CupertinoPageRoute(
+                            fullscreenDialog: true,
+                            builder: (_) => const PantallaPlanes(),
+                          ),
+                        )
+                        .then((_) => _cargarHub()),
                   ),
                   const SizedBox(height: 12),
                   _CardDestinoSocial(
@@ -392,7 +439,7 @@ class _PantallaSocialHubState extends State<PantallaSocial>
 class PantallaAmigosSquads extends StatefulWidget {
   const PantallaAmigosSquads({super.key, this.initialTab = 0});
 
-  /// 0 → amigos, 1 → squads. Lo usan notificaciones/deep-links.
+  /// 0 = Amigos, 1 = Squads.
   final int initialTab;
 
   @override
@@ -699,9 +746,7 @@ class _LocalTendenciaItem extends StatelessWidget {
                         color: acento,
                         boxShadow: [
                           BoxShadow(
-                            color: acento.withValues(
-                              alpha: esPodio ? 0.36 : 0.24,
-                            ),
+                            color: acento.withValues(alpha: esPodio ? 0.36 : 0.24),
                             blurRadius: esPodio ? 9 : 7,
                           ),
                         ],

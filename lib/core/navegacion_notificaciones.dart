@@ -6,14 +6,18 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 
 import '../PANTALLAS/pantalla_actividad.dart';
+import '../PANTALLAS/pantalla_chat_plan.dart';
 import '../PANTALLAS/pantalla_fernecito_match.dart';
 import '../PANTALLAS/pantalla_match_chats.dart';
 import '../PANTALLAS/pantalla_mis_squads.dart';
 import '../PANTALLAS/pantalla_perfil_squads.dart';
 import '../PANTALLAS/pantalla_perfil_usuarios.dart';
+import '../PANTALLAS/pantalla_planes.dart';
 import '../PANTALLAS/pantalla_rompehielo.dart' show TipoContraparte;
 import '../PANTALLAS/pantalla_social.dart';
 import '../PANTALLAS/pantalla_soporte.dart';
+import '../PANTALLAS/pantalla_ver_plan.dart';
+import 'servicio_planes.dart';
 import '../models/notificacion.dart';
 import 'app_navigator.dart';
 import 'navegacion_evento_compartido.dart';
@@ -51,14 +55,27 @@ Future<bool> _irATabOFallback(
       );
       return true;
     case 1:
-      await _push(
-        CupertinoPageRoute(
-          builder: (_) => PantallaSocial(
-            vista: socialVista ?? SocialVista.explorar,
-            mostrarVolver: true,
+      final tab = switch (socialVista) {
+        SocialVista.amigos => 0,
+        SocialVista.squads => 1,
+        _ => null,
+      };
+      if (tab != null) {
+        await _push(
+          CupertinoPageRoute(
+            builder: (_) => PantallaAmigosSquads(initialTab: tab),
           ),
-        ),
-      );
+        );
+      } else {
+        await _push(
+          CupertinoPageRoute(
+            builder: (_) => const PantallaSocial(
+              vista: SocialVista.explorar,
+              mostrarVolver: true,
+            ),
+          ),
+        );
+      }
       return true;
     case 2:
       return true; // abrir la app/cartelera alcanza para broadcasts o home.
@@ -161,15 +178,54 @@ Future<bool> abrirEventoDesdeNotificacion(Notificacion n) async {
   return true;
 }
 
+Future<bool> abrirPlanDesdeNotificacion(Notificacion n) async {
+  final idPlan =
+      n.ctaIdRef?.trim() ?? n.payload?['id_plan']?.toString().trim();
+  final accion =
+      n.payload?['accion']?.toString() ??
+      (n.tipo == 'plan_aceptado'
+          ? 'chat'
+          : (n.tipo == 'plan_cancelado' || n.tipo == 'plan_eliminado'
+                ? 'hub'
+                : 'detalle'));
+
+  // Cancelado / eliminado (o sin id): volver al hub de planes.
+  if (accion == 'hub' || idPlan == null || idPlan.isEmpty) {
+    await _push(
+      CupertinoPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const PantallaPlanes(),
+      ),
+    );
+    return true;
+  }
+
+  if (accion == 'chat') {
+    final res = await ServicioPlanes().detalle(idPlan);
+    final plan = res.detalle?.plan;
+    if (plan != null && plan.chatDisponible) {
+      await _push(
+        CupertinoPageRoute(builder: (_) => PantallaChatPlan(plan: plan)),
+      );
+      return true;
+    }
+  }
+
+  await _push(
+    CupertinoPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => PantallaVerPlan(idPlan: idPlan),
+    ),
+  );
+  return true;
+}
+
 Future<bool> abrirSquadDesdeNotificacion(Notificacion n) async {
   final idGrupo = n.ctaIdRef?.trim();
   if (idGrupo == null || idGrupo.isEmpty) {
     await _push(
       CupertinoPageRoute(
-        builder: (_) => const PantallaSocial(
-          vista: SocialVista.squads,
-          mostrarVolver: true,
-        ),
+        builder: (_) => const PantallaAmigosSquads(initialTab: 1),
       ),
     );
     return true;
@@ -181,10 +237,7 @@ Future<bool> abrirSquadDesdeNotificacion(Notificacion n) async {
   if (det == null) {
     await _push(
       CupertinoPageRoute(
-        builder: (_) => const PantallaSocial(
-          vista: SocialVista.squads,
-          mostrarVolver: true,
-        ),
+        builder: (_) => const PantallaAmigosSquads(initialTab: 1),
       ),
     );
     return true;
@@ -244,8 +297,7 @@ Future<bool> abrirPerfilAmistadDesdeNotificacion(
 
   await _push(
     CupertinoPageRoute(
-      builder: (_) =>
-          const PantallaSocial(vista: SocialVista.amigos, mostrarVolver: true),
+      builder: (_) => const PantallaAmigosSquads(initialTab: 0),
     ),
   );
   return true;
@@ -321,6 +373,14 @@ Future<bool> navegarDesdeNotificacion(
         ),
       );
       return true;
+    case 'plan_solicitud':
+    case 'plan_aceptado':
+    case 'plan_rechazado':
+    case 'plan_cancelado':
+    case 'plan_eliminado':
+    case 'plan_pedido_local':
+    case 'plan_pedido_respuesta':
+      return abrirPlanDesdeNotificacion(n);
     case 'rompehielo_recibido':
     case 'rompehielo_respondido':
     case 'rompehielo_replicado':
@@ -380,6 +440,9 @@ Future<bool> navegarDesdeNotificacion(
             onIrATab: onIrATab,
             socialVista: SocialVista.amigos,
           );
+        case 'planes':
+        case '/planes':
+          return abrirPlanDesdeNotificacion(n);
         case '/actividad':
           return _irATabOFallback(0, onIrATab: onIrATab);
         case '/home':

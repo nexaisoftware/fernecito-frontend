@@ -76,7 +76,6 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
   String? _usernameMsg;
   String? _usernameNormalizado;
   bool _creando = false;
-  bool _esPublico = false;
   Uint8List? _bannerPreviewBytes;
 
   final ImagePicker _picker = ImagePicker();
@@ -347,7 +346,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
       nombre: nombre,
       username: _usernameNormalizado ?? _usernameController.text.trim(),
       descripcion: descripcion.isEmpty ? null : descripcion,
-      esPublico: _esPublico,
+      esPublico: true,
       vibe: vibe.isEmpty ? null : vibe,
     );
 
@@ -525,36 +524,34 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
                       radius: 16,
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Squad público',
-                                style: GoogleFonts.baloo2(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: ColoresApp.textoPrincipal,
-                                ),
-                              ),
-                              Text(
-                                'Otros pueden encontrarlo y pedir unirse',
-                                style: GoogleFonts.baloo2(
-                                  fontSize: 12,
-                                  color: ColoresApp.textoSecundario,
-                                ),
-                              ),
-                            ],
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                      decoration: BoxDecoration(
+                        color: ColoresApp.fondoPrincipal.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            CupertinoIcons.globe,
+                            size: 18,
+                            color: ColoresApp.principalMarca,
                           ),
-                        ),
-                        CupertinoSwitch(
-                          value: _esPublico,
-                          activeTrackColor: ColoresApp.principalMarca,
-                          onChanged: (v) => setState(() => _esPublico = v),
-                        ),
-                      ],
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Los squads son públicos: otros pueden encontrarlos y pedir unirse.',
+                              style: GoogleFonts.baloo2(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: ColoresApp.textoSecundario,
+                                height: 1.25,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

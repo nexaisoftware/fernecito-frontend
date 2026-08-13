@@ -7,8 +7,8 @@
 ///   * Barra Spotlight (search + filtros plan / tiempo)
 ///   * Top Ultra → modal stories al abrir
 ///   * Sección TOP (carruseles de 10 por fila, divide en filas si hay más)
-///   * Sección ON FIRE PARA ESTE FINDE (top 5 locales tendencia)
 ///   * Sección RECOMENDADO FERNECITO (carruseles de 15 por fila)
+///   * Sección LUGARES POPULARES (locales random)
 ///   * Sección DESTACADOS EN TU CIUDAD (carruseles "normal" de 15, máx 2 filas + "Ver más")
 ///   * Grid de planes gratis al final
 /// - Pull-to-refresh + shuffle random en cada apertura.
@@ -22,6 +22,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -34,13 +35,12 @@ import '../core/jerarquias_data.dart';
 import '../core/secciones_impresion.dart';
 import '../core/servicio_estado_cuenta.dart';
 import '../core/servicio_impresiones.dart';
-import '../core/servicio_cartelera_locales.dart';
-import '../core/mezcla_cartelera_locales.dart';
-import '../models/local_cartelera_card.dart';
 import '../core/servicio_notificaciones_usuarios.dart';
 import '../core/servicio_perfil_usuario.dart';
 import '../core/navegacion_evento_compartido.dart';
+import '../core/navegacion_plan_compartido.dart';
 import '../core/servicio_enlace_evento.dart';
+import '../core/servicio_enlace_plan.dart';
 import '../core/supabase_client.dart';
 import '../core/coordenadas_ciudades.dart';
 import '../core/servicio_ubicacion_global.dart';
@@ -51,7 +51,6 @@ import '../core/tema_fernecito.dart';
 import '../core/ubicaciones_data.dart';
 import '../widgets/avatar_local.dart';
 import '../widgets/cards_cartelera.dart';
-import '../widgets/card_local_cartelera.dart';
 import '../widgets/carrusel_auto_scroll.dart';
 import '../widgets/detector_impresion_cartelera.dart';
 import '../widgets/fernecito_loader.dart';
@@ -159,7 +158,7 @@ class _PantallaHomeState extends State<PantallaHome>
   /// (IndexedStack no recrea el hijo).
   int _notifsReloadTick = 0;
   int _socialNavToken = 0;
-  SocialVista? _socialVistaInicial;
+  int? _socialAbrirAmigosSquadsTab;
 
   final _srvNotificaciones = ServicioNotificacionesUsuarios();
 
@@ -167,8 +166,13 @@ class _PantallaHomeState extends State<PantallaHome>
     setState(() {
       _currentTabIndex = tab.clamp(0, 4);
       if (tab == 0) _actividadReloadTick++;
-      if (tab == 1 && socialVista != null) {
-        _socialVistaInicial = socialVista;
+      if (tab == 1) {
+        // Tab Social = hub nuevo. Amigos/Squads se abren encima.
+        _socialAbrirAmigosSquadsTab = switch (socialVista) {
+          SocialVista.amigos => 0,
+          SocialVista.squads => 1,
+          _ => null,
+        };
         _socialNavToken++;
       }
     });
@@ -280,7 +284,9 @@ class _PantallaHomeState extends State<PantallaHome>
             CupertinoTabView(
               builder: (context) => PantallaSocial(
                 key: ValueKey('social_$_socialNavToken'),
-                vista: _socialVistaInicial ?? SocialVista.explorar,
+                // Siempre hub. Amigos/Squads van por push (abrirAmigosSquadsTab).
+                vista: SocialVista.explorar,
+                abrirAmigosSquadsTab: _socialAbrirAmigosSquadsTab,
               ),
             ),
             CupertinoTabView(builder: (context) => const _PantallaCartelera()),
@@ -314,7 +320,11 @@ class _PantallaHomeState extends State<PantallaHome>
                 setState(() {
                   _currentTabIndex = index;
                   if (index == 0) _actividadReloadTick++;
-                  if (index == 1) _socialVistaInicial = null;
+                  if (index == 1) {
+                    // Tap manual al tab Social: hub limpio, sin auto-abrir Amigos.
+                    _socialAbrirAmigosSquadsTab = null;
+                    _socialNavToken++;
+                  }
                   if (index == 2) _srvNotificaciones.refrescarContador();
                   if (index == 3) {
                     _notifsReloadTick++;
@@ -835,7 +845,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   // ---- Datos crudos (de Supabase) ----
   List<Map<String, dynamic>> _eventos = const [];
   List<Map<String, dynamic>> _locales = const [];
-  List<LocalCarteleraCard> _poolLocalesCartelera = const [];
 
   // ---- Filtros ----
   String _query = '';
@@ -860,6 +869,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     ServicioEnlaceEvento.instancia.cambios.addListener(
       _consumirEnlaceEventoPendiente,
     );
+    ServicioEnlacePlan.instancia.cambios.addListener(
+      _consumirEnlacePlanPendiente,
+    );
     _arrancar();
   }
 
@@ -868,6 +880,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     ServicioImpresiones.instancia.alSalirCartelera();
     ServicioEnlaceEvento.instancia.cambios.removeListener(
       _consumirEnlaceEventoPendiente,
+    );
+    ServicioEnlacePlan.instancia.cambios.removeListener(
+      _consumirEnlacePlanPendiente,
     );
     super.dispose();
   }
@@ -925,10 +940,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     if (!mounted || elegido == null || !SexoPerfil.esValido(elegido)) return;
 
     try {
-      await sb
-          .from('perfiles_usuarios')
-          .update({'sexo': elegido})
-          .eq('id', uid);
+      await sb.from('perfiles_usuarios').update({'sexo': elegido}).eq('id', uid);
     } catch (e) {
       debugPrint('⚠️ guardar sexo perfil falló: $e');
     }
@@ -1096,13 +1108,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
               const <String, Map<String, dynamic>>{},
             )
           : _obtenerLocalesPorIds(sb, idsLocales);
-      // Lugares populares (Q4) y pool semanal de locales cartelera en paralelo.
+      // Lugares populares (Q4) arranca EN PARALELO con lo anterior.
       final localesPopFut = _cargarLocalesPopulares(sb, idsLocales);
-      final poolLocalesFut = _ciudadesActivas.isEmpty
-          ? Future<List<LocalCarteleraCard>>.value(const [])
-          : ServicioCarteleraLocales.instancia.obtenerPorCiudades(
-              _ciudadesActivas,
-            );
       final localesPorId = await localesPorIdFut;
 
       final eventos = rows
@@ -1179,19 +1186,18 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           .toList();
 
       final locales = await localesPopFut;
-      final poolLocales = await poolLocalesFut;
 
       if (!mounted) return;
       setState(() {
         _eventos = eventos;
         _locales = locales;
-        _poolLocalesCartelera = poolLocales;
         _cargando = false;
         _seedShuffle = DateTime.now().millisecondsSinceEpoch;
       });
       BootstrapCartelera.marcarLista();
 
       _consumirEnlaceEventoPendiente();
+      _consumirEnlacePlanPendiente();
 
       // Top Ultra y luego modal de reseña sobre la cartelera.
       if (!_storiesYaMostrado) {
@@ -1328,37 +1334,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     List<String> idsPrioritariosCartelera,
   ) async {
     try {
-      final tendencias = await sb.rpc(
-        'cartelera_locales_on_fire',
-        params: {
-          'p_ciudades': _ciudadesActivas.isEmpty
-              ? null
-              : _ciudadesActivas.toList(),
-          'p_provincia': _provinciaActiva,
-          'p_limite': 5,
-        },
-      );
-      if (tendencias is List && tendencias.isNotEmpty) {
-        return tendencias
-            .whereType<Map>()
-            .take(5)
-            .map((raw) {
-              final t = Map<String, dynamic>.from(raw);
-              return {
-                'idLocal': t['id_local']?.toString() ?? '',
-                'nombre': t['nombre_local']?.toString() ?? 'Local',
-                'avatar': _resolverAvatarLocal(sb, t['foto_perfil_url']),
-                'verificado': false,
-                'esPionero': false,
-                'rubro': 'tendencia',
-                'ciudad': t['ciudad']?.toString(),
-                'provincia': t['provincia']?.toString(),
-                'score': (t['score'] as num?)?.toInt() ?? 0,
-              };
-            })
-            .toList(growable: false);
-      }
-
       const sel =
           'id, nombre_local, local_username, local_verificado, es_pionero, foto_perfil_url, '
           'url_foto_banner, foto_local_1, foto_local_2, rubro, ciudad, provincia';
@@ -1395,7 +1370,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
         };
       }
 
-      // Fallback si ranking no trae nada: primero IDs de cartelera, luego completar.
+      // Random orden: primero los IDs de cartelera, luego completar
       List<Map<String, dynamic>> resultado = [];
       final vistos = <String>{};
 
@@ -1431,9 +1406,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
         } catch (_) {}
       }
 
-      // Shuffle al final, pero solo mostramos top 5 para no ensuciar cartelera.
+      // Shuffle al final
       resultado.shuffle(math.Random(_seedShuffle));
-      return resultado.take(5).toList(growable: false);
+      return resultado;
     } catch (e) {
       debugPrint('⚠️ locales populares: $e');
       return [];
@@ -1598,19 +1573,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           principal: res.ciudadPrincipal,
         );
       }
-      await _recargarPoolLocales();
     }
-  }
-
-  Future<void> _recargarPoolLocales() async {
-    if (_ciudadesActivas.isEmpty) {
-      if (mounted) setState(() => _poolLocalesCartelera = const []);
-      return;
-    }
-    final pool = await ServicioCarteleraLocales.instancia.obtenerPorCiudades(
-      _ciudadesActivas,
-    );
-    if (mounted) setState(() => _poolLocalesCartelera = pool);
   }
 
   Future<void> _abrirTopUltraStories() async {
@@ -1665,7 +1628,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       _ciudadesActivas = Set<String>.from(res.ciudades);
       _carteleraInteligente = res.carteleraInteligente;
     });
-    await _recargarPoolLocales();
   }
 
   void _irAEvento(String idEvento) {
@@ -1693,6 +1655,15 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     });
   }
 
+  void _consumirEnlacePlanPendiente() {
+    final id = ServicioEnlacePlan.instancia.tomarPendiente();
+    if (id == null || id.isEmpty || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await abrirPlanCompartidoPorId(context, id);
+    });
+  }
+
   void _irALocal(Map<String, dynamic> local) {
     Navigator.of(context).push(
       CupertinoPageRoute(
@@ -1700,18 +1671,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           avatarUrl: local['avatar']?.toString() ?? '',
           nombreLocal: local['nombre']?.toString() ?? 'Local',
           idLocal: local['idLocal']?.toString(),
-        ),
-      ),
-    );
-  }
-
-  void _irALocalCartelera(LocalCarteleraCard local) {
-    Navigator.of(context).push(
-      CupertinoPageRoute(
-        builder: (_) => PantallaLocalPerfil(
-          avatarUrl: local.avatarUrl ?? '',
-          nombreLocal: local.nombreLocal,
-          idLocal: local.localId,
         ),
       ),
     );
@@ -1791,38 +1750,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     final normales = _porJerarquia(filtrados, JerarquiasData.normal.slug);
     final gratis = _porJerarquia(filtrados, JerarquiasData.gratis.slug);
     final localesPop = _localesPopularesFiltrados();
-
-    final conteosEventos = <String, int>{
-      'top': topsTotales.length,
-      JerarquiasData.recomendadoFernecito.slug: recos.length,
-      JerarquiasData.normal.slug: normales.length,
-      JerarquiasData.gratis.slug: gratis.length,
-    };
-    final localesPorSeccion =
-        MezclaCarteleraLocales.necesitaRelleno(conteosEventos)
-        ? MezclaCarteleraLocales.distribuir(
-            pool: _poolLocalesCartelera,
-            conteosEventos: conteosEventos,
-            seed: _seedShuffle,
-          )
-        : const <String, List<LocalCarteleraCard>>{};
-
-    final topsConLocales = MezclaCarteleraLocales.appendLocales(
-      topsTotales,
-      localesPorSeccion['top'],
-    );
-    final recosConLocales = MezclaCarteleraLocales.appendLocales(
-      recos,
-      localesPorSeccion[JerarquiasData.recomendadoFernecito.slug],
-    );
-    final normalesConLocales = MezclaCarteleraLocales.appendLocales(
-      normales,
-      localesPorSeccion[JerarquiasData.normal.slug],
-    );
-    final gratisConLocales = MezclaCarteleraLocales.appendLocales(
-      gratis,
-      localesPorSeccion[JerarquiasData.gratis.slug],
-    );
     // El badge de stories solo aparece si hay top_ultra en la(s) ciudad(es)
     // seleccionada(s) — consistente con que las stories ahora filtran por ciudad.
     final tieneTopUltra = _eventos
@@ -1848,37 +1775,37 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
             ),
           ),
         ),
-      // TOP (incluye top_ultra; locales solo si <10 eventos en la sección)
-      if (topsConLocales.isNotEmpty)
+      // TOP (incluye top_ultra)
+      if (topsTotales.isNotEmpty)
         _buildSeccionCarruseles(
           titulo: JerarquiasData.top.labelSeccion,
           icono: JerarquiasData.top.icono,
-          eventos: topsConLocales,
+          eventos: topsTotales,
           porFila: CapacidadCartelera.topPorFila,
           variante: _Variante.grande,
           sentidoBase: false, // TOP: hacia la derecha
           seccionDeEvento: _seccionImpresionCartelera,
         ),
-      // TOP 5 LOCALES TENDENCIA (ranking semanal, filtrado por ubicación)
-      if (localesPop.isNotEmpty) _buildSeccionLocalesPopulares(localesPop),
       // RECOMENDADO FERNECITO
-      if (recosConLocales.isNotEmpty)
+      if (recos.isNotEmpty)
         _buildSeccionCarruseles(
           titulo: JerarquiasData.recomendadoFernecito.labelSeccion,
           icono: CupertinoIcons.hand_thumbsup_fill,
-          eventos: recosConLocales,
+          eventos: recos,
           porFila: CapacidadCartelera.recomendadoPorFila,
           variante: _Variante.mediano,
           sentidoBase:
               true, // RECOMENDADOS: hacia la izquierda (contrario a TOP)
           seccionFija: SeccionesImpresion.recomendadoFernecito,
         ),
+      // LUGARES POPULARES (entre recomendado y normal)
+      if (localesPop.isNotEmpty) _buildSeccionLocalesPopulares(localesPop),
       // NORMAL (Destacados en tu ciudad)
-      if (normalesConLocales.isNotEmpty)
+      if (normales.isNotEmpty)
         _buildSeccionCarruseles(
           titulo: JerarquiasData.normal.labelSeccion,
           icono: JerarquiasData.normal.icono,
-          eventos: normalesConLocales,
+          eventos: normales,
           porFila: CapacidadCartelera.normalPorFila,
           variante: _Variante.mediano,
           sentidoBase: false, // base derecha, alterna por fila
@@ -1886,14 +1813,12 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           seccionFija: SeccionesImpresion.normal,
         ),
       // GRID GRATIS
-      if (gratisConLocales.isNotEmpty)
-        _buildSeccionGratisGrid(eventos: gratisConLocales),
+      if (gratis.isNotEmpty) _buildSeccionGratisGrid(eventos: gratis),
       // Empty state si nada
-      if (topsConLocales.isEmpty &&
-          recosConLocales.isEmpty &&
-          normalesConLocales.isEmpty &&
-          gratisConLocales.isEmpty &&
-          localesPop.isEmpty)
+      if (topsTotales.isEmpty &&
+          recos.isEmpty &&
+          normales.isEmpty &&
+          gratis.isEmpty)
         _buildEmptyState(),
       SliverPadding(
         padding: EdgeInsets.only(
@@ -2129,37 +2054,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
 
     Widget cardAt(BuildContext ctx, int i) {
       final raw = fila[i];
-      if (LocalCarteleraCard.esItemLocal(raw)) {
-        final local = LocalCarteleraCard.desdeItemCartelera(raw);
-        if (local == null) return const SizedBox.shrink();
-        Widget card;
-        if (esGrande) {
-          card = CardLocalCartelera(
-            local: local,
-            ancho: ancho,
-            variante: VarianteCardLocalCartelera.grande,
-            onTap: () => _irALocalCartelera(local),
-          );
-        } else {
-          card = CardLocalCartelera(
-            local: local,
-            ancho: ancho,
-            variante: VarianteCardLocalCartelera.mediano,
-            onTap: () => _irALocalCartelera(local),
-          );
-        }
-        // Misma mecánica que eventos: ~10% visible → 1 vista (card_local).
-        if (local.localId.isNotEmpty) {
-          card = DetectorImpresionCartelera(
-            idLocal: local.localId,
-            idEvento: ServicioImpresiones.uuidSinEvento,
-            seccion: SeccionesImpresion.cardLocal,
-            child: card,
-          );
-        }
-        return RepaintBoundary(child: card);
-      }
-
       final ev = _aEventoCartelera(raw);
       final idLocal = raw['idLocal']?.toString() ?? '';
       final seccion =
@@ -2225,41 +2119,67 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     );
   }
 
-  /// El RPC ya filtró por ciudades activas (+ alias). No re-filtrar por string
-  /// exacto: "Córdoba" vs "Córdoba capital" vaciaba la sección.
   List<Map<String, dynamic>> _localesPopularesFiltrados() {
-    if (_locales.isEmpty) return const [];
-    return _locales.take(5).toList(growable: false);
+    if (_ciudadesActivas.isEmpty) return const [];
+    return _locales
+        .where((l) {
+          final c = l['ciudad']?.toString().trim();
+          if (c == null || c.isEmpty) return false;
+          return _ciudadesActivas.contains(c);
+        })
+        .take(24)
+        .toList();
   }
 
-  // ---- Sección TOP 5 LOCALES TENDENCIA ----
+  // ---- Sección LUGARES POPULARES ----
   Widget _buildSeccionLocalesPopulares(List<Map<String, dynamic>> filtrados) {
-    final top5 = filtrados.take(5).toList(growable: false);
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 2),
+        padding: const EdgeInsets.only(top: 14, bottom: 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _TituloOnFireCartelera(),
-            SizedBox(
-              height: 72,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(20, 3, 20, 6),
-                physics: const BouncingScrollPhysics(),
-                itemCount: top5.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 12),
-                itemBuilder: (_, index) {
-                  final local = top5[index];
-                  return _LocalOnFireCarteleraItem(
-                    posicion: index + 1,
-                    nombre: local['nombre']?.toString() ?? 'Local',
-                    fotoUrl: local['avatar']?.toString(),
-                    onTap: () => _irALocal(local),
+            _TituloSeccion(
+              icono: FontAwesomeIcons.store,
+              titulo: 'Lugares populares',
+            ),
+            Builder(
+              builder: (_) {
+                Widget cardLocalAt(BuildContext ctx, int i) {
+                  final l = filtrados[i];
+                  return CardLocalPopular(
+                    idLocal: l['idLocal']?.toString() ?? '',
+                    nombreLocal: l['nombre']?.toString() ?? 'Local',
+                    urlAvatar: l['avatar']?.toString(),
+                    rubro: l['rubro']?.toString(),
+                    verificado: l['verificado'] == true,
+                    esPionero: l['esPionero'] == true,
+                    onTap: () => _irALocal(l),
                   );
-                },
-              ),
+                }
+
+                const padPop = EdgeInsets.fromLTRB(20, 6, 20, 8);
+                if (filtrados.length > 1) {
+                  return CarruselAutoScroll(
+                    itemCount: filtrados.length,
+                    itemBuilder: cardLocalAt,
+                    height: 142,
+                    padding: padPop,
+                    invertir: true, // hacia la izquierda
+                  );
+                }
+                return SizedBox(
+                  height: 142,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: padPop,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: filtrados.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: cardLocalAt,
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -2293,24 +2213,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
             ),
             delegate: SliverChildBuilderDelegate((ctx, i) {
               final raw = eventos[i];
-              if (LocalCarteleraCard.esItemLocal(raw)) {
-                final local = LocalCarteleraCard.desdeItemCartelera(raw);
-                if (local == null) return const SizedBox.shrink();
-                Widget card = CardLocalCartelera(
-                  local: local,
-                  variante: VarianteCardLocalCartelera.grid,
-                  onTap: () => _irALocalCartelera(local),
-                );
-                if (local.localId.isNotEmpty) {
-                  card = DetectorImpresionCartelera(
-                    idLocal: local.localId,
-                    idEvento: ServicioImpresiones.uuidSinEvento,
-                    seccion: SeccionesImpresion.cardLocal,
-                    child: card,
-                  );
-                }
-                return RepaintBoundary(child: card);
-              }
               final ev = _aEventoCartelera(raw);
               final idLocal = raw['idLocal']?.toString() ?? '';
               Widget card = CardEventoGrid(
@@ -2480,236 +2382,6 @@ class _TituloSeccion extends StatelessWidget {
       ),
     );
   }
-}
-
-class _TituloOnFireCartelera extends StatefulWidget {
-  const _TituloOnFireCartelera();
-
-  @override
-  State<_TituloOnFireCartelera> createState() => _TituloOnFireCarteleraState();
-}
-
-class _TituloOnFireCarteleraState extends State<_TituloOnFireCartelera>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _onFireController;
-
-  @override
-  void initState() {
-    super.initState();
-    _onFireController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 820),
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loopOnFire());
-  }
-
-  Future<void> _loopOnFire() async {
-    while (mounted) {
-      await _onFireController.forward(from: 0);
-      if (!mounted) return;
-      await Future<void>.delayed(const Duration(seconds: 3));
-    }
-  }
-
-  @override
-  void dispose() {
-    _onFireController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 2),
-      child: Row(
-        children: [
-          AnimatedBuilder(
-            animation: _onFireController,
-            child: const Text('🔥', style: TextStyle(fontSize: 19)),
-            builder: (context, child) {
-              final t = Curves.easeOutCubic.transform(_onFireController.value);
-              final wave = math.sin(t * math.pi * 4);
-              final pop = 1 + (math.sin(t * math.pi) * 0.18);
-              return Transform.translate(
-                offset: Offset(wave * 1.6, 0),
-                child: Transform.rotate(
-                  angle: wave * 0.07,
-                  child: Transform.scale(scale: pop, child: child),
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-          AnimatedBuilder(
-            animation: _onFireController,
-            builder: (context, _) {
-              final breathe = math.sin(_onFireController.value * math.pi);
-              final color = Color.lerp(
-                ColoresApp.textoPrincipal,
-                const Color(0xFFFF6B5F),
-                breathe * 0.72,
-              );
-              return Text(
-                'Tendencias para el finde',
-                style: GoogleFonts.baloo2(
-                  color: color,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.2,
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-            decoration: BoxDecoration(
-              color: ColoresApp.principalMarca.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              'Top 5',
-              style: GoogleFonts.baloo2(
-                color: ColoresApp.principalMarca,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-                height: 1.0,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LocalOnFireCarteleraItem extends StatelessWidget {
-  const _LocalOnFireCarteleraItem({
-    required this.posicion,
-    required this.nombre,
-    required this.fotoUrl,
-    required this.onTap,
-  });
-
-  static const _oro = Color(0xFFFFD54A);
-  static const _platino = Color(0xFFD8DEE9);
-  static const _cobre = Color(0xFFD08A45);
-
-  final int posicion;
-  final String nombre;
-  final String? fotoUrl;
-  final VoidCallback onTap;
-
-  Color get _acentoMedalla {
-    switch (posicion) {
-      case 1:
-        return _oro;
-      case 2:
-        return _platino;
-      case 3:
-        return _cobre;
-      default:
-        return ColoresApp.principalMarca;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final acento = _acentoMedalla;
-    final esPodio = posicion <= 3;
-    final foto = fotoUrl?.trim();
-
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 61,
-        child: Column(
-          children: [
-            SizedBox(
-              width: 58,
-              height: 48,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned(
-                    left: 11,
-                    top: 1,
-                    child: Container(
-                      width: 47,
-                      height: 47,
-                      padding: EdgeInsets.all(esPodio ? 2.25 : 1.8),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: acento,
-                        boxShadow: [
-                          BoxShadow(
-                            color: acento.withValues(
-                              alpha: esPodio ? 0.34 : 0.2,
-                            ),
-                            blurRadius: esPodio ? 8 : 6,
-                          ),
-                        ],
-                      ),
-                      child: ClipOval(
-                        child: Container(
-                          color: ColoresApp.fondoSuperficie,
-                          child: foto != null && foto.isNotEmpty
-                              ? CachedNetworkImage(
-                                  imageUrl: foto,
-                                  fit: BoxFit.cover,
-                                  errorWidget: (_, _, _) => _iconoLocal(),
-                                  placeholder: (_, _) => _iconoLocal(),
-                                )
-                              : _iconoLocal(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 0,
-                    bottom: 0,
-                    child: Text(
-                      '$posicion',
-                      style: GoogleFonts.baloo2(
-                        fontSize: 25,
-                        height: 0.9,
-                        fontWeight: FontWeight.w900,
-                        color: esPodio ? acento : Colors.white,
-                        shadows: const [
-                          Shadow(color: Colors.black, blurRadius: 7),
-                          Shadow(color: Colors.black, blurRadius: 2),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              nombre,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.baloo2(
-                fontSize: 9.6,
-                height: 0.98,
-                fontWeight: FontWeight.w800,
-                color: ColoresApp.textoPrincipal,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _iconoLocal() => Icon(
-    CupertinoIcons.building_2_fill,
-    size: 24,
-    color: ColoresApp.textoSecundario,
-  );
 }
 
 // ============================================================================
@@ -2910,69 +2582,48 @@ class _PillMapaYQr extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<Color>(
-      valueListenable: TemaFernecito.instancia.colorActual,
-      builder: (context, colorTema, _) {
-        return SizedBox(
-          width: kHomeFabPillWidth,
-          height: kHomeFabPillHeight,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF4EA),
-              borderRadius: BorderRadius.circular(kHomeFabPillWidth / 2),
-              border: Border.all(color: Colors.white, width: 1.1),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.18),
-                  blurRadius: 9,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+    return SizedBox(
+      width: kHomeFabPillWidth,
+      height: kHomeFabPillHeight,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: ColoresApp.fondoSuperficie,
+          borderRadius: BorderRadius.circular(kHomeFabPillWidth / 2),
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: onMapa,
+                behavior: HitTestBehavior.opaque,
+                child: const Center(child: IconoMapaCarteleraAnimado(size: 24)),
+              ),
             ),
-            child: Column(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: onMapa,
-                    behavior: HitTestBehavior.opaque,
-                    child: const Center(
-                      child: IconoMapaCarteleraAnimado(size: 24),
+            Expanded(
+              child: GestureDetector(
+                onTap: onQr,
+                behavior: HitTestBehavior.opaque,
+                child: ValueListenableBuilder<Color>(
+                  valueListenable: TemaFernecito.instancia.colorActual,
+                  builder: (context, colorTema, _) => Center(
+                    child: Icon(
+                      CupertinoIcons.qrcode_viewfinder,
+                      color: colorTema,
+                      size: 26,
+                      shadows: [
+                        Shadow(
+                          color: colorTema.withValues(alpha: 0.45),
+                          blurRadius: 12,
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                Container(
-                  width: 26,
-                  height: 1,
-                  decoration: BoxDecoration(
-                    color: colorTema.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: onQr,
-                    behavior: HitTestBehavior.opaque,
-                    child: Center(
-                      child: Icon(
-                        CupertinoIcons.qrcode_viewfinder,
-                        color: colorTema,
-                        size: 26,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withValues(alpha: 0.22),
-                            blurRadius: 2.5,
-                            offset: const Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 }

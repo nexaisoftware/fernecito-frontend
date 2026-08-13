@@ -15,6 +15,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants.dart';
 import '../core/servicio_match.dart';
 import '../core/supabase_client.dart';
+import '../widgets/stack_avatares_squad.dart';
 
 class PantallaMatchChat extends StatefulWidget {
   const PantallaMatchChat({super.key, required this.match});
@@ -197,6 +198,76 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
     }
   }
 
+  Future<void> _cancelarDesdeChat() async {
+    final nombre = widget.match.otro.nombre;
+    final confirmar = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text('¿Cancelar el match con $nombre?'),
+        content: const Text(
+          'Se borra este chat y el match. Igual pueden volver a cruzarse en las cards.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Volver'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cancelar match'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+    final ok = await _srv.cancelarMatch(widget.match.idMatch);
+    if (!mounted) return;
+    if (ok) {
+      Navigator.of(context).pop(true);
+    } else {
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('No se pudo cancelar'),
+          content: const Text('Probá de nuevo en un momento.'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  void _menuChat() {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text(
+          widget.match.otro.nombre,
+          style: GoogleFonts.baloo2(fontWeight: FontWeight.w800),
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _cancelarDesdeChat();
+            },
+            child: const Text('✋ Cancelar match'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Volver'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
@@ -209,6 +280,8 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
         : (keyboard > 0 ? keyboard : safeBottom);
     final otro = widget.match.otro;
     final foto = otro.fotoUrl;
+    final urlsSquad = otro.avataresMiembrosUrls;
+    final esSquadStack = otro.esSquad && urlsSquad.isNotEmpty;
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
       navigationBar: CupertinoNavigationBar(
@@ -221,27 +294,35 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
         middle: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF2A2A2A),
-                image: foto != null
-                    ? DecorationImage(
-                        image: NetworkImage(foto),
-                        fit: BoxFit.cover,
+            if (esSquadStack)
+              StackAvataresSquad(
+                avatares: urlsSquad,
+                totalExtra: otro.miembrosParaStack,
+                size: 26,
+                paddingExterno: 0,
+              )
+            else
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF2A2A2A),
+                  image: foto != null
+                      ? DecorationImage(
+                          image: NetworkImage(foto),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: foto == null
+                    ? Text(
+                        otro.esSquad ? '👥' : '🙋',
+                        style: const TextStyle(fontSize: 15),
                       )
                     : null,
               ),
-              alignment: Alignment.center,
-              child: foto == null
-                  ? Text(
-                      otro.esSquad ? '👥' : '🙋',
-                      style: const TextStyle(fontSize: 15),
-                    )
-                  : null,
-            ),
             const SizedBox(width: 8),
             Flexible(
               child: Column(
@@ -272,6 +353,16 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
               ),
             ),
           ],
+        ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(36, 36),
+          onPressed: _menuChat,
+          child: const Icon(
+            CupertinoIcons.ellipsis_circle,
+            color: Colors.white54,
+            size: 24,
+          ),
         ),
       ),
       child: SafeArea(

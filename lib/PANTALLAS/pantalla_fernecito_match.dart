@@ -20,6 +20,8 @@ import '../core/servicio_ubicacion_global.dart';
 import '../core/ubicaciones_data.dart';
 import '../models/social.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
+import '../widgets/stack_avatares_squad.dart';
+import 'pantalla_match_chat.dart';
 import 'pantalla_match_chats.dart';
 
 const _kPlanes = [
@@ -117,6 +119,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   /// Requisitos para aparecer en las cards (los informa match_mi_estado).
   bool _perfilPublico = true;
   bool _tieneFoto = true;
+  bool _edadOk = true;
   bool _activo = true;
   List<MatchPendiente> _pendientes = const [];
   List<MatchCard> _mazo = [];
@@ -135,9 +138,13 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   String? _rePintaDetalle;
   Timer? _timerRePinta;
 
+  /// Descarta respuestas viejas si el usuario cambia de ciudad enseguida.
+  int _genUbicacion = 0;
+
   @override
   void initState() {
     super.initState();
+    PreferenciasCartelera.instancia.cambios.addListener(_onUbicacionGlobal);
     _cargarSquads();
     _cargarEstado();
     _cargarCantMatches();
@@ -145,13 +152,61 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   @override
   void dispose() {
+    PreferenciasCartelera.instancia.cambios.removeListener(_onUbicacionGlobal);
     _timerRePinta?.cancel();
     super.dispose();
   }
 
+  /// Cartelera / perfil / pill local: siempre nueva query y mazo limpio.
+  void _onUbicacionGlobal() {
+    unawaited(_recargarPorUbicacion());
+  }
+
+  /// Limpia cards al toque y vuelve a pedir el feed (plan o preview).
+  Future<void> _recargarPorUbicacion() async {
+    final gen = ++_genUbicacion;
+    setState(() {
+      _cargando = true;
+      _errorCarga = false;
+      _mazo = [];
+      _idsVistos.clear();
+      _hayMasCards = false;
+      _arrastre = Offset.zero;
+      _swipeando = false;
+    });
+    await PreferenciasCartelera.instancia.cargar();
+    if (!mounted || gen != _genUbicacion) return;
+
+    if (_sinPlan) {
+      // Modo mirar: re-pedir preview con ciudades nuevas (antes solo
+      // actualizaba el pill y quedaban cards de la ubicación anterior).
+      if (_modo == 'usuario' && _perfilPublico && _tieneFoto) {
+        final ciudades =
+            PreferenciasCartelera.instancia.ciudadesActivas.toList();
+        final preview = await _srv.feedPreview(ciudades: ciudades);
+        if (!mounted || gen != _genUbicacion) return;
+        setState(() {
+          _mazo = preview;
+          _cargando = false;
+        });
+      } else if (mounted && gen == _genUbicacion) {
+        setState(() => _cargando = false);
+      }
+      return;
+    }
+
+    await _cargarMazo(gen: gen);
+  }
+
   Future<void> _cargarSquads() async {
     final squads = await ServicioSquads().misSquads();
-    if (mounted) setState(() => _misSquads = squads);
+    // Match en modo squad: solo admin/líder (el BE exige es_admin_grupo).
+    final admin = squads
+        .where(
+          (s) => s.soyLider || s.miRol == 'admin' || s.miRol == 'lider',
+        )
+        .toList();
+    if (mounted) setState(() => _misSquads = admin);
   }
 
   Future<void> _cargarCantMatches() async {
@@ -162,6 +217,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     if (!mounted) return;
     final matches = resultados[0] as List<MatchItem>;
     final pendientes = resultados[1] as List<MatchPendiente>;
+    // Badge de "Mis matches": todo (personal+squad). La tira del mazo filtra.
     setState(() => _cantMatches = matches.length + pendientes.length);
   }
 
@@ -180,14 +236,18 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       _sexoCargado = estado['sexo_cargado'] == true;
       _perfilPublico = estado['perfil_publico'] == true;
       _tieneFoto = estado['tiene_foto'] == true;
+      _edadOk = estado['edad_ok'] != false;
       _activo = estado['activo'] == true;
       _planActual = estado['plan'] is Map
           ? Map<String, dynamic>.from(estado['plan'] as Map)
           : null;
       if (!tiene) {
         setState(() => _sinPlan = true);
-        // Puede MIRAR sin plan si ya tiene perfil público y foto.
-        if (_modo == 'usuario' && _perfilPublico && _tieneFoto) {
+        // Puede MIRAR sin plan si ya tiene perfil público, foto y edad ≥16.
+        if (_modo == 'usuario' &&
+            _perfilPublico &&
+            _tieneFoto &&
+            _edadOk) {
           final preview = await _srv.feedPreview(
             ciudades: PreferenciasCartelera.instancia.ciudadesActivas.toList(),
           );
@@ -216,15 +276,17 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     }
   }
 
-  Future<void> _cargarMazo() async {
+  Future<void> _cargarMazo({int? gen}) async {
+    final g = gen ?? _genUbicacion;
     try {
+      await PreferenciasCartelera.instancia.cargar();
       final ciudades = PreferenciasCartelera.instancia.ciudadesActivas.toList();
       final mazo = await _srv.feed(
         tipo: _modo,
         idGrupo: _squad?.idGrupo,
         ciudades: ciudades,
       );
-      if (!mounted) return;
+      if (!mounted || g != _genUbicacion) return;
       setState(() {
         _mazo = mazo;
         _idsVistos
@@ -235,7 +297,15 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
         _cargando = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _cargando = false);
+      // Ante error de red tras cambio de ciudad: mazo vacío, no cards viejas.
+      if (mounted && g == _genUbicacion) {
+        setState(() {
+          _mazo = [];
+          _idsVistos.clear();
+          _hayMasCards = false;
+          _cargando = false;
+        });
+      }
     }
   }
 
@@ -267,11 +337,32 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   Future<void> _cargarPendientes() async {
     final p = await _srv.pendientes();
-    if (mounted) setState(() => _pendientes = p);
+    if (!mounted) return;
+    setState(() => _pendientes = _filtrarPendientesPorModo(p));
   }
 
-  /// Aviso de requisito faltante (perfil público / foto) al tocar Preferencias.
+  /// En el mazo, la tira sigue el switch Personal/Squad (Mis matches sí mezcla).
+  List<MatchPendiente> _filtrarPendientesPorModo(List<MatchPendiente> todos) {
+    return todos.where((p) {
+      final mi = p.miPlan ?? p.planPrincipal;
+      if (_modo == 'usuario') {
+        return mi == null || !mi.esSquad;
+      }
+      final gid = _squad?.idGrupo;
+      if (mi == null || !mi.esSquad) return false;
+      return gid == null || mi.idGrupo == gid;
+    }).toList();
+  }
+
+  /// Aviso de requisito faltante (perfil público / foto / edad) al tocar Preferencias.
   Future<bool> _chequearRequisitos() async {
+    if (!_edadOk) {
+      await _avisoRequisito(
+        'Match desde los 16',
+        'Para usar Fernecito Match necesitás tener al menos 16 años.\n\nPodés seguir explorando el resto de la app sin problema.',
+      );
+      return false;
+    }
     if (_modo == 'usuario' && !_perfilPublico) {
       await _avisoRequisito(
         '¡Necesitás el perfil público!',
@@ -343,14 +434,30 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     );
     if (confirmado != true || !mounted) return;
     try {
-      await _srv.aceptarInteres(p.idPlanOrigen);
+      final idMatch = await _srv.aceptarInteres(p.idPlanOrigen);
       if (!mounted) return;
+      if (idMatch == null || idMatch.isEmpty) {
+        await _avisoRequisito(
+          'No pudimos matchear',
+          'Probá de nuevo en un momento.',
+        );
+        return;
+      }
       await _cargarPendientes();
       _cargarCantMatches();
       if (!mounted) return;
+      final match = MatchItem(
+        idMatch: idMatch,
+        tipo: p.tipo,
+        otro: p.otro,
+        planPrincipal: p.planPrincipal ?? p.miPlan,
+        miPlan: p.miPlan,
+        otroTeRecopo: p.esRecopa,
+        sinChat: true,
+      );
       await Navigator.push(
         context,
-        CupertinoPageRoute(builder: (_) => const PantallaMatchChats()),
+        CupertinoPageRoute(builder: (_) => PantallaMatchChat(match: match)),
       );
     } catch (_) {
       if (mounted) {
@@ -387,11 +494,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       );
     }
     if (!mounted) return;
-    setState(() {});
-    if (!_sinPlan) {
-      setState(() => _cargando = true);
-      await _cargarMazo();
-    }
+    // aplicarManual/Inteligente dispara PreferenciasCartelera.cambios; acá
+    // reforzamos para cubrir también el modo mirar (sin plan).
+    await _recargarPorUbicacion();
   }
 
   Offset _destinoVuelo(String decision) {
@@ -407,12 +512,6 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   Future<void> _swipe(String decision) async {
     if (_mazo.isEmpty || _swipeando) return;
-    // Modo mirar: sin plan no se puede deslizar; lo invitamos a armarlo.
-    if (_sinPlan) {
-      setState(() => _arrastre = Offset.zero);
-      await _abrirConfiguracion();
-      return;
-    }
     final card = _mazo.first;
 
     // 1) Empujón: la card activa sale por el costado/arriba.
@@ -436,8 +535,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     setState(() {
       // Brindis 🥂 → overlay "¡ME RE PINTA!" que se va solo a los 3 seg.
       if (decision == 'recopa') {
-        _rePintaDetalle =
-            'Le va a llegar que te re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}';
+        _rePintaDetalle = _sinPlan
+            ? 'Probaste "me re pinta" 🥂\nArmá tu plan para que le llegue de verdad'
+            : 'Le va a llegar que te re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}';
       }
     });
     if (decision == 'recopa') {
@@ -449,27 +549,35 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
     try {
       // El like queda pendiente del otro lado; ya no hay match automático.
+      // Sin plan: preview rate-limited (3 likes/día) en el backend.
       await _srv.swipe(
         idPlanDestino: card.idPlan,
         decision: decision,
         idGrupo: _modo == 'squad' ? _squad?.idGrupo : null,
       );
-      if (mounted) _cargarCantMatches();
+      if (mounted && !_sinPlan) _cargarCantMatches();
     } catch (e) {
       if (!mounted) return;
-      if (decision == 'recopa' && e.toString().contains('rate_limit')) {
-        // Tope diario de "Me re pinta": devolvemos la card al mazo y avisamos.
+      final msg = e.toString();
+      // Cualquier fallo: devolver la card al mazo (no perder el swipe).
+      void restaurarCard() {
         setState(() {
           _animarArrastre = false;
           _arrastre = Offset.zero;
           _mazo = [card, ..._mazo];
+          if (decision == 'recopa') _rePintaDetalle = null;
         });
+      }
+      restaurarCard();
+
+      if (msg.contains('necesita_plan')) {
         await showCupertinoDialog<void>(
           context: context,
           builder: (ctx) => CupertinoAlertDialog(
-            title: const Text('🥂 Sin "Me re pinta" por hoy'),
+            title: const Text('Armá tu plan para seguir'),
             content: const Text(
-              'Ya usaste tus 2 de hoy. Mañana tenés más 🥂\nMientras, podés dar "me pinta" normal.',
+              'Ya usaste tus 3 "me pinta" / "me re pinta" de hoy en modo mirar. '
+              'Creá un plan para seguir haciendo match.',
             ),
             actions: [
               CupertinoDialogAction(
@@ -479,10 +587,190 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
             ],
           ),
         );
+        if (mounted) await _abrirConfiguracion();
+      } else if (decision == 'recopa' && msg.contains('rate_limit')) {
+        // Cartel exclusivo: solo cuando se gastaron los 2 diarios.
+        await _mostrarCartelRecopaAgotada();
+      } else if (decision == 'interesa' &&
+          msg.contains('rate_limit') &&
+          !_sinPlan) {
+        await showCupertinoDialog<void>(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('Tope de "me pinta" por hoy'),
+            content: const Text(
+              'Llegaste a los 100 "me pinta" de hoy. Mañana se renueva el cupo.',
+            ),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } else if (msg.contains('edad_minima_match')) {
+        setState(() => _edadOk = false);
+        await _avisoRequisito(
+          'Match desde los 16',
+          'Para usar Fernecito Match necesitás tener al menos 16 años.',
+        );
+      } else if (msg.contains('bloqueado') || msg.contains('no_admin')) {
+        // Card ya restaurada; sin ruido extra.
+      } else {
+        await _avisoRequisito(
+          'No se pudo registrar',
+          'Revisá tu conexión e intentá de nuevo.',
+        );
       }
-      // Otros errores: la card ya salió del mazo, no rompemos el flujo.
     } finally {
       if (mounted) setState(() => _swipeando = false);
+    }
+  }
+
+  /// Cartelito estilo app cuando se agotaron los 2 "Me re pinta" del día.
+  Future<void> _mostrarCartelRecopaAgotada() async {
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'recopa',
+      barrierColor: Colors.black.withValues(alpha: 0.72),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (_, _, _) => const SizedBox.shrink(),
+      transitionBuilder: (ctx, anim, _, _) {
+        final t = Curves.easeOutCubic.transform(anim.value);
+        return Opacity(
+          opacity: t,
+          child: Transform.translate(
+            offset: Offset(0, 28 * (1 - t)),
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+                      decoration: BoxDecoration(
+                        color: ColoresApp.fondoSuperficie,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: _kAzulRecopa.withValues(alpha: 0.55),
+                          width: 1.4,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _kAzulRecopa.withValues(alpha: 0.28),
+                            blurRadius: 28,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _kAzulRecopa.withValues(alpha: 0.18),
+                            ),
+                            child: const Text('🥂', style: TextStyle(fontSize: 28)),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Me re pinta agotado',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.baloo2(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: ColoresApp.textoPrincipal,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Ya usaste tus 2 de hoy — es exclusivo.\nMañana se renuevan. Mientras, seguí con "me pinta".',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.baloo2(
+                              fontSize: 14,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                              color: ColoresApp.textoSecundario,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: CupertinoButton(
+                              color: _kAzulRecopa,
+                              borderRadius: BorderRadius.circular(16),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              onPressed: () => Navigator.pop(ctx),
+                              child: Text(
+                                'Seguir swipando',
+                                style: GoogleFonts.baloo2(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _bloquearCardActual(MatchCard card) async {
+    final ok = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text(
+          card.esSquad ? 'Squad en el mazo' : 'Persona en el mazo',
+          style: GoogleFonts.baloo2(fontWeight: FontWeight.w800),
+        ),
+        message: Text(
+          'Si bloqueás, no se van a volver a cruzar en Match ni en Social.',
+          style: GoogleFonts.baloo2(fontSize: 13),
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Bloquear'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final done = await _srv.bloquear(
+      idUsuario: card.esSquad ? null : card.idUsuario,
+      idGrupo: card.esSquad ? card.idGrupo : null,
+    );
+    if (!mounted) return;
+    if (done) {
+      setState(() {
+        _mazo = _mazo.where((c) => c.idPlan != card.idPlan).toList();
+      });
+      if (_mazo.length <= 5) unawaited(_cargarMasCards());
+    } else {
+      await _avisoRequisito('No se pudo bloquear', 'Probá de nuevo en un momento.');
     }
   }
 
@@ -511,9 +799,10 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       await showCupertinoDialog<void>(
         context: context,
         builder: (ctx) => CupertinoAlertDialog(
-          title: const Text('Sin squads'),
+          title: const Text('Sin squads para Match'),
           content: const Text(
-            'Todavía no sos parte de ningún squad. Crealo o unite desde Social.',
+            'Para matchear como squad tenés que ser admin o líder de uno. '
+            'Crealo o pedile al líder que te haga admin.',
           ),
           actions: [
             CupertinoDialogAction(
@@ -871,7 +1160,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       );
     }
     if (_sinPlan) {
-      // Modo mirar: ve el mazo pero no puede deslizar hasta armar su plan.
+      // Modo mirar: puede deslizar con tope de 3 likes/día; después pide plan.
       if (_mazo.isNotEmpty) {
         return Column(
           children: [
@@ -928,7 +1217,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
           ),
         ),
         SizedBox(
-          height: 82,
+          height: 96,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -944,54 +1233,64 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   Widget _burbujaPendiente(MatchPendiente p) {
     final foto = p.otro.fotoUrl;
+    final urls = p.otro.avataresMiembrosUrls;
+    final esSquadStack = p.otro.esSquad && urls.isNotEmpty;
     return GestureDetector(
       onTap: () => _abrirPendiente(p),
       child: SizedBox(
-        width: 62,
+        width: esSquadStack ? 88 : 62,
         child: Column(
           children: [
-            Container(
-              width: 56,
-              height: 56,
-              padding: const EdgeInsets.all(2.2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: p.esRecopa ? _kAzulRecopa : ColoresApp.principalMarca,
-                  width: 2.3,
-                ),
-                boxShadow: p.esRecopa
-                    ? [
-                        BoxShadow(
-                          color: _kAzulRecopa.withValues(alpha: 0.5),
-                          blurRadius: 10,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Container(
+            if (esSquadStack)
+              StackAvataresSquad(
+                avatares: urls,
+                totalExtra: p.otro.miembrosParaStack,
+                size: 36,
+                paddingExterno: 2,
+              )
+            else
+              Container(
+                width: 56,
+                height: 56,
+                padding: const EdgeInsets.all(2.2),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF2A2A2A),
-                  image: foto != null
-                      ? DecorationImage(
-                          image: NetworkImage(foto),
-                          fit: BoxFit.cover,
+                  border: Border.all(
+                    color: p.esRecopa ? _kAzulRecopa : ColoresApp.principalMarca,
+                    width: 2.3,
+                  ),
+                  boxShadow: p.esRecopa
+                      ? [
+                          BoxShadow(
+                            color: _kAzulRecopa.withValues(alpha: 0.5),
+                            blurRadius: 10,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF2A2A2A),
+                    image: foto != null
+                        ? DecorationImage(
+                            image: NetworkImage(foto),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: foto == null
+                      ? Text(
+                          p.otro.esSquad ? '👥' : '🙋',
+                          style: const TextStyle(fontSize: 20),
                         )
                       : null,
                 ),
-                alignment: Alignment.center,
-                child: foto == null
-                    ? Text(
-                        p.otro.esSquad ? '👥' : '🙋',
-                        style: const TextStyle(fontSize: 20),
-                      )
-                    : null,
               ),
-            ),
             const SizedBox(height: 4),
             Text(
-              p.otro.nombre.split(RegExp(r'\s+')).first,
+              p.otro.nombre,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.baloo2(
@@ -1006,7 +1305,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     );
   }
 
-  /// Banner del modo mirar: ve el mazo pero todavía no participa.
+  /// Banner del modo mirar: puede probar likes con tope diario.
   Widget _bannerArmaTuPlan() {
     return GestureDetector(
       onTap: _abrirConfiguracion,
@@ -1037,7 +1336,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
                     ),
                   ),
                   Text(
-                    'Armá tu plan para deslizar y que te vean',
+                    'Tenés 3 "me pinta"/"me re pinta" por día. Armá tu plan para más.',
                     style: GoogleFonts.baloo2(
                       color: ColoresApp.textoSecundario,
                       fontWeight: FontWeight.w700,
@@ -1232,6 +1531,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
                 ),
               // Card de arriba, arrastrable (horizontal y hacia arriba)
               GestureDetector(
+                onLongPress: _swipeando
+                    ? null
+                    : () => _bloquearCardActual(_mazo.first),
                 onPanUpdate: _swipeando
                     ? null
                     : (d) => setState(() {
@@ -1420,6 +1722,8 @@ class _MatchCardVisual extends StatelessWidget {
     final ancho = MediaQuery.sizeOf(context).width - 40;
     final alto = MediaQuery.sizeOf(context).height * 0.58;
     final foto = card.fotoUrl;
+    final urlsSquad = card.avataresMiembrosUrls;
+    final esSquadStack = card.esSquad && urlsSquad.isNotEmpty;
     return SizedBox(
       width: ancho,
       height: alto,
@@ -1505,6 +1809,15 @@ class _MatchCardVisual extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (esSquadStack) ...[
+                          StackAvataresSquad(
+                            avatares: urlsSquad,
+                            totalExtra: card.miembrosParaStack,
+                            size: 48,
+                            paddingExterno: 0,
+                          ),
+                          const SizedBox(height: 8),
+                        ],
                         Text(
                           card.esSquad
                               ? '$_nombreCorto${card.miembros != null ? ' · ${card.miembros} 👥' : ''}'
@@ -1708,7 +2021,8 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
     final a = min is num ? min.toInt() : int.tryParse('${min ?? ''}');
     final b = max is num ? max.toInt() : int.tryParse('${max ?? ''}');
     if (a == null && b == null) return 'todos';
-    if (a == 18 && b == 24) return '18_24';
+    if (a == 16 && b == 24) return '16_24';
+    if (a == 18 && b == 24) return '16_24'; // legacy
     if (a == 25 && b == 29) return '25_29';
     if (a == 30 && b == 39) return '30_39';
     if (a == 40 && b == 49) return '40_49';
@@ -1746,7 +2060,8 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
   }
 
   (int?, int?) get _edades => switch (_rangoEdad) {
-    '18_24' => (18, 24),
+    '16_24' => (16, 24),
+    '18_24' => (16, 24),
     '25_29' => (25, 29),
     '30_39' => (30, 39),
     '40_49' => (40, 49),
@@ -1963,7 +2278,7 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                       _chips(
                         opciones: const [
                           ('todos', '✨ Todas'),
-                          ('18_24', '18-24'),
+                          ('16_24', '16-24'),
                           ('25_29', '25-29'),
                           ('30_39', '30-39'),
                           ('40_49', '40-49'),
@@ -2332,6 +2647,8 @@ class _TarjetaPendiente extends StatelessWidget {
     final foto = card.fotoUrl;
     final ancho = MediaQuery.sizeOf(context).width * 0.86;
     final recopa = esRecopa;
+    final urlsSquad = card.avataresMiembrosUrls;
+    final esSquadStack = card.esSquad && urlsSquad.isNotEmpty;
     final datos = [
       if (card.edad != null) '${card.edad} años',
       if (_genero.isNotEmpty) _genero,
@@ -2424,8 +2741,19 @@ class _TarjetaPendiente extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (esSquadStack) ...[
+                            StackAvataresSquad(
+                              avatares: urlsSquad,
+                              totalExtra: card.miembrosParaStack,
+                              size: 44,
+                              paddingExterno: 0,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                           Text(
-                            card.nombre.split(RegExp(r'\s+')).first,
+                            card.esSquad
+                                ? card.nombre
+                                : card.nombre.split(RegExp(r'\s+')).first,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.baloo2(
