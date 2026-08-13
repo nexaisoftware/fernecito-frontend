@@ -38,25 +38,16 @@ flutter build web --release --base-href / --no-wasm-dry-run \
   --dart-define=FIREBASE_WEB_STORAGE_BUCKET="${FIREBASE_WEB_STORAGE_BUCKET:-}" \
   --dart-define=FCM_WEB_VAPID_KEY="${FCM_WEB_VAPID_KEY:-}"
 
-echo "==> [1b/3] deploy_id en build/web/version.json"
+echo "==> [1b/3] version.json siempre desde pubspec + deploy_id único"
 python3 - <<'PY'
 import json, os, re, subprocess, time
 from pathlib import Path
 
-path = Path("build/web/version.json")
-if path.exists():
-    data = json.loads(path.read_text(encoding="utf-8"))
-else:
-    pub = Path("pubspec.yaml").read_text(encoding="utf-8")
-    m = re.search(r"^version:\s*(\d+\.\d+\.\d+)\+(\d+)", pub, re.M)
-    ver, build = (m.group(1), m.group(2)) if m else ("0.0.0", "0")
-    data = {
-        "app_name": "fernecito_frontend",
-        "version": ver,
-        "build_number": build,
-        "package_name": "fernecito_frontend",
-        "deploy_id": "pending-local",
-    }
+# Fuente de verdad: pubspec.yaml (NO reusar web/version.json viejo: eso
+# dejaba la PWA en 1.2.27 aunque el bump ya fuera 1.2.29+).
+pub = Path("pubspec.yaml").read_text(encoding="utf-8")
+m = re.search(r"^version:\s*(\d+\.\d+\.\d+)\+(\d+)", pub, re.M)
+ver, build = (m.group(1), m.group(2)) if m else ("0.0.0", "0")
 
 git_ref = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "").strip()
 if not git_ref:
@@ -67,8 +58,17 @@ if not git_ref:
     except Exception:
         git_ref = "local"
 
-data["deploy_id"] = f"{git_ref[:12]}-{int(time.time())}"
-path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+data = {
+    "app_name": "fernecito_frontend",
+    "version": ver,
+    "build_number": build,
+    "package_name": "fernecito_frontend",
+    "deploy_id": f"{git_ref[:12]}-{int(time.time())}",
+}
+for path in (Path("build/web/version.json"), Path("web/version.json")):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+print(f"version.json -> {ver}+{build} deploy_id={data['deploy_id']}")
 PY
 
 echo "==> [2/3] preparando Vercel: api + build/web/vercel.json"
