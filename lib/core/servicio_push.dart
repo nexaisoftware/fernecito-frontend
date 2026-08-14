@@ -81,6 +81,7 @@ class ServicioPush {
 
       var abierta = false;
       for (var i = 0; i < 8 && !abierta; i++) {
+        // Sin onIrATab: navegarDesdeNotificacion usa irATabHome del shell.
         abierta = await navegarDesdeNotificacion(n);
         if (!abierta) {
           await Future<void>.delayed(Duration(milliseconds: 250 + i * 150));

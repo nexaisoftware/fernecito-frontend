@@ -16,6 +16,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/constants.dart';
 import 'core/supabase_client.dart';
 import 'core/auth_gate.dart';
+import 'core/historial_web.dart';
 import 'core/tema_fernecito.dart';
 import 'core/servicio_estado_cuenta.dart';
 import 'core/barra_sistema_fernecito.dart';
@@ -127,6 +128,10 @@ class _AppFernecitoState extends State<AppFernecito>
         setState(() {
           _verificandoSesion = false;
         });
+        if (_tieneSesionActiva) {
+          // Evita que el "atrás" del browser vuelva a OAuth/login tras un cold start.
+          limpiarHistorialAuthWeb();
+        }
         // Login / crear perfil: salir del splash verde a la UI oscura.
         // Home aplica la barra al terminar de cargar la cartelera.
         if (!_tieneSesionActiva || !_perfilCompleto) {

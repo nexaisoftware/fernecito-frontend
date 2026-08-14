@@ -17,6 +17,7 @@ import '../PANTALLAS/pantalla_crear_perfil.dart';
 import '../PANTALLAS/pantalla_cuenta_pausada.dart';
 import '../PANTALLAS/pantalla_nueva_contrasena.dart';
 import 'app_navigator.dart';
+import 'historial_web.dart';
 import 'recovery_flow_flag.dart';
 import 'servicio_estado_cuenta.dart';
 import 'servicio_push.dart';
@@ -223,13 +224,19 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     try {
-      // Navegar limpiando todo el stack
+      // Navegar limpiando todo el stack Flutter (login / OAuth no quedan debajo).
       navigator.pushAndRemoveUntil(
         CupertinoPageRoute(builder: (context) => screen, maintainState: false),
         (route) => false, // Remover todas las rutas anteriores
       );
 
       _currentRoute = routeName;
+      // En PWA/web: el history del browser puede seguir apuntando a Google OAuth.
+      if (routeName == 'home' ||
+          routeName == 'crear_perfil' ||
+          routeName == 'login') {
+        limpiarHistorialAuthWeb();
+      }
       print('✅ AuthGate: Navegación completada a $routeName');
     } catch (error) {
       print('❌ AuthGate: Error en navegación: $error');
