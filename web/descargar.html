@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#1eb955">
+  <title>Descargar Fernecito App</title>
+  <script>
+    (function () {
+      var links = {
+        android: "https://play.google.com/store/apps/details?id=com.nexaisoftware.fernecitoapp",
+        ios: "https://apps.apple.com/ar/app/fernecito-app-salidas/id6788588345",
+        web: "https://share.google/8JsNxqNIO7r0HLaDc",
+        instagram: "https://www.instagram.com/fernecitoapp?igsh=MWh0bXI5OHhpYXF5Yg==",
+        tiktok: "https://www.tiktok.com/@fernecitoapp?_r=1&_t=ZS-97Y23o8JgSy"
+      };
+
+      function platformFromQuery() {
+        var params = new URLSearchParams(window.location.search);
+        return (params.get("platform") || "").toLowerCase();
+      }
+
+      function detectPlatform() {
+        var forced = platformFromQuery();
+        if (forced === "android" || forced === "ios" || forced === "web") return forced;
+
+        var ua = navigator.userAgent || navigator.vendor || "";
+        var platform = navigator.platform || "";
+        var maxTouchPoints = navigator.maxTouchPoints || 0;
+        var isAndroid = /android/i.test(ua);
+        var isIOS = /iphone|ipad|ipod/i.test(ua) ||
+          (platform === "MacIntel" && maxTouchPoints > 1);
+
+        if (isAndroid) return "android";
+        if (isIOS) return "ios";
+        return "web";
+      }
+
+      var platform = detectPlatform();
+      window.fernecitoLinks = links;
+      window.fernecitoDetectedPlatform = platform;
+
+      if (platform === "android") {
+        window.location.replace(links.android);
+      } else if (platform === "ios") {
+        window.location.replace(links.ios);
+      }
+    }());
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --green: #1eb955;
+      --black: #171313;
+      --muted: #625b57;
+      --line: #e8e4df;
+      --bg: #faf8f5;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      background: var(--bg);
+      color: var(--black);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(100%, 440px);
+      text-align: center;
+    }
+
+    .mark {
+      width: 84px;
+      height: 84px;
+      margin: 0 auto 18px;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      background: var(--green);
+      color: #fff;
+      font-size: 50px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      line-height: 1.05;
+    }
+
+    p {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.45;
+    }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    a {
+      display: block;
+      padding: 14px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--black);
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    a.primary {
+      border-color: var(--green);
+      background: var(--green);
+      color: #fff;
+    }
+
+    .small {
+      margin-top: 18px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark">F</div>
+    <h1>Fernecito App</h1>
+    <p>Descubri promos, planes y eventos en tu ciudad.</p>
+    <div class="actions">
+      <a class="primary" href="https://play.google.com/store/apps/details?id=com.nexaisoftware.fernecitoapp">Descargar en Android</a>
+      <a class="primary" href="https://apps.apple.com/ar/app/fernecito-app-salidas/id6788588345">Descargar en iPhone</a>
+      <a href="https://share.google/8JsNxqNIO7r0HLaDc">Abrir web</a>
+      <a href="https://www.instagram.com/fernecitoapp?igsh=MWh0bXI5OHhpYXF5Yg==">Instagram</a>
+      <a href="https://www.tiktok.com/@fernecitoapp?_r=1&_t=ZS-97Y23o8JgSy">TikTok</a>
+    </div>
+    <p class="small">Si no se abre automaticamente, elegi tu tienda.</p>
+  </main>
+</body>
+</html>

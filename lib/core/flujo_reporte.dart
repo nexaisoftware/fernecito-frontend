@@ -7,7 +7,8 @@ import 'servicio_reportes.dart';
 /// de "Gracias por tu reporte".
 ///
 /// [entidad]: sustantivo para los textos ('este perfil', 'este local',
-/// 'este evento'). [targetTipo]: 'usuario' | 'local' | 'evento'.
+/// 'este evento', 'este squad', 'este plan'). [targetTipo]: 'usuario' |
+/// 'local' | 'evento' | 'squad' | 'plan'.
 Future<void> mostrarFlujoReporte({
   required BuildContext context,
   required String entidad,

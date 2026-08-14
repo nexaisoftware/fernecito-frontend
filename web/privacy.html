@@ -1,208 +1,344 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="index, follow">
-  <title>Política de Privacidad — Fernecito</title>
-  <meta name="description" content="Política de Privacidad de Fernecito — cómo recopilamos, usamos y protegemos tus datos.">
-  <link rel="icon" type="image/png" href="favicon.png">
+  <title>Privacy Policy - Fernecito App</title>
+  <meta name="description" content="Privacy Policy for Fernecito App: how we collect, use, protect and moderate account, location, community, AI and notification data.">
+  <link rel="canonical" href="https://fernecitoapp.com/privacy">
+  <link rel="icon" type="image/png" href="/favicon-192.png">
   <style>
     :root {
-      --bg: #121212;
-      --card: #1b1b1b;
-      --verde: #1DB954;
-      --texto: #e8e8e8;
-      --tenue: #a8a8a8;
+      --bg: #101010;
+      --card: #181818;
+      --soft: #232323;
+      --green: #19c463;
+      --purple: #a259ff;
+      --gold: #f0c400;
+      --text: #f4f4f4;
+      --muted: #b9b9b9;
+      --line: rgba(255,255,255,.1);
     }
     * { box-sizing: border-box; }
     html, body {
       margin: 0;
-      padding: 0;
-      background: var(--bg);
-      color: var(--texto);
+      background: radial-gradient(circle at 20% -10%, rgba(25,196,99,.18), transparent 34%),
+                  radial-gradient(circle at 90% 0%, rgba(162,89,255,.16), transparent 32%),
+                  var(--bg);
+      color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      line-height: 1.65;
+      line-height: 1.62;
       -webkit-font-smoothing: antialiased;
     }
     .wrap {
-      max-width: 760px;
+      width: min(920px, calc(100% - 32px));
       margin: 0 auto;
-      padding: 48px 22px 80px;
+      padding: 34px 0 72px;
     }
-    header {
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+    .brand {
       display: flex;
       align-items: center;
       gap: 14px;
-      margin-bottom: 8px;
+      min-width: 0;
     }
-    header img {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
+    .brand img {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      flex: 0 0 auto;
     }
-    header h1 {
-      font-size: 1.55rem;
+    h1 {
+      font-size: clamp(2rem, 5vw, 4.4rem);
+      line-height: .95;
+      margin: 0 0 14px;
+      letter-spacing: 0;
+    }
+    .eyebrow {
+      color: var(--green);
+      font-weight: 800;
+      font-size: .92rem;
       margin: 0;
-      color: #fff;
     }
     .sub {
-      color: var(--tenue);
-      font-size: 0.9rem;
-      margin: 0 0 36px;
+      color: var(--muted);
+      max-width: 760px;
+      margin: 0 0 28px;
+      font-size: 1.02rem;
+    }
+    .card {
+      background: color-mix(in srgb, var(--card) 92%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: clamp(20px, 4vw, 34px);
+      box-shadow: 0 18px 50px rgba(0,0,0,.26);
+      backdrop-filter: blur(14px);
     }
     h2 {
-      color: var(--verde);
-      font-size: 1.15rem;
-      margin: 34px 0 10px;
+      color: #fff;
+      font-size: 1.18rem;
+      margin: 30px 0 10px;
     }
-    a { color: var(--verde); }
-    ul { padding-left: 20px; }
-    li { margin: 6px 0; }
-    .card {
-      background: var(--card);
+    h2:first-child { margin-top: 0; }
+    p { margin: 0 0 14px; }
+    a { color: var(--green); font-weight: 700; }
+    ul { padding-left: 21px; margin: 8px 0 16px; }
+    li { margin: 7px 0; }
+    strong { color: #fff; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+      color: #fff;
+      padding: 8px 12px;
+      font-size: .9rem;
+      font-weight: 800;
+      margin: 0 8px 10px 0;
+    }
+    .lang-switch {
+      display: flex;
+      gap: 8px;
+      padding: 6px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid var(--line);
+      flex: 0 0 auto;
+    }
+    .lang-switch button {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 9px 13px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .lang-switch button.active {
+      background: #fff;
+      color: #111;
+    }
+    .notice {
+      background: rgba(240,196,0,.12);
+      border: 1px solid rgba(240,196,0,.28);
       border-radius: 14px;
-      padding: 4px 24px 24px;
-      margin-top: 24px;
+      padding: 14px 16px;
+      margin: 8px 0 24px;
+      color: #fff5c8;
     }
     footer {
-      margin-top: 48px;
-      padding-top: 20px;
-      border-top: 1px solid #2a2a2a;
-      color: var(--tenue);
-      font-size: 0.85rem;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      margin-top: 34px;
+      padding-top: 22px;
+      font-size: .9rem;
+    }
+    .lang-es { display: none; }
+    body.show-es .lang-en { display: none; }
+    body.show-es .lang-es { display: block; }
+    @media (max-width: 640px) {
+      .top { align-items: flex-start; flex-direction: column; }
+      .brand img { width: 46px; height: 46px; }
+      .lang-switch { width: 100%; }
+      .lang-switch button { flex: 1; }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <img src="icons/Icon-192.png" alt="Fernecito" onerror="this.style.display='none'">
-      <h1>Política de Privacidad</h1>
-    </header>
-    <p class="sub">Aplicación: <strong>Fernecito</strong> · Última actualización: 8 de julio de 2026</p>
-
-    <div class="card">
-      <h2>1. Quiénes somos</h2>
-      <p>
-        Fernecito ("la aplicación", "nosotros") es una aplicación para descubrir la
-        vida nocturna de Córdoba, Argentina. El responsable del tratamiento de los datos
-        es <strong>Fernecito</strong>. Para cualquier consulta sobre privacidad podés
-        escribirnos a <a href="mailto:nexaisoftware@gmail.com">nexaisoftware@gmail.com</a>.
-      </p>
-
-      <h2>2. Qué datos recopilamos</h2>
-      <p>Recopilamos únicamente los datos necesarios para que la aplicación funcione:</p>
-      <ul>
-        <li><strong>Datos de cuenta:</strong> nombre, dirección de correo electrónico y
-          foto de perfil, provistos al registrarte por email o al iniciar sesión con Google
-          o con Apple.</li>
-        <li><strong>Contenido que subís:</strong> foto de perfil y, en su caso, imágenes
-          asociadas a tu cuenta.</li>
-        <li><strong>Ubicación:</strong> con tu permiso, la ubicación de tu dispositivo, para
-          mostrarte locales y eventos cercanos en el mapa (ver sección 5).</li>
-        <li><strong>Token de notificaciones:</strong> si activás las notificaciones, un
-          identificador del dispositivo (token de push) para poder enviártelas (ver sección 6).</li>
-        <li><strong>Datos técnicos básicos:</strong> información mínima necesaria para
-          mantener tu sesión iniciada y operar el servicio de forma segura.</li>
-      </ul>
-
-      <h2>3. Para qué usamos tus datos</h2>
-      <ul>
-        <li>Crear y administrar tu cuenta de usuario.</li>
-        <li>Autenticarte y mantener tu sesión iniciada.</li>
-        <li>Mostrar y personalizar tu perfil dentro de la aplicación.</li>
-        <li>Brindar soporte y responder tus consultas.</li>
-      </ul>
-      <p>No vendemos tus datos personales ni los usamos para publicidad de terceros.</p>
-
-      <h2>4. Inicio de sesión con Google y con Apple</h2>
-      <p>
-        Si elegís iniciar sesión con Google, accedemos únicamente a tu nombre, dirección de
-        correo electrónico y foto de perfil de tu cuenta de Google, con el solo fin de crear
-        e identificar tu cuenta en Fernecito. No accedemos a ningún otro dato de tu cuenta de Google.
-      </p>
-      <p>
-        Si elegís <strong>Iniciar sesión con Apple</strong>, recibimos tu nombre y una dirección
-        de correo electrónico para crear e identificar tu cuenta. Apple te permite ocultar tu correo
-        real mediante su función "Ocultar mi correo"; en ese caso recibimos una dirección de reenvío
-        anónima y no tu correo personal. No accedemos a ningún otro dato de tu cuenta de Apple.
-      </p>
-
-      <h2>5. Ubicación</h2>
-      <p>
-        Con tu permiso expreso, usamos la ubicación de tu dispositivo para mostrarte locales y
-        eventos cercanos en el mapa. Podés negar o revocar este permiso en cualquier momento desde
-        los ajustes de tu dispositivo; la aplicación sigue funcionando sin él. No usamos tu ubicación
-        para rastrearte ni la compartimos con terceros con fines publicitarios.
-      </p>
-
-      <h2>6. Notificaciones push</h2>
-      <p>
-        Si activás las notificaciones, generamos y almacenamos un identificador del dispositivo
-        (token de notificaciones) para poder enviarte avisos sobre eventos, novedades y actividad de
-        tu cuenta. Para entregar estas notificaciones usamos <strong>Firebase Cloud Messaging</strong>,
-        un servicio de Google. Podés desactivar las notificaciones en cualquier momento desde los
-        ajustes de tu dispositivo.
-      </p>
-
-      <h2>7. Dónde se almacenan</h2>
-      <p>
-        Los datos se almacenan de forma segura a través de <strong>Supabase</strong>, nuestro
-        proveedor de infraestructura y base de datos. El acceso está protegido y restringido.
-      </p>
-
-      <h2>8. Compartir con terceros</h2>
-      <p>Solo compartimos datos con proveedores estrictamente necesarios para operar el servicio:</p>
-      <ul>
-        <li><strong>Supabase</strong> — almacenamiento de datos y autenticación.</li>
-        <li><strong>Google</strong> — autenticación (inicio de sesión) y envío de
-          notificaciones push (Firebase Cloud Messaging).</li>
-        <li><strong>Apple</strong> — autenticación (Iniciar sesión con Apple).</li>
-      </ul>
-      <p>No compartimos tus datos con anunciantes ni los vendemos a terceros.</p>
-
-      <h2>9. Tus derechos</h2>
-      <p>
-        Podés <strong>eliminar tu cuenta y tus datos personales</strong> directamente desde la
-        aplicación (Perfil → Eliminar cuenta). También podés solicitar en cualquier momento el
-        acceso, la rectificación o la eliminación de tus datos escribiéndonos a
-        <a href="mailto:nexaisoftware@gmail.com">nexaisoftware@gmail.com</a>. Procesaremos tu
-        solicitud en un plazo razonable.
-      </p>
-
-      <h2>10. Retención</h2>
-      <p>
-        Conservamos tus datos mientras tu cuenta esté activa. Si solicitás la eliminación de
-        tu cuenta, borramos tus datos personales salvo aquellos que debamos conservar por
-        obligaciones legales.
-      </p>
-
-      <h2>11. Menores de edad</h2>
-      <p>
-        Fernecito está orientada a personas de 13 años o más. Si sos menor de
-        edad, debés usar la app con autorización y supervisión de tu madre,
-        padre o tutor legal. No recopilamos intencionalmente datos de personas
-        menores de 13 años.
-      </p>
-
-      <h2>12. Cambios en esta política</h2>
-      <p>
-        Podemos actualizar esta política ocasionalmente. Publicaremos la versión vigente en
-        esta misma página, indicando la fecha de última actualización.
-      </p>
-
-      <h2>13. Contacto</h2>
-      <p>
-        Ante cualquier consulta sobre esta Política de Privacidad o sobre el tratamiento de
-        tus datos, escribinos a
-        <a href="mailto:nexaisoftware@gmail.com">nexaisoftware@gmail.com</a>.
-      </p>
+  <main class="wrap">
+    <div class="top">
+      <div class="brand">
+        <img src="/favicon-192.png" alt="Fernecito App" onerror="this.onerror=null;this.src='/icons/Icon-192.png';">
+        <div>
+          <p class="eyebrow">Fernecito App</p>
+          <p class="sub" style="margin:0">Privacy, safety and community moderation.</p>
+        </div>
+      </div>
+      <div class="lang-switch" aria-label="Language">
+        <button type="button" id="btnEn" class="active">English</button>
+        <button type="button" id="btnEs">Español</button>
+      </div>
     </div>
 
+    <section class="lang-en">
+      <h1>Privacy Policy</h1>
+      <p class="sub">Last updated: <strong>August 14, 2026</strong>. This policy applies to Fernecito App, Fernecito Locales, Fernecito Owner/admin tools and related Fernecito web apps.</p>
+      <div class="notice">
+        Fernecito includes community features. Reports are reviewed through our internal Owner/admin system by authorized human team members so we can keep the app useful, respectful and safe.
+      </div>
+
+      <div class="card">
+        <h2>1. Who We Are</h2>
+        <p>Fernecito App helps people discover events, places, promotions, menus and social plans in their city. Fernecito Locales lets businesses manage their public profile, events, promotions and related business information. For privacy questions, contact us at <a href="mailto:nexaisoftware@gmail.com">nexaisoftware@gmail.com</a>.</p>
+
+        <h2>2. Information We Collect</h2>
+        <ul>
+          <li><strong>Account data:</strong> name, username, email address, profile photo, birthday or age-related information, login provider and authentication identifiers.</li>
+          <li><strong>Profile and community data:</strong> bio, photos, city, social links, friends, squads, statuses, icebreakers, likes, ratings, reservations, list/pass activity and content you choose to publish.</li>
+          <li><strong>Business and event data:</strong> local/business profile information, opening hours, WhatsApp/contact button, website/social links, photos, events, promotions, tickets/external links, menus, prices and documents or images uploaded to create a menu.</li>
+          <li><strong>Location and city data:</strong> approximate city selected by you, GPS-based city suggestions when permission is granted, nearby cities used for discovery, maps and recommendations.</li>
+          <li><strong>Usage and safety data:</strong> app interactions, views, clicks, impressions, reports, blocks, support requests, moderation actions, basic device/session information and logs needed to protect the service.</li>
+          <li><strong>Notifications:</strong> push notification tokens, delivery status and notification preferences when you allow notifications.</li>
+          <li><strong>AI queries:</strong> prompts, selected location context and relevant public app data needed to answer searches or organize business menus.</li>
+        </ul>
+
+        <h2>3. How We Use Information</h2>
+        <ul>
+          <li>Operate accounts, authentication, profiles, events, menus, reservations, social features and notifications.</li>
+          <li>Show places, events, menus and recommendations based on your selected or permitted location.</li>
+          <li>Help businesses manage their public profile, opening hours, promotions, menus and visibility.</li>
+          <li>Power AI search and AI-assisted menu/profile/event organization.</li>
+          <li>Detect abuse, enforce community rules, review reports and keep the platform safe.</li>
+          <li>Provide support, fix bugs, improve performance and understand aggregate usage.</li>
+        </ul>
+        <p>We do not sell your personal data and we do not use it for third-party advertising networks.</p>
+
+        <h2>4. Human Review and Community Moderation</h2>
+        <p>Users can report profiles, local/business profiles, events, squads and other community content where available. Reports are sent to our internal Owner/admin panel. Authorized human reviewers may review the report, the reported content, related account details and safety logs to decide whether to remove content, hide events, suspend accounts, block abusive behavior, respond to support requests or preserve records for safety and legal reasons.</p>
+        <p>Blocking and reporting are designed to reduce unwanted contact and protect the community. We may retain moderation records after account deletion when needed to prevent abuse, investigate incidents or comply with law.</p>
+
+        <h2>5. AI Features</h2>
+        <p>Fernecito may use AI providers, including xAI/Grok, to answer discovery questions, recommend plans, summarize menus, extract menu items from text, images, PDFs or URLs, and help businesses create better profiles or events. We send only the information needed for that feature, such as your query, selected city context and relevant public business/event/menu data. Do not include passwords, payment credentials or highly sensitive personal information in AI prompts.</p>
+
+        <h2>6. Location</h2>
+        <p>With your permission, the app may use your device location to suggest nearby cities, show nearby places and improve map or AI results. You can deny or revoke location permission in your device settings. You can also use manual city selection. We do not sell location data.</p>
+
+        <h2>7. Push Notifications</h2>
+        <p>If you allow notifications, we store a device push token to send account activity, community updates, owner/admin alerts, business notices or promotional messages related to Fernecito. Delivery uses Firebase Cloud Messaging and platform notification services from Google and Apple. You can disable notifications from your device settings.</p>
+
+        <h2>8. Third-Party Services</h2>
+        <p>We use trusted providers to operate the service, including Supabase for database, authentication and edge functions; Firebase/Google Cloud Messaging for push notifications; Google and Apple for sign-in where selected; xAI/Grok for AI features; Vercel for web hosting; and map, WhatsApp, Instagram, TikTok, website or ticketing links when you choose to open external destinations. External sites have their own privacy policies.</p>
+
+        <h2>9. Payments and Subscriptions</h2>
+        <p>Some business features may include subscriptions, plans, visibility credits or paid services. Where platform billing is used, Google Play or Apple may process payment information under their own terms. For manual business verification or payment review, authorized Owner/admin users may review payment proof and related business account data.</p>
+
+        <h2>10. Data Retention and Deletion</h2>
+        <p>We keep data while your account or business profile is active and as needed to provide the service. You may request deletion of your account or data from the app or by contacting us. Some records may be retained for security, fraud prevention, moderation, accounting, legal compliance or dispute resolution.</p>
+
+        <h2>11. Security</h2>
+        <p>We use access controls, authentication, server-side rules and operational safeguards to protect data. No online system is 100% secure, but we work to keep access limited and to respond quickly to reports or incidents.</p>
+
+        <h2>12. Children and Teens</h2>
+        <p>Fernecito is intended for users aged 13 and older. The app is not directed to children under 13. If you are a minor, use the app with permission and supervision from a parent or legal guardian.</p>
+
+        <h2>13. Your Choices and Rights</h2>
+        <ul>
+          <li>Update your profile information in the app.</li>
+          <li>Change notification, location and app permissions in your device settings.</li>
+          <li>Report or block users, squads, local profiles or content where available.</li>
+          <li>Request access, correction or deletion by contacting <a href="mailto:nexaisoftware@gmail.com">nexaisoftware@gmail.com</a>.</li>
+        </ul>
+
+        <h2>14. Changes</h2>
+        <p>We may update this Privacy Policy as Fernecito evolves. The current version will be published on this page with its latest update date.</p>
+      </div>
+    </section>
+
+    <section class="lang-es">
+      <h1>Política de Privacidad</h1>
+      <p class="sub">Última actualización: <strong>14 de agosto de 2026</strong>. Esta política aplica a Fernecito App, Fernecito Locales, Fernecito Owner/herramientas de administración y webs relacionadas.</p>
+      <div class="notice">
+        Fernecito incluye funciones de comunidad. Los reportes se revisan desde nuestro sistema interno Owner/admin por personas humanas autorizadas para mantener la app útil, respetuosa y segura.
+      </div>
+
+      <div class="card">
+        <h2>1. Quiénes Somos</h2>
+        <p>Fernecito App ayuda a descubrir eventos, lugares, promociones, cartas y planes sociales en tu ciudad. Fernecito Locales permite que los comercios gestionen su perfil público, eventos, promociones e información comercial. Por consultas de privacidad, escribinos a <a href="mailto:nexaisoftware@gmail.com">nexaisoftware@gmail.com</a>.</p>
+
+        <h2>2. Qué Información Recopilamos</h2>
+        <ul>
+          <li><strong>Datos de cuenta:</strong> nombre, username, email, foto de perfil, cumpleaños o datos vinculados a edad, proveedor de inicio de sesión e identificadores de autenticación.</li>
+          <li><strong>Perfil y comunidad:</strong> bio, fotos, ciudad, redes sociales, amigos, squads, estados, rompehielos, likes, calificaciones, reservas, listas/pases y contenido que decidís publicar.</li>
+          <li><strong>Locales y eventos:</strong> perfil del local, horarios, botón de WhatsApp/contacto, links web/redes, fotos, eventos, promos, links de entradas, cartas, precios y documentos o imágenes subidas para armar una carta.</li>
+          <li><strong>Ubicación y ciudad:</strong> ciudad elegida manualmente, sugerencias por GPS con permiso, ciudades cercanas usadas para cartelera, mapa y recomendaciones.</li>
+          <li><strong>Uso y seguridad:</strong> interacciones, vistas, clicks, impresiones, reportes, bloqueos, soporte, acciones de moderación, datos básicos de dispositivo/sesión y logs necesarios para proteger el servicio.</li>
+          <li><strong>Notificaciones:</strong> tokens push, estado de entrega y preferencias cuando permitís notificaciones.</li>
+          <li><strong>Consultas de IA:</strong> prompts, contexto de ubicación seleccionado y datos públicos relevantes de la app para responder búsquedas u ordenar cartas.</li>
+        </ul>
+
+        <h2>3. Cómo Usamos la Información</h2>
+        <ul>
+          <li>Operar cuentas, login, perfiles, eventos, cartas, reservas, funciones sociales y notificaciones.</li>
+          <li>Mostrar lugares, eventos, cartas y recomendaciones según tu ubicación elegida o permitida.</li>
+          <li>Ayudar a locales a gestionar su perfil público, horarios, promociones, cartas y visibilidad.</li>
+          <li>Usar búsqueda IA y asistentes para ordenar cartas, perfiles o eventos.</li>
+          <li>Detectar abuso, aplicar reglas de comunidad, revisar reportes y cuidar la plataforma.</li>
+          <li>Dar soporte, corregir errores, mejorar rendimiento y entender uso agregado.</li>
+        </ul>
+        <p>No vendemos tus datos personales ni los usamos para redes publicitarias de terceros.</p>
+
+        <h2>4. Revisión Humana y Moderación</h2>
+        <p>Los usuarios pueden reportar perfiles, perfiles de locales, eventos, squads y otros contenidos comunitarios cuando la app lo permita. Los reportes llegan a nuestro panel interno Owner/admin. Personas humanas autorizadas pueden revisar el reporte, el contenido reportado, datos relacionados de la cuenta y logs de seguridad para decidir si corresponde eliminar contenido, ocultar eventos, suspender cuentas, bloquear abuso, responder soporte o conservar registros por seguridad y motivos legales.</p>
+        <p>El bloqueo y los reportes ayudan a reducir contactos no deseados y proteger la comunidad. Podemos conservar registros de moderación incluso luego de una eliminación de cuenta cuando sea necesario para prevenir abuso, investigar incidentes o cumplir obligaciones legales.</p>
+
+        <h2>5. Funciones de IA</h2>
+        <p>Fernecito puede usar proveedores de IA, incluyendo xAI/Grok, para responder búsquedas, recomendar planes, resumir cartas, extraer ítems desde texto, imágenes, PDFs o URLs, y ayudar a locales a crear mejores perfiles o eventos. Enviamos solo la información necesaria para esa función, como tu consulta, la ciudad seleccionada y datos públicos relevantes de locales/eventos/cartas. No incluyas contraseñas, credenciales de pago ni información personal altamente sensible en los prompts.</p>
+
+        <h2>6. Ubicación</h2>
+        <p>Con tu permiso, la app puede usar la ubicación del dispositivo para sugerir ciudades cercanas, mostrar lugares próximos y mejorar resultados de mapa o IA. Podés negar o revocar el permiso desde ajustes del dispositivo. También podés usar selección manual de ciudad. No vendemos datos de ubicación.</p>
+
+        <h2>7. Notificaciones Push</h2>
+        <p>Si permitís notificaciones, almacenamos un token del dispositivo para enviarte actividad de cuenta, novedades de comunidad, alertas owner/admin, avisos de locales o mensajes promocionales relacionados con Fernecito. La entrega usa Firebase Cloud Messaging y servicios de notificación de Google y Apple. Podés desactivarlas desde ajustes del dispositivo.</p>
+
+        <h2>8. Servicios de Terceros</h2>
+        <p>Usamos proveedores necesarios para operar el servicio, incluyendo Supabase para base de datos, autenticación y edge functions; Firebase/Google Cloud Messaging para push; Google y Apple para login cuando lo elegís; xAI/Grok para IA; Vercel para hosting web; y mapas, WhatsApp, Instagram, TikTok, webs o ticketeras cuando decidís abrir enlaces externos. Los sitios externos tienen sus propias políticas.</p>
+
+        <h2>9. Pagos y Suscripciones</h2>
+        <p>Algunas funciones para locales pueden incluir suscripciones, planes, créditos de visibilidad o servicios pagos. Cuando usemos pagos de plataforma, Google Play o Apple pueden procesar información de pago bajo sus propios términos. Para verificaciones o pagos manuales de locales, usuarios autorizados de Owner/admin pueden revisar comprobantes y datos relacionados del local.</p>
+
+        <h2>10. Retención y Eliminación</h2>
+        <p>Conservamos datos mientras tu cuenta o perfil de local esté activo y mientras sean necesarios para brindar el servicio. Podés pedir eliminar tu cuenta o datos desde la app o escribiéndonos. Algunos registros pueden conservarse por seguridad, prevención de fraude, moderación, contabilidad, cumplimiento legal o resolución de disputas.</p>
+
+        <h2>11. Seguridad</h2>
+        <p>Usamos controles de acceso, autenticación, reglas del servidor y medidas operativas para proteger los datos. Ningún sistema online es 100% seguro, pero trabajamos para limitar accesos y responder rápido ante reportes o incidentes.</p>
+
+        <h2>12. Menores</h2>
+        <p>Fernecito está pensada para usuarios de 13 años o más. No está dirigida a menores de 13 años. Si sos menor de edad, usala con permiso y supervisión de tu madre, padre o tutor legal.</p>
+
+        <h2>13. Tus Opciones y Derechos</h2>
+        <ul>
+          <li>Actualizar tus datos de perfil en la app.</li>
+          <li>Cambiar permisos de notificación, ubicación y app desde ajustes del dispositivo.</li>
+          <li>Reportar o bloquear usuarios, squads, locales o contenido cuando esté disponible.</li>
+          <li>Solicitar acceso, corrección o eliminación escribiendo a <a href="mailto:nexaisoftware@gmail.com">nexaisoftware@gmail.com</a>.</li>
+        </ul>
+
+        <h2>14. Cambios</h2>
+        <p>Podemos actualizar esta Política de Privacidad a medida que Fernecito evoluciona. La versión vigente se publicará en esta página con su fecha de actualización.</p>
+      </div>
+    </section>
+
     <footer>
-      © 2026 Fernecito. Todos los derechos reservados.
+      <span class="pill">Community reports</span>
+      <span class="pill">Human moderation</span>
+      <span class="pill">AI-assisted discovery</span>
+      <p>© 2026 Fernecito App. Official privacy page: <a href="https://fernecitoapp.com/privacy">fernecitoapp.com/privacy</a></p>
     </footer>
-  </div>
+  </main>
+
+  <script>
+    const btnEn = document.getElementById('btnEn');
+    const btnEs = document.getElementById('btnEs');
+    function setLang(lang) {
+      const es = lang === 'es';
+      document.body.classList.toggle('show-es', es);
+      document.documentElement.lang = es ? 'es' : 'en';
+      btnEn.classList.toggle('active', !es);
+      btnEs.classList.toggle('active', es);
+      localStorage.setItem('fernecitoPrivacyLang', es ? 'es' : 'en');
+    }
+    btnEn.addEventListener('click', () => setLang('en'));
+    btnEs.addEventListener('click', () => setLang('es'));
+    setLang(localStorage.getItem('fernecitoPrivacyLang') || 'en');
+  </script>
 </body>
 </html>

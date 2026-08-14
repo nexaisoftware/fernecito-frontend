@@ -77,6 +77,14 @@ cp -R web/api/. build/web/api/
 mkdir -p build/web/.well-known
 cp -R web/.well-known/. build/web/.well-known/
 cp web/firebase-messaging-sw.js build/web/firebase-messaging-sw.js
+if [ -f web/descargar.html ]; then
+  cp web/descargar.html build/web/descargar.html
+elif [ -f ../web/descargar.html ]; then
+  cp ../web/descargar.html build/web/descargar.html
+else
+  echo "ERROR: falta descargar.html para /descargar" >&2
+  exit 1
+fi
 
 if [ -n "${FIREBASE_WEB_API_KEY:-}" ] && [ -n "${FIREBASE_WEB_APP_ID:-}" ] && [ -n "${FIREBASE_WEB_MESSAGING_SENDER_ID:-}" ] && [ -n "${FIREBASE_WEB_PROJECT_ID:-}" ]; then
   echo "==> [2a/3] firebase-config-sw.js para push web"
@@ -114,8 +122,9 @@ cat > build/web/vercel.json <<'JSON'
   "cleanUrls": true,
   "rewrites": [
     { "source": "/share-evento", "destination": "/api/share-evento" },
+    { "source": "/descargar", "destination": "/descargar.html" },
     {
-      "source": "/((?!firebase-messaging-sw\\.js|firebase-config-sw\\.js|flutter_service_worker\\.js|flutter_bootstrap\\.js|main\\.dart\\.js|version\\.json|manifest\\.json|favicon\\.png|assets/|icons/|splash/|canvaskit/|api/).*)",
+      "source": "/((?!descargar\\.html|firebase-messaging-sw\\.js|firebase-config-sw\\.js|flutter_service_worker\\.js|flutter_bootstrap\\.js|main\\.dart\\.js|version\\.json|manifest\\.json|favicon\\.png|assets/|icons/|splash/|canvaskit/|api/).*)",
       "destination": "/index.html"
     }
   ],

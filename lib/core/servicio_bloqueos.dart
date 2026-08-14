@@ -3,14 +3,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_client.dart';
 
-/// Bloqueo de cuentas iniciado por el usuario (usuarios y locales).
+/// Bloqueo de cuentas/contenido social iniciado por el usuario.
 /// Backend: RPCs bloquear_cuenta / desbloquear_cuenta (security definer,
 /// usan auth.uid() como bloqueador).
 class ServicioBloqueos {
   SupabaseClient get _sb => ServicioSupabase().cliente;
 
   Future<Map<String, dynamic>> bloquearCuenta({
-    required String targetTipo, // 'usuario' | 'local'
+    required String targetTipo, // 'usuario' | 'local' | 'squad'
     required String targetId,
   }) async {
     try {

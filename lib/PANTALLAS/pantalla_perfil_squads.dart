@@ -8,6 +8,8 @@ import '../core/constants.dart';
 import '../core/privacidad_perfil.dart';
 import '../core/servicio_amigos.dart';
 import '../core/servicio_perfil_usuario.dart';
+import '../core/flujo_bloqueo.dart';
+import '../core/flujo_reporte.dart';
 import '../core/rompehielo_navegacion.dart';
 import '../core/servicio_squads.dart';
 import '../core/supabase_client.dart';
@@ -283,6 +285,58 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
     setState(() => _miembrosExpandidos = !_miembrosExpandidos);
   }
 
+  void _abrirMenuSquad() {
+    if (_idGrupo.isEmpty) return;
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _reportarSquad();
+            },
+            child: const Text('Reportar squad'),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              _bloquearSquad();
+            },
+            child: const Text('Bloquear squad'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancelar'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reportarSquad() async {
+    if (_idGrupo.isEmpty) return;
+    await mostrarFlujoReporte(
+      context: context,
+      entidad: 'este squad',
+      targetTipo: 'squad',
+      targetId: _idGrupo,
+    );
+  }
+
+  Future<void> _bloquearSquad() async {
+    if (_idGrupo.isEmpty) return;
+    final bloqueado = await mostrarFlujoBloqueo(
+      context: context,
+      entidad: 'este squad',
+      targetTipo: 'squad',
+      targetId: _idGrupo,
+    );
+    if (bloqueado && mounted) Navigator.of(context).maybePop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomPad = squadPaddingInferior(context);
@@ -327,6 +381,18 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
                 imageCacheKey: bannerCacheKey,
                 topBar: SquadBotonVolver(
                   onTap: () => Navigator.of(context).pop(),
+                  trailing: _idGrupo.isNotEmpty
+                      ? CupertinoButton(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          onPressed: _procesando ? null : _abrirMenuSquad,
+                          child: const Icon(
+                            CupertinoIcons.ellipsis,
+                            color: Colors.white,
+                            size: 23,
+                          ),
+                        )
+                      : null,
                 ),
                 usernameBadge: username.isNotEmpty
                     ? SquadBadgeUsername(username: username)

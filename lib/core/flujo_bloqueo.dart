@@ -5,8 +5,9 @@ import 'servicio_bloqueos.dart';
 /// Flujo simple de bloqueo (perfiles de usuario y locales), en el mismo estilo
 /// que el flujo de reporte: CONFIRMAR → bloquear → aviso.
 ///
-/// [entidad]: sustantivo para los textos ('este perfil', 'este local').
-/// [targetTipo]: 'usuario' | 'local'.
+/// [entidad]: sustantivo para los textos ('este perfil', 'este local',
+/// 'este squad').
+/// [targetTipo]: 'usuario' | 'local' | 'squad'.
 /// Devuelve true si el bloqueo se concretó (para que la pantalla oculte/retroceda).
 Future<bool> mostrarFlujoBloqueo({
   required BuildContext context,

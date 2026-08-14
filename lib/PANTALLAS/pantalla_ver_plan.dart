@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/compartir_evento.dart' show origenCompartirDesdeContexto;
 import '../core/compartir_plan.dart';
 import '../core/constants.dart';
+import '../core/flujo_reporte.dart';
 import '../core/servicio_planes.dart';
 import '../widgets/fernecito_loader.dart';
 import 'pantalla_chat_plan.dart';
@@ -387,6 +388,17 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     );
   }
 
+  Future<void> _reportarPlan() async {
+    final plan = _plan;
+    if (plan == null) return;
+    await mostrarFlujoReporte(
+      context: context,
+      entidad: 'este plan',
+      targetTipo: 'plan',
+      targetId: plan.id,
+    );
+  }
+
   Future<void> _copiarContacto(String texto) async {
     await Clipboard.setData(ClipboardData(text: texto));
     if (!mounted) return;
@@ -398,10 +410,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     if (plan == null) return;
     setState(() => _pedidoOcupado = true);
     try {
-      final ok = await _srv.pedidoResponder(
-        idPlan: plan.id,
-        accion: 'aceptar',
-      );
+      final ok = await _srv.pedidoResponder(idPlan: plan.id, accion: 'aceptar');
       if (!mounted) return;
       if (!ok) {
         _toast('No se pudo aceptar.');
@@ -667,6 +676,20 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                       ),
                     ),
                   ),
+                  Positioned(
+                    top: MediaQuery.paddingOf(context).top + 8,
+                    right: 10,
+                    child: CupertinoButton(
+                      padding: const EdgeInsets.all(8),
+                      minimumSize: const Size(0, 36),
+                      onPressed: _reportarPlan,
+                      child: const Icon(
+                        CupertinoIcons.ellipsis,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -892,7 +915,10 @@ class _Avatar extends StatelessWidget {
                 errorWidget: (_, _, _) => ColoredBox(
                   color: const Color(0xFF2B2B2B),
                   child: Center(
-                    child: Text(ini, style: const TextStyle(color: Colors.white)),
+                    child: Text(
+                      ini,
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
               )

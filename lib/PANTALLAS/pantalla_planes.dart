@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/compartir_evento.dart' show origenCompartirDesdeContexto;
 import '../core/compartir_plan.dart';
 import '../core/constants.dart';
+import '../core/flujo_reporte.dart';
 import '../core/preferencias_cartelera.dart';
 import '../core/servicio_ubicacion_global.dart';
 import '../core/ubicaciones_data.dart';
@@ -220,6 +221,15 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
     } finally {
       if (mounted) setState(() => _uniendoId = null);
     }
+  }
+
+  Future<void> _reportarPlan(PlanComunidad plan) async {
+    await mostrarFlujoReporte(
+      context: context,
+      entidad: 'este plan',
+      targetTipo: 'plan',
+      targetId: plan.id,
+    );
   }
 
   Future<String?> _elegirIdentidadUnion(PlanComunidad plan) async {
@@ -526,14 +536,16 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
                             uniendo: _uniendoId == plan.id,
                             onTap: () => _abrirPlan(plan),
                             onUnirse: () => _unirse(plan),
+                            onReportar: () => _reportarPlan(plan),
                             onCompartir: () => compartirPlan(
                               idPlan: plan.id,
                               titulo: plan.titulo,
                               nombreLocal: plan.nombreLocal,
                               ciudad: plan.ciudad,
                               fechaInicio: plan.fechaInicio,
-                              sharePositionOrigin:
-                                  origenCompartirDesdeContexto(context),
+                              sharePositionOrigin: origenCompartirDesdeContexto(
+                                context,
+                              ),
                               feedbackContext: context,
                             ),
                           );
@@ -759,6 +771,7 @@ class _CardPlan extends StatelessWidget {
     required this.plan,
     required this.onTap,
     required this.onUnirse,
+    required this.onReportar,
     this.onCompartir,
     this.uniendo = false,
   });
@@ -766,6 +779,7 @@ class _CardPlan extends StatelessWidget {
   final PlanComunidad plan;
   final VoidCallback onTap;
   final VoidCallback onUnirse;
+  final VoidCallback onReportar;
   final VoidCallback? onCompartir;
   final bool uniendo;
 
@@ -835,6 +849,19 @@ class _CardPlan extends StatelessWidget {
                             ),
                           ),
                         ],
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: onReportar,
+                          behavior: HitTestBehavior.opaque,
+                          child: const Padding(
+                            padding: EdgeInsets.all(2),
+                            child: Icon(
+                              CupertinoIcons.ellipsis,
+                              size: 20,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
                         const SizedBox(width: 8),
                         if (plan.soyModerador)
                           const _MiniBadge('Sos admin')
