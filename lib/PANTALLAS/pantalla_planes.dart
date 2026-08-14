@@ -838,30 +838,6 @@ class _CardPlan extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(child: _AutoresPlanLine(plan: plan)),
-                        if (onCompartir != null) ...[
-                          const SizedBox(width: 6),
-                          GestureDetector(
-                            onTap: onCompartir,
-                            child: const Icon(
-                              CupertinoIcons.share,
-                              size: 18,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: onReportar,
-                          behavior: HitTestBehavior.opaque,
-                          child: const Padding(
-                            padding: EdgeInsets.all(2),
-                            child: Icon(
-                              CupertinoIcons.ellipsis,
-                              size: 20,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
                         const SizedBox(width: 8),
                         if (plan.soyModerador)
                           const _MiniBadge('Sos admin')
@@ -938,28 +914,134 @@ class _CardPlan extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 9),
-                    if (plan.soyMiembro)
-                      _BotonGlass(texto: 'Ver plan', onTap: onTap)
-                    else
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _BotonGlass(texto: 'Ver más', onTap: onTap),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _BotonPlan(
-                              plan: plan,
-                              uniendo: uniendo,
-                              onTap: onUnirse,
-                            ),
-                          ),
-                        ],
-                      ),
+                    _AccionesPlan(
+                      plan: plan,
+                      desactivada: desactivada,
+                      uniendo: uniendo,
+                      onTap: onTap,
+                      onUnirse: onUnirse,
+                      onCompartir: onCompartir,
+                      onReportar: onReportar,
+                    ),
                   ],
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccionesPlan extends StatelessWidget {
+  const _AccionesPlan({
+    required this.plan,
+    required this.desactivada,
+    required this.uniendo,
+    required this.onTap,
+    required this.onUnirse,
+    required this.onReportar,
+    this.onCompartir,
+  });
+
+  final PlanComunidad plan;
+  final bool desactivada;
+  final bool uniendo;
+  final VoidCallback onTap;
+  final VoidCallback onUnirse;
+  final VoidCallback onReportar;
+  final VoidCallback? onCompartir;
+
+  @override
+  Widget build(BuildContext context) {
+    final acciones = <Widget>[
+      if (onCompartir != null) ...[
+        _IconoAccionPlan(
+          icon: Icons.share_rounded,
+          tooltip: 'Compartir plan',
+          onTap: desactivada ? null : onCompartir,
+        ),
+        const SizedBox(width: 8),
+      ],
+      _IconoAccionPlan(
+        icon: Icons.more_horiz_rounded,
+        tooltip: 'Reportar plan',
+        onTap: onReportar,
+      ),
+    ];
+
+    if (desactivada) {
+      return Row(
+        children: [
+          const Expanded(child: _BotonGlassDeshabilitado(texto: 'Finalizado')),
+          const SizedBox(width: 10),
+          ...acciones,
+        ],
+      );
+    }
+
+    if (plan.soyMiembro) {
+      return Row(
+        children: [
+          Expanded(
+            child: _BotonGlass(texto: 'Ver plan', onTap: onTap),
+          ),
+          const SizedBox(width: 10),
+          ...acciones,
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: _BotonGlass(texto: 'Ver más', onTap: onTap),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: _BotonPlan(plan: plan, uniendo: uniendo, onTap: onUnirse),
+        ),
+        const SizedBox(width: 9),
+        ...acciones,
+      ],
+    );
+  }
+}
+
+class _IconoAccionPlan extends StatelessWidget {
+  const _IconoAccionPlan({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final habilitado = onTap != null;
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withValues(alpha: habilitado ? 0.15 : 0.08),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: habilitado ? 0.08 : 0.04),
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 19,
+            color: Colors.white.withValues(alpha: habilitado ? 0.92 : 0.36),
           ),
         ),
       ),
@@ -1062,6 +1144,30 @@ class _BotonGlass extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BotonGlassDeshabilitado extends StatelessWidget {
+  const _BotonGlassDeshabilitado({required this.texto});
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 30,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+    ),
+    child: Text(
+      texto,
+      style: GoogleFonts.baloo2(
+        fontSize: 12.5,
+        fontWeight: FontWeight.w900,
+        color: Colors.white70,
+      ),
+    ),
+  );
 }
 
 class _AutoresPlanLine extends StatelessWidget {
