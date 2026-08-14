@@ -17,6 +17,10 @@ abstract final class MezclaCarteleraLocales {
     'gratis',
   ];
 
+  /// TOP solo admite pionero, verificado o plan pago (nunca cuentas free).
+  static bool aptoParaTop(LocalCarteleraCard c) =>
+      c.esPionero || c.esVerificado || c.tienePlanActivo;
+
   /// ¿Alguna sección necesita relleno según conteos de eventos filtrados?
   static bool necesitaRelleno(Map<String, int> conteosEventos) {
     for (final s in seccionesOrden) {
@@ -26,8 +30,8 @@ abstract final class MezclaCarteleraLocales {
   }
 
   /// Reparte hasta [maxTotal] locales entre secciones con &lt;10 eventos (máx 4 c/u).
-  /// Round-robin para que gratis/recomendados no queden sin cupo si TOP pide primero.
-  /// Prioriza pioneros/plan; mezcla pseudo-aleatoria con [seed].
+  /// 1) Reserva TOP solo con pionero/verificado/plan.
+  /// 2) Round-robin el resto para no starvear gratis/recomendados.
   static Map<String, List<LocalCarteleraCard>> distribuir({
     required List<LocalCarteleraCard> pool,
     required Map<String, int> conteosEventos,
@@ -50,13 +54,27 @@ abstract final class MezclaCarteleraLocales {
       for (final s in cupos.keys) s: <LocalCarteleraCard>[],
     };
 
+    // Fase 1: TOP primero, solo elegibles (pionero / verificado / plan).
+    final cupoTop = cupos['top'];
+    if (cupoTop != null && cupoTop > 0) {
+      final listaTop = result['top']!;
+      for (final card in ordenados) {
+        if (listaTop.length >= cupoTop || restantesTotal <= 0) break;
+        if (usados.contains(card.localId) || !aptoParaTop(card)) continue;
+        listaTop.add(card);
+        usados.add(card.localId);
+        restantesTotal--;
+      }
+    }
+
+    // Fase 2: round-robin del resto (pueden ser free).
+    final otras = seccionesOrden.where((s) => s != 'top' && cupos.containsKey(s));
     var progreso = true;
     while (restantesTotal > 0 && progreso) {
       progreso = false;
-      for (final seccion in seccionesOrden) {
+      for (final seccion in otras) {
         if (restantesTotal <= 0) break;
-        final cupo = cupos[seccion];
-        if (cupo == null) continue;
+        final cupo = cupos[seccion]!;
         final lista = result[seccion]!;
         if (lista.length >= cupo) continue;
 
@@ -88,15 +106,15 @@ abstract final class MezclaCarteleraLocales {
   ) {
     final rng = math.Random(seed);
     final pioneros = pool.where((c) => c.esPionero).toList()..shuffle(rng);
-    final plan = pool
-        .where((c) => !c.esPionero && c.tienePlanActivo)
+    final premium = pool
+        .where((c) => !c.esPionero && (c.esVerificado || c.tienePlanActivo))
         .toList()
       ..shuffle(rng);
     final resto = pool
-        .where((c) => !c.esPionero && !c.tienePlanActivo)
+        .where((c) => !c.esPionero && !c.esVerificado && !c.tienePlanActivo)
         .toList()
       ..shuffle(rng);
-    return [...pioneros, ...plan, ...resto];
+    return [...pioneros, ...premium, ...resto];
   }
 
   /// Intercala locales entre eventos para que no queden al final del carrusel.

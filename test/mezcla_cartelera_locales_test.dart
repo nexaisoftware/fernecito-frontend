@@ -3,7 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fernecito_frontend/core/mezcla_cartelera_locales.dart';
 import 'package:fernecito_frontend/models/local_cartelera_card.dart';
 
-LocalCarteleraCard _card(String id, {bool pionero = false, bool plan = false}) {
+LocalCarteleraCard _card(
+  String id, {
+  bool pionero = false,
+  bool plan = false,
+  bool verificado = false,
+}) {
   return LocalCarteleraCard(
     id: 'card-$id',
     localId: id,
@@ -14,6 +19,7 @@ LocalCarteleraCard _card(String id, {bool pionero = false, bool plan = false}) {
     imagenesUrls: const [],
     nombreLocal: 'Local $id',
     esPionero: pionero,
+    esVerificado: verificado,
     tienePlanActivo: plan,
   );
 }
@@ -29,15 +35,15 @@ void main() {
       };
       expect(MezclaCarteleraLocales.necesitaRelleno(conteos), isFalse);
       final out = MezclaCarteleraLocales.distribuir(
-        pool: List.generate(12, (i) => _card('$i')),
+        pool: List.generate(12, (i) => _card('$i', pionero: true)),
         conteosEventos: conteos,
         seed: 1,
       );
       expect(out, isEmpty);
     });
 
-    test('round-robin reparte cupo y no starvea gratis', () {
-      final pool = List.generate(12, (i) => _card('$i', pionero: i < 2));
+    test('TOP reserva elegibles primero; resto round-robin sin starvear', () {
+      final pool = List.generate(12, (i) => _card('$i', pionero: i < 4));
       final out = MezclaCarteleraLocales.distribuir(
         pool: pool,
         conteosEventos: {
@@ -48,17 +54,62 @@ void main() {
         },
         seed: 42,
       );
-      expect(out['top']?.length, 3);
-      expect(out['recomendado_fernecito']?.length, 3);
-      expect(out['normal']?.length, 3);
-      expect(out['gratis']?.length, 3);
+      expect(out['top']?.length, 4);
+      expect(out['top']!.every(MezclaCarteleraLocales.aptoParaTop), isTrue);
+      final resto = (out['recomendado_fernecito']?.length ?? 0) +
+          (out['normal']?.length ?? 0) +
+          (out['gratis']?.length ?? 0);
+      expect(resto, 8);
+      expect(out['gratis'], isNotEmpty);
       final ids = out.values.expand((e) => e.map((c) => c.localId)).toSet();
       expect(ids.length, 12);
     });
 
+    test('TOP solo admite pionero/verificado/plan, nunca free', () {
+      final pool = [
+        _card('free1'),
+        _card('free2'),
+        _card('pio', pionero: true),
+        _card('ver', verificado: true),
+        _card('plan', plan: true),
+        _card('free3'),
+      ];
+      final out = MezclaCarteleraLocales.distribuir(
+        pool: pool,
+        conteosEventos: {
+          'top': 0,
+          'recomendado_fernecito': 9,
+          'normal': 10,
+          'gratis': 10,
+        },
+        seed: 1,
+      );
+      final tops = out['top'] ?? const [];
+      expect(tops.length, 3);
+      expect(tops.every(MezclaCarteleraLocales.aptoParaTop), isTrue);
+      expect(tops.any((c) => c.localId.startsWith('free')), isFalse);
+    });
+
+    test('si no hay elegibles TOP, otras secciones igual reciben free', () {
+      final pool = List.generate(6, (i) => _card('free$i'));
+      final out = MezclaCarteleraLocales.distribuir(
+        pool: pool,
+        conteosEventos: {
+          'top': 0,
+          'recomendado_fernecito': 0,
+          'normal': 0,
+          'gratis': 0,
+        },
+        seed: 3,
+      );
+      expect(out.containsKey('top'), isFalse);
+      expect(out['recomendado_fernecito'], isNotEmpty);
+      expect(out['gratis'], isNotEmpty);
+    });
+
     test('respeta max 4 por sección y cupo por umbral', () {
       final out = MezclaCarteleraLocales.distribuir(
-        pool: List.generate(12, (i) => _card('$i')),
+        pool: List.generate(12, (i) => _card('$i', pionero: true)),
         conteosEventos: {
           'top': 8,
           'recomendado_fernecito': 9,
@@ -78,7 +129,7 @@ void main() {
         4,
         (i) => <String, dynamic>{'id': 'e$i', 'titulo': 'E$i'},
       );
-      final locales = [_card('a'), _card('b')];
+      final locales = [_card('a', pionero: true), _card('b')];
       final mezclado = MezclaCarteleraLocales.mezclarEnLista(eventos, locales);
       expect(mezclado.length, 6);
       expect(LocalCarteleraCard.esItemLocal(mezclado[1]), isTrue);

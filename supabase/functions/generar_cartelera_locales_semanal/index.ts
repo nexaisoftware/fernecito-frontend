@@ -5,14 +5,21 @@ const MAX_POR_CIUDAD = 12;
 const MAX_FOTOS_CARD = 4;
 
 const TEXTOS_FALLBACK = [
+  (nombre: string) => `¿Ya descubriste ${nombre}? Esta semana puede pintar.`,
+  (nombre: string) => `Las promos de ${nombre} están para vos.`,
+  (nombre: string) => `${nombre} te espera: buena excusa para salir.`,
+  (nombre: string) => `Para vos: mirá qué onda tiene ${nombre} esta semana.`,
+  (nombre: string) => `¿Conocés ${nombre}? Sumalo al plan de la semana.`,
+  (nombre: string) => `${nombre} ya está en cartelera: dale una chance.`,
+  (nombre: string) => `Si pinta moverse, ${nombre} puede entrar en el plan.`,
+  (nombre: string) => `Descubrí ${nombre} esta semana y armá tu salida.`,
+];
+
+const TEXTOS_FALLBACK_SIN_NOMBRE = [
   "Un lugar de tu ciudad para descubrir esta semana.",
   "¿Ya lo conocés? Puede ser tu próxima salida.",
   "Buena excusa para cortar la rutina y salir un rato.",
   "Sumalo a tu lista de lugares para conocer.",
-  "Si pinta moverse, este lugar puede entrar en el plan.",
-  "Un rincón de la ciudad que merece una visita.",
-  "Ideal para una salida simple y distinta.",
-  "Los buenos momentos también empiezan en lugares así.",
 ];
 
 type LocalRow = {
@@ -186,24 +193,43 @@ function resumirHorarios(horarios: unknown): string {
   return raw.replace(/\s+/g, " ").slice(0, 180);
 }
 
-function fallbackTexto(local: LocalRow, index: number): string {
-  const nombre = (local.nombre_local ?? "").trim();
+function fallbackTexto(
+  local: LocalRow,
+  index: number,
+  ctx?: ContextoLocal,
+): string {
+  const nombre = (local.nombre_local ?? "").trim() || "este local";
+  const promo = (ctx?.promos?.[0] ?? "").replace(/\s+/g, " ").trim();
+  const evento = (ctx?.eventos?.[0] ?? "").replace(/\s+/g, " ").trim();
   const desc = (local.descripcion_local ?? "").replace(/\s+/g, " ").trim();
-  // Preferí la descripción real del local antes que frases genéricas.
-  if (desc.length >= 36) {
-    const conNombre = nombre && !desc.toLowerCase().includes(nombre.toLowerCase())
-      ? `${nombre}: ${desc}`
-      : desc;
-    return limitarTextoCard(conNombre);
+
+  // Prioridad: promo/evento real de la semana con el nombre del local.
+  if (promo.length >= 8) {
+    const corta = promo.length > 48 ? `${promo.slice(0, 47).trim()}…` : promo;
+    return limitarTextoCard(`Las promos de ${nombre} para vos: ${corta}`);
   }
+  if (evento.length >= 8) {
+    const corta = evento.length > 48 ? `${evento.slice(0, 47).trim()}…` : evento;
+    return limitarTextoCard(`${nombre} esta semana: ${corta}`);
+  }
+
+  // Descripción del local, pero siempre anclada al nombre (suena “hecha”).
+  if (desc.length >= 28) {
+    const sinNombre = !desc.toLowerCase().includes(nombre.toLowerCase());
+    return limitarTextoCard(sinNombre ? `¿Ya descubriste ${nombre}? ${desc}` : desc);
+  }
+
   const rubro = rubroTexto(local.rubro);
-  if (nombre && rubro) {
-    return limitarTextoCard(`${nombre}: ${rubro.toLowerCase()} para una salida en tu ciudad esta semana.`);
+  if (rubro) {
+    return limitarTextoCard(
+      `Para vos: ${nombre} (${rubro.toLowerCase()}) esta semana en tu ciudad.`,
+    );
   }
-  const base = TEXTOS_FALLBACK[index % TEXTOS_FALLBACK.length];
-  if (!nombre) return base;
-  if (index % 3 === 0) return limitarTextoCard(`${nombre}: ${base.charAt(0).toLowerCase()}${base.slice(1)}`);
-  return base;
+
+  if (!(local.nombre_local ?? "").trim()) {
+    return TEXTOS_FALLBACK_SIN_NOMBRE[index % TEXTOS_FALLBACK_SIN_NOMBRE.length];
+  }
+  return limitarTextoCard(TEXTOS_FALLBACK[index % TEXTOS_FALLBACK.length](nombre));
 }
 
 function extraerJsonObjeto(raw: string): Record<string, unknown> | null {
@@ -233,7 +259,9 @@ async function generarTextosIaCiudad(
 ): Promise<Map<string, string>> {
   const resultado = new Map<string, string>();
   for (let i = 0; i < items.length; i++) {
-    resultado.set(items[i].local.id, fallbackTexto(items[i].local, i));
+    const local = items[i].local;
+    const ctx = contextos.get(local.id);
+    resultado.set(local.id, fallbackTexto(local, i, ctx));
   }
 
   const locales = items.map(({ local, score }) => {
@@ -450,7 +478,7 @@ Deno.serve(async (req) => {
 
     let pos = 1;
     for (const { local, score } of top) {
-      const texto = textosPorLocal.get(local.id) ?? fallbackTexto(local, pos);
+      const texto = textosPorLocal.get(local.id) ?? fallbackTexto(local, pos, contextos.get(local.id));
       const fotos = recolectarFotos(sb, local);
       const avatar = publicUrl(sb, "perfiles-locales", local.foto_perfil_url);
 
