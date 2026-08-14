@@ -188,6 +188,18 @@ function resumirHorarios(horarios: unknown): string {
 
 function fallbackTexto(local: LocalRow, index: number): string {
   const nombre = (local.nombre_local ?? "").trim();
+  const desc = (local.descripcion_local ?? "").replace(/\s+/g, " ").trim();
+  // Preferí la descripción real del local antes que frases genéricas.
+  if (desc.length >= 36) {
+    const conNombre = nombre && !desc.toLowerCase().includes(nombre.toLowerCase())
+      ? `${nombre}: ${desc}`
+      : desc;
+    return limitarTextoCard(conNombre);
+  }
+  const rubro = rubroTexto(local.rubro);
+  if (nombre && rubro) {
+    return limitarTextoCard(`${nombre}: ${rubro.toLowerCase()} para una salida en tu ciudad esta semana.`);
+  }
   const base = TEXTOS_FALLBACK[index % TEXTOS_FALLBACK.length];
   if (!nombre) return base;
   if (index % 3 === 0) return limitarTextoCard(`${nombre}: ${base.charAt(0).toLowerCase()}${base.slice(1)}`);
@@ -253,6 +265,7 @@ Reglas estrictas:
 - Español argentino, simpático, fresco, con idea de salida.
 - Variá los comienzos. Evitá repetir "Armá tu plan", "Vení a", "Che" y "Pasate por".
 - No uses más de 2 textos con la misma primera palabra.
+- Priorizá la descripción del local; si hay promo/evento de esta semana o fecha especial, podés anclarlo ahí.
 - Destacá una sola cosa fuerte: descripción, promo/evento de esta semana, rubro u ocasión.
 - No inventes descuentos, comida, tragos, horarios, teléfonos, ranking ni eventos.
 - Si mencionás promo/evento, debe estar en promos_semana/eventos_semana.
@@ -269,7 +282,7 @@ Reglas estrictas:
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => controller.abort(), 45000);
     const res = await fetch(baseUrl, {
       method: "POST",
       signal: controller.signal,

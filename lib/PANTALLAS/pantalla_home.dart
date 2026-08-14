@@ -1582,7 +1582,12 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     // Evento sin ciudad cargada → NO se muestra. Los locales deben cargar ciudad
     // obligatoriamente al subir el evento (edge `subir_evento` aplica default).
     if (c.isEmpty) return false;
-    return _ciudadesActivas.contains(c);
+    if (_ciudadesActivas.contains(c)) return true;
+    // Alias Córdoba ↔ Córdoba capital (mismo grupo de ubicación).
+    final expandidas = ServicioCarteleraLocales.expandirCiudadesQuery(
+      _ciudadesActivas,
+    );
+    return expandidas.contains(c);
   }
 
   bool _coincideTiempo(Map<String, dynamic> e) {
@@ -1892,8 +1897,11 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     final gratis = _porJerarquia(filtrados, JerarquiasData.gratis.slug);
     final localesPop = _localesPopularesFiltrados();
 
+    // Umbral de relleno: TOP cuenta solo jerarquía `top` (no top_ultra).
+    // Los ultra viven en stories/badge; si los sumamos al conteo, TOP casi
+    // nunca recibe locales aunque haya pocos eventos "top".
     final conteosEventos = <String, int>{
-      'top': topsTotales.length,
+      'top': tops.length,
       JerarquiasData.recomendadoFernecito.slug: recos.length,
       JerarquiasData.normal.slug: normales.length,
       JerarquiasData.gratis.slug: gratis.length,
@@ -1907,19 +1915,19 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           )
         : const <String, List<LocalCarteleraCard>>{};
 
-    final topsConLocales = MezclaCarteleraLocales.appendLocales(
+    final topsConLocales = MezclaCarteleraLocales.mezclarEnLista(
       topsTotales,
       localesPorSeccion['top'],
     );
-    final recosConLocales = MezclaCarteleraLocales.appendLocales(
+    final recosConLocales = MezclaCarteleraLocales.mezclarEnLista(
       recos,
       localesPorSeccion[JerarquiasData.recomendadoFernecito.slug],
     );
-    final normalesConLocales = MezclaCarteleraLocales.appendLocales(
+    final normalesConLocales = MezclaCarteleraLocales.mezclarEnLista(
       normales,
       localesPorSeccion[JerarquiasData.normal.slug],
     );
-    final gratisConLocales = MezclaCarteleraLocales.appendLocales(
+    final gratisConLocales = MezclaCarteleraLocales.mezclarEnLista(
       gratis,
       localesPorSeccion[JerarquiasData.gratis.slug],
     );
