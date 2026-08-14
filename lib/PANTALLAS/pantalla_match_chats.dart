@@ -20,7 +20,10 @@ import 'pantalla_perfil_usuarios.dart';
 const _kAzulRePinta = Color(0xFF3B82F6);
 
 class PantallaMatchChats extends StatefulWidget {
-  const PantallaMatchChats({super.key});
+  const PantallaMatchChats({super.key, this.idMatchInicial});
+
+  /// Si viene de una notif, abre ese hilo apenas carga.
+  final String? idMatchInicial;
 
   @override
   State<PantallaMatchChats> createState() => _PantallaMatchChatsState();
@@ -49,6 +52,22 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
       _pendientes = resultados[1] as List<MatchPendiente>;
       _cargando = false;
     });
+    final inicial = widget.idMatchInicial?.trim();
+    if (inicial != null && inicial.isNotEmpty) {
+      MatchItem? m;
+      for (final x in _matches) {
+        if (x.idMatch == inicial) {
+          m = x;
+          break;
+        }
+      }
+      if (m != null && mounted) {
+        await Navigator.push(
+          context,
+          CupertinoPageRoute(builder: (_) => PantallaMatchChat(match: m!)),
+        );
+      }
+    }
   }
 
   Future<void> _verPerfil(MatchItem m) async {

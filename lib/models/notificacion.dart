@@ -101,6 +101,17 @@ class Notificacion {
         return CupertinoIcons.heart_fill;
       case 'star_fill':
         return CupertinoIcons.star_fill;
+      case 'sparkles':
+        return CupertinoIcons.sparkles;
+      case 'chat_bubble_text_fill':
+      case 'chat':
+        return CupertinoIcons.chat_bubble_text_fill;
+      case 'calendar':
+        return CupertinoIcons.calendar;
+      case 'gift':
+        return CupertinoIcons.gift_fill;
+      case 'rompehielo':
+        return CupertinoIcons.snow;
       default:
         return CupertinoIcons.bell_fill;
     }

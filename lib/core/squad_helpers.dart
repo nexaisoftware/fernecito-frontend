@@ -23,10 +23,14 @@ bool squadDetalleSoyMiembroAceptado(SquadDetalle d) => d.miEstado == 'aceptado';
 
 /// Invitación recibida (tab invitaciones / notif) vs pedido enviado por el usuario.
 bool notifEsInvitacionSquad(Notificacion n) =>
-    n.titulo.contains('Invitación') || n.ctaTexto == 'Ver invitación';
+    n.payload?['origen']?.toString() == 'invitacion' ||
+    n.titulo.toLowerCase().contains('invitaron') ||
+    n.ctaTexto == 'Ver invitación';
 
 bool notifEsPedidoUnionSquad(Notificacion n) =>
-    n.titulo.contains('Pedido') || n.ctaTexto == 'Ver squad';
+    n.payload?['origen']?.toString() == 'solicitud' ||
+    n.titulo.toLowerCase().contains('quiere entrar') ||
+    n.ctaTexto == 'Ver squad';
 
 Map<String, dynamic> mapNavegacionDesdeResumen(
   SquadResumen s, {

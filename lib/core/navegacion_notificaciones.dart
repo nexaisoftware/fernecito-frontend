@@ -183,7 +183,7 @@ Future<bool> abrirPlanDesdeNotificacion(Notificacion n) async {
       n.ctaIdRef?.trim() ?? n.payload?['id_plan']?.toString().trim();
   final accion =
       n.payload?['accion']?.toString() ??
-      (n.tipo == 'plan_aceptado'
+      (n.tipo == 'plan_aceptado' || n.tipo == 'plan_mencion'
           ? 'chat'
           : (n.tipo == 'plan_cancelado' || n.tipo == 'plan_eliminado'
                 ? 'hub'
@@ -335,38 +335,26 @@ Future<bool> navegarDesdeNotificacion(
         socialVista: SocialVista.squads,
       );
     case 'match_plan':
-      // ¡Match! → Match (pantalla completa) + la lista de chats encima, así
-      // el "atrás" deja al usuario en el mazo y no lo saca de la sección.
-      // OJO: _push se resuelve recién al cerrarse la pantalla → no se awaitea
-      // el primero, si no el segundo nunca se apilaría.
+    case 'match_mensaje':
       final navMatch = _nav;
       if (navMatch == null) return false;
+      final idMatch = n.ctaIdRef?.trim();
       unawaited(
         _push(
           CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
         ),
       );
       unawaited(
-        _push(CupertinoPageRoute(builder: (_) => const PantallaMatchChats())),
-      );
-      return true;
-    case 'match_mensaje':
-      // Mensaje nuevo en un match → Match + bandeja de chats.
-      final navMsj = _nav;
-      if (navMsj == null) return false;
-      unawaited(
         _push(
-          CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
+          CupertinoPageRoute(
+            builder: (_) => PantallaMatchChats(idMatchInicial: idMatch),
+          ),
         ),
       );
-      unawaited(
-        _push(CupertinoPageRoute(builder: (_) => const PantallaMatchChats())),
-      );
       return true;
+    case 'match_interes':
     case 'match_recopa':
-      // "Le re pintó tu plan" → a Mis matches (pendientes).
-      final navRecopa = _nav;
-      if (navRecopa == null) return false;
+      if (_nav == null) return false;
       unawaited(
         _push(
           CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
@@ -380,6 +368,8 @@ Future<bool> navegarDesdeNotificacion(
     case 'plan_eliminado':
     case 'plan_pedido_local':
     case 'plan_pedido_respuesta':
+    case 'plan_mencion':
+    case 'plan_mensaje':
       return abrirPlanDesdeNotificacion(n);
     case 'rompehielo_recibido':
     case 'rompehielo_respondido':
