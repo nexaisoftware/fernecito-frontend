@@ -160,12 +160,13 @@ class _PantallaSocialHubState extends State<PantallaSocial>
     // El tab Social siempre es el hub nuevo (nunca el legacy con Explorar).
     if (!_debeDelegarFueraDelHub) {
       _cargarHub();
-      final tab = widget.abrirAmigosSquadsTab ??
+      final tab =
+          widget.abrirAmigosSquadsTab ??
           (widget.vista == SocialVista.amigos
               ? 0
               : widget.vista == SocialVista.squads
-                  ? 1
-                  : null);
+              ? 1
+              : null);
       if (tab != null && !widget.mostrarVolver) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -178,7 +179,8 @@ class _PantallaSocialHubState extends State<PantallaSocial>
   /// Entradas deep-link que no deben renderizar el hub en este State.
   bool get _debeDelegarFueraDelHub =>
       widget.mostrarVolver &&
-      (widget.vista == SocialVista.amigos || widget.vista == SocialVista.squads);
+      (widget.vista == SocialVista.amigos ||
+          widget.vista == SocialVista.squads);
 
   @override
   void dispose() {
@@ -265,7 +267,8 @@ class _PantallaSocialHubState extends State<PantallaSocial>
             SliverPadding(
               padding: EdgeInsets.fromLTRB(
                 16,
-                MediaQuery.paddingOf(context).top + (widget.mostrarVolver ? 52 : 14),
+                MediaQuery.paddingOf(context).top +
+                    (widget.mostrarVolver ? 52 : 14),
                 16,
                 bottom,
               ),
@@ -746,7 +749,9 @@ class _LocalTendenciaItem extends StatelessWidget {
                         color: acento,
                         boxShadow: [
                           BoxShadow(
-                            color: acento.withValues(alpha: esPodio ? 0.36 : 0.24),
+                            color: acento.withValues(
+                              alpha: esPodio ? 0.36 : 0.24,
+                            ),
                             blurRadius: esPodio ? 9 : 7,
                           ),
                         ],
@@ -1106,8 +1111,13 @@ class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
   };
 
   void _abrirCrearSquad(BuildContext context) {
-    Navigator.of(context)
-        .push(CupertinoPageRoute(builder: (_) => const PantallaCrearSquad()))
+    Navigator.of(context, rootNavigator: true)
+        .push(
+          CupertinoPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => const PantallaCrearSquad(),
+          ),
+        )
         .then((_) => _cargarSquads());
   }
 
@@ -1290,6 +1300,63 @@ class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
         .length;
     final novedadesSquads = _invitaciones.length;
 
+    final tabAmigos = _TabAmigos(
+      pantallaDedicada: widget.mostrarVolver || widget.ocultarCabeceraEmbebida,
+      solicitudes: solicitudesAmigos,
+      amigos: amigos,
+      cargando: _cargandoAmigos,
+      solicitudProcesandoKey: _solicitudProcesandoKey,
+      srvAmigos: _srvAmigos,
+      onRefresh: () => _cargarAmigos(silencioso: true, forzarCompleto: true),
+      onAceptar: _aceptarAmigo,
+      onCancelarRechazar: (s) {
+        final esEnviada = s['esEnviada'] as bool? ?? false;
+        if (esEnviada) {
+          _cancelarSolicitudAmigo(s['id_usuario'] as String);
+        } else {
+          _rechazarAmigo(
+            s['id_relacion']?.toString(),
+            idUsuario: s['id_usuario']?.toString(),
+          );
+        }
+      },
+      onAbrirPerfil: (s, estado) =>
+          _abrirPerfilUsuario(context, s, estadoRelacion: estado),
+    );
+
+    final tabSquads = _TabSquads(
+      pantallaDedicada: widget.mostrarVolver || widget.ocultarCabeceraEmbebida,
+      solicitudes: solicitudesSquads,
+      misGrupos: misGrupos,
+      cargando: _cargandoSquads,
+      srvSquads: _srvSquads,
+      onRefresh: () => _cargarSquads(forzarCompleto: true),
+      onCrearSquad: () => _abrirCrearSquad(context),
+      squadProcesandoId: _squadProcesandoId,
+      onAbrirPerfilSquad: (s) => _abrirPerfilSquad(
+        context,
+        s,
+        estado: _estadoSquadDesde(
+          s['mi_estado'] as String?,
+          esInvitacionRecibida: s['es_invitacion_recibida'] == true,
+        ),
+      ),
+      onAceptarInvitacion: (s) => _resolverPendienteSquad(s, aceptar: true),
+      onRechazarInvitacion: (s) => _resolverPendienteSquad(s, aceptar: false),
+      onAbrirMisSquad: (s) => _abrirMisSquad(context, s),
+    );
+
+    // Embebido en Amigos & squads: sin scaffold anidado. El scaffold padre
+    // (nav translúcida) infla MediaQuery.padding.top y el scaffold hijo
+    // pone un GestureDetector de "tap status bar" de esa altura encima de
+    // la barra de búsqueda / crear squad, que deja de responder.
+    if (_vista == SocialVista.amigos && widget.ocultarCabeceraEmbebida) {
+      return tabAmigos;
+    }
+    if (_vista == SocialVista.squads && widget.ocultarCabeceraEmbebida) {
+      return tabSquads;
+    }
+
     if (_vista == SocialVista.amigos) {
       return CupertinoPageScaffold(
         backgroundColor: fondoSocial,
@@ -1316,34 +1383,9 @@ class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!widget.mostrarVolver && !widget.ocultarCabeceraEmbebida)
+              if (!widget.mostrarVolver)
                 _barraVolverEmbebida(titulo: 'Mis amigos'),
-              Expanded(
-                child: _TabAmigos(
-                  pantallaDedicada: widget.mostrarVolver,
-                  solicitudes: solicitudesAmigos,
-                  amigos: amigos,
-                  cargando: _cargandoAmigos,
-                  solicitudProcesandoKey: _solicitudProcesandoKey,
-                  srvAmigos: _srvAmigos,
-                  onRefresh: () =>
-                      _cargarAmigos(silencioso: true, forzarCompleto: true),
-                  onAceptar: _aceptarAmigo,
-                  onCancelarRechazar: (s) {
-                    final esEnviada = s['esEnviada'] as bool? ?? false;
-                    if (esEnviada) {
-                      _cancelarSolicitudAmigo(s['id_usuario'] as String);
-                    } else {
-                      _rechazarAmigo(
-                        s['id_relacion']?.toString(),
-                        idUsuario: s['id_usuario']?.toString(),
-                      );
-                    }
-                  },
-                  onAbrirPerfil: (s, estado) =>
-                      _abrirPerfilUsuario(context, s, estadoRelacion: estado),
-                ),
-              ),
+              Expanded(child: tabAmigos),
             ],
           ),
         ),
@@ -1376,33 +1418,9 @@ class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (!widget.mostrarVolver && !widget.ocultarCabeceraEmbebida)
+              if (!widget.mostrarVolver)
                 _barraVolverEmbebida(titulo: 'Mis squads'),
-              Expanded(
-                child: _TabSquads(
-                  pantallaDedicada: widget.mostrarVolver,
-                  solicitudes: solicitudesSquads,
-                  misGrupos: misGrupos,
-                  cargando: _cargandoSquads,
-                  srvSquads: _srvSquads,
-                  onRefresh: () => _cargarSquads(forzarCompleto: true),
-                  onCrearSquad: () => _abrirCrearSquad(context),
-                  squadProcesandoId: _squadProcesandoId,
-                  onAbrirPerfilSquad: (s) => _abrirPerfilSquad(
-                    context,
-                    s,
-                    estado: _estadoSquadDesde(
-                      s['mi_estado'] as String?,
-                      esInvitacionRecibida: s['es_invitacion_recibida'] == true,
-                    ),
-                  ),
-                  onAceptarInvitacion: (s) =>
-                      _resolverPendienteSquad(s, aceptar: true),
-                  onRechazarInvitacion: (s) =>
-                      _resolverPendienteSquad(s, aceptar: false),
-                  onAbrirMisSquad: (s) => _abrirMisSquad(context, s),
-                ),
-              ),
+              Expanded(child: tabSquads),
             ],
           ),
         ),

@@ -16,6 +16,7 @@ class BusquedaSocialExpandible extends StatefulWidget {
     this.onQueryChanged,
     this.debounceMs = 380,
     this.accionesColapsado = const [],
+
     /// Reparto del ancho en reposo: barra vs cada acción (suma ≈ 10).
     this.flexBarraColapsada = 6,
     this.flexPorAccionColapsada = 4,
@@ -69,6 +70,7 @@ class _BusquedaSocialExpandibleState extends State<BusquedaSocialExpandible>
   }
 
   void _expandir() {
+    if (_expandido) return;
     setState(() => _expandido = true);
     _anim.forward();
     Future<void>.delayed(const Duration(milliseconds: 60), () {
@@ -125,37 +127,41 @@ class _BusquedaSocialExpandibleState extends State<BusquedaSocialExpandible>
 
   /// Píldora ancha (lupa + hint) hasta los botones de acción.
   Widget _barraColapsada() {
-    return GestureDetector(
-      onTap: _expandir,
+    return Listener(
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: ColoresApp.fondoSuperficie.withValues(alpha: 0.65),
-          borderRadius: BorderRadius.circular(18),
+      onPointerDown: (_) => _expandir(),
+      child: GestureDetector(
+        onTap: _expandir,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: ColoresApp.fondoSuperficie.withValues(alpha: 0.65),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                CupertinoIcons.search,
+                color: ColoresApp.textoSecundario.withValues(alpha: 0.85),
+                size: 17,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.hint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.baloo2(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: ColoresApp.textoSecundario.withValues(alpha: 0.9),
                   ),
-        child: Row(
-          children: [
-            Icon(
-              CupertinoIcons.search,
-              color: ColoresApp.textoSecundario.withValues(alpha: 0.85),
-              size: 17,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                widget.hint,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.baloo2(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: ColoresApp.textoSecundario.withValues(alpha: 0.9),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -170,9 +176,7 @@ class _BusquedaSocialExpandibleState extends State<BusquedaSocialExpandible>
       child: Container(
         height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-                  ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
         child: Row(
           children: [
             Icon(
@@ -194,11 +198,19 @@ class _BusquedaSocialExpandibleState extends State<BusquedaSocialExpandible>
                 ),
                 decoration: InputDecoration(
                   isCollapsed: true,
-                                  ),
+                  hintText: widget.hint,
+                  hintStyle: GoogleFonts.baloo2(
+                    color: ColoresApp.textoSecundario.withValues(alpha: 0.9),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  border: InputBorder.none,
+                ),
               ),
             ),
             GestureDetector(
               onTap: _colapsar,
+              behavior: HitTestBehavior.opaque,
               child: Icon(
                 CupertinoIcons.xmark_circle_fill,
                 size: 22,
@@ -222,6 +234,7 @@ class BotonExplorarSocial extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Container(
         height: 36,
         width: double.infinity,
@@ -269,6 +282,7 @@ class BotonSquadMasSocial extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Container(
         height: 36,
         width: double.infinity,
