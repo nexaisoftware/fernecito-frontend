@@ -1915,19 +1915,19 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           )
         : const <String, List<LocalCarteleraCard>>{};
 
-    final topsConLocales = MezclaCarteleraLocales.mezclarEnLista(
+    final topsConLocales = MezclaCarteleraLocales.appendLocales(
       topsTotales,
       localesPorSeccion['top'],
     );
-    final recosConLocales = MezclaCarteleraLocales.mezclarEnLista(
+    final recosConLocales = MezclaCarteleraLocales.appendLocales(
       recos,
       localesPorSeccion[JerarquiasData.recomendadoFernecito.slug],
     );
-    final normalesConLocales = MezclaCarteleraLocales.mezclarEnLista(
+    final normalesConLocales = MezclaCarteleraLocales.appendLocales(
       normales,
       localesPorSeccion[JerarquiasData.normal.slug],
     );
-    final gratisConLocales = MezclaCarteleraLocales.mezclarEnLista(
+    final gratisConLocales = MezclaCarteleraLocales.appendLocales(
       gratis,
       localesPorSeccion[JerarquiasData.gratis.slug],
     );

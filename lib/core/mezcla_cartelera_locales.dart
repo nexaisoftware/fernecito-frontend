@@ -105,11 +105,18 @@ abstract final class MezclaCarteleraLocales {
     int seed,
   ) {
     final rng = math.Random(seed);
-    final pioneros = pool.where((c) => c.esPionero).toList()..shuffle(rng);
+    int cmpScore(LocalCarteleraCard a, LocalCarteleraCard b) {
+      final byScore = b.scorePerfil.compareTo(a.scorePerfil);
+      if (byScore != 0) return byScore;
+      return a.rankingPosition.compareTo(b.rankingPosition);
+    }
+
+    // TOP / prioridad: pioneros por score, luego verificados/plan por score.
+    final pioneros = pool.where((c) => c.esPionero).toList()..sort(cmpScore);
     final premium = pool
         .where((c) => !c.esPionero && (c.esVerificado || c.tienePlanActivo))
         .toList()
-      ..shuffle(rng);
+      ..sort(cmpScore);
     final resto = pool
         .where((c) => !c.esPionero && !c.esVerificado && !c.tienePlanActivo)
         .toList()
@@ -117,35 +124,22 @@ abstract final class MezclaCarteleraLocales {
     return [...pioneros, ...premium, ...resto];
   }
 
-  /// Intercala locales entre eventos para que no queden al final del carrusel.
-  /// Patrón: 1º evento, 1º local, luego cada 2 eventos otro local; sobrantes al final.
-  static List<Map<String, dynamic>> mezclarEnLista(
+  /// Rellena: primero todos los eventos de la sección, al final las cards de locales.
+  static List<Map<String, dynamic>> appendLocales(
     List<Map<String, dynamic>> eventos,
     List<LocalCarteleraCard>? locales,
   ) {
     if (locales == null || locales.isEmpty) return eventos;
-    final locItems = locales.map((l) => l.toItemCartelera()).toList();
-    if (eventos.isEmpty) return locItems;
-
-    final result = <Map<String, dynamic>>[];
-    var li = 0;
-    for (var i = 0; i < eventos.length; i++) {
-      result.add(eventos[i]);
-      final insertarAqui = li < locItems.length && (i == 0 || (i + 1) % 2 == 0);
-      if (insertarAqui) {
-        result.add(locItems[li++]);
-      }
-    }
-    while (li < locItems.length) {
-      result.add(locItems[li++]);
-    }
-    return result;
+    return [
+      ...eventos,
+      ...locales.map((l) => l.toItemCartelera()),
+    ];
   }
 
-  /// @deprecated Preferí [mezclarEnLista]; se mantiene por compat.
-  static List<Map<String, dynamic>> appendLocales(
+  /// Alias de [appendLocales] (eventos primero, locales al final).
+  static List<Map<String, dynamic>> mezclarEnLista(
     List<Map<String, dynamic>> eventos,
     List<LocalCarteleraCard>? locales,
   ) =>
-      mezclarEnLista(eventos, locales);
+      appendLocales(eventos, locales);
 }

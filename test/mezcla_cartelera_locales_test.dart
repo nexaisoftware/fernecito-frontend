@@ -8,6 +8,7 @@ LocalCarteleraCard _card(
   bool pionero = false,
   bool plan = false,
   bool verificado = false,
+  double score = 0,
 }) {
   return LocalCarteleraCard(
     id: 'card-$id',
@@ -21,6 +22,7 @@ LocalCarteleraCard _card(
     esPionero: pionero,
     esVerificado: verificado,
     tienePlanActivo: plan,
+    scorePerfil: score,
   );
 }
 
@@ -124,16 +126,38 @@ void main() {
       expect(out['gratis']?.length, 3);
     });
 
-    test('mezclarEnLista intercala locales visibles', () {
+    test('appendLocales pone eventos primero y locales al final', () {
       final eventos = List.generate(
         4,
         (i) => <String, dynamic>{'id': 'e$i', 'titulo': 'E$i'},
       );
       final locales = [_card('a', pionero: true), _card('b')];
-      final mezclado = MezclaCarteleraLocales.mezclarEnLista(eventos, locales);
+      final mezclado = MezclaCarteleraLocales.appendLocales(eventos, locales);
       expect(mezclado.length, 6);
-      expect(LocalCarteleraCard.esItemLocal(mezclado[1]), isTrue);
       expect(mezclado[0]['id'], 'e0');
+      expect(mezclado[3]['id'], 'e3');
+      expect(LocalCarteleraCard.esItemLocal(mezclado[4]), isTrue);
+      expect(LocalCarteleraCard.esItemLocal(mezclado[5]), isTrue);
+    });
+
+    test('TOP prioriza mayor score entre elegibles', () {
+      final pool = [
+        _card('low', pionero: true, score: 10),
+        _card('high', pionero: true, score: 90),
+        _card('mid', verificado: true, score: 50),
+        _card('free', score: 999),
+      ];
+      final out = MezclaCarteleraLocales.distribuir(
+        pool: pool,
+        conteosEventos: {
+          'top': 8,
+          'recomendado_fernecito': 10,
+          'normal': 10,
+          'gratis': 10,
+        },
+        seed: 1,
+      );
+      expect(out['top']!.map((c) => c.localId).toList(), ['high', 'low']);
     });
   });
 }
