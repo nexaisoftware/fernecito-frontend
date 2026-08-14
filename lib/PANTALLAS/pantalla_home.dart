@@ -151,6 +151,12 @@ class _PantallaHomeState extends State<PantallaHome>
   static const _ttlFotoPerfil = Duration(minutes: 5);
   int _currentTabIndex = 2;
 
+  /// Un navigator por tab: permite pop-to-root al re-tapear la navbar.
+  final List<GlobalKey<NavigatorState>> _tabNavKeys = List.generate(
+    5,
+    (_) => GlobalKey<NavigatorState>(),
+  );
+
   /// Se incrementa al entrar al tab Actividad para forzar `_cargarActividad` (IndexedStack no recrea el hijo).
   int _actividadReloadTick = 0;
   int _perfilReloadTick = 0;
@@ -160,23 +166,106 @@ class _PantallaHomeState extends State<PantallaHome>
   int _notifsReloadTick = 0;
   int _socialNavToken = 0;
   int? _socialAbrirAmigosSquadsTab;
+  bool _mostrandoSalida = false;
 
   final _srvNotificaciones = ServicioNotificacionesUsuarios();
 
   void _irATabDesdeNotif(int tab, {SocialVista? socialVista}) {
+    _seleccionarTab(
+      tab.clamp(0, 4),
+      desdeNotif: true,
+      socialVista: socialVista,
+    );
+  }
+
+  void _popTabToRoot(int index) {
+    final nav = _tabNavKeys[index.clamp(0, 4)].currentState;
+    if (nav != null && nav.canPop()) {
+      nav.popUntil((route) => route.isFirst);
+    }
+  }
+
+  /// Tap de navbar o deep-link interno: cambia de sección y vuelve al root
+  /// de esa sección (evento/perfil/local → Cartelera, etc.).
+  void _seleccionarTab(
+    int index, {
+    bool desdeNotif = false,
+    SocialVista? socialVista,
+  }) {
+    final target = index.clamp(0, 4);
+    if (_currentTabIndex == 2 && target != 2) {
+      ServicioImpresiones.instancia.alSalirCartelera();
+    }
+
+    _popTabToRoot(target);
+
     setState(() {
-      _currentTabIndex = tab.clamp(0, 4);
-      if (tab == 0) _actividadReloadTick++;
-      if (tab == 1) {
-        // Tab Social = hub nuevo. Amigos/Squads se abren encima.
-        _socialAbrirAmigosSquadsTab = switch (socialVista) {
-          SocialVista.amigos => 0,
-          SocialVista.squads => 1,
-          _ => null,
-        };
+      _currentTabIndex = target;
+      if (target == 0) _actividadReloadTick++;
+      if (target == 1) {
+        if (desdeNotif) {
+          _socialAbrirAmigosSquadsTab = switch (socialVista) {
+            SocialVista.amigos => 0,
+            SocialVista.squads => 1,
+            _ => null,
+          };
+        } else {
+          // Tap manual: hub limpio, sin auto-abrir Amigos.
+          _socialAbrirAmigosSquadsTab = null;
+        }
         _socialNavToken++;
       }
+      if (target == 2) _srvNotificaciones.refrescarContador();
+      if (target == 3) {
+        _notifsReloadTick++;
+        _srvNotificaciones.refrescarContador(forzar: true);
+      }
+      if (target == 4) _perfilReloadTick++;
     });
+  }
+
+  Future<void> _manejarBackDelSistema() async {
+    if (_mostrandoSalida) return;
+
+    final tabNav = _tabNavKeys[_currentTabIndex].currentState;
+    if (tabNav != null && tabNav.canPop()) {
+      tabNav.pop();
+      return;
+    }
+
+    final root = navigatorKey.currentState;
+    // Si hay una pantalla fullscreen encima del Home (Match, Planes, etc.).
+    if (root != null && root.canPop()) {
+      root.pop();
+      return;
+    }
+
+    _mostrandoSalida = true;
+    final salir = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('¿Querés salir de Fernecito?'),
+        content: const Text(
+          'Si salís ahora cerrás la app. Podés seguir explorando sin problema.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Seguir acá'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    _mostrandoSalida = false;
+    if (salir == true) {
+      await SystemNavigator.pop();
+    }
   }
 
   @override
@@ -186,6 +275,10 @@ class _PantallaHomeState extends State<PantallaHome>
     // El splash único vive en AppFernecito; acá solo cargamos datos.
     BootstrapCartelera.reset();
     ServicioPerfilUsuario().avatarNavbarUrl.addListener(_onAvatarNavbarCambio);
+    registrarHomeIrATab((tab, {Object? socialVista}) {
+      final vista = socialVista is SocialVista ? socialVista : null;
+      _irATabDesdeNotif(tab, socialVista: vista);
+    });
     _cargarFotoPerfil();
     _verificarCuentaPausada();
     _srvNotificaciones.refrescarContador();
@@ -193,6 +286,7 @@ class _PantallaHomeState extends State<PantallaHome>
 
   @override
   void dispose() {
+    limpiarHomeIrATab();
     ServicioPerfilUsuario().avatarNavbarUrl.removeListener(
       _onAvatarNavbarCambio,
     );
@@ -269,76 +363,71 @@ class _PantallaHomeState extends State<PantallaHome>
   @override
   Widget build(BuildContext context) {
     // Splash único en AppFernecito; acá siempre el shell (puede estar tapado).
-    return Stack(
-      children: [
-        const ColoredBox(
-          color: ColoresApp.fondoPrincipal,
-          child: SizedBox.expand(),
-        ),
-        IndexedStack(
-          index: _currentTabIndex,
-          children: [
-            CupertinoTabView(
-              builder: (context) =>
-                  PantallaActividad(reloadTick: _actividadReloadTick),
-            ),
-            CupertinoTabView(
-              builder: (context) => PantallaSocial(
-                key: ValueKey('social_$_socialNavToken'),
-                // Siempre hub. Amigos/Squads van por push (abrirAmigosSquadsTab).
-                vista: SocialVista.explorar,
-                abrirAmigosSquadsTab: _socialAbrirAmigosSquadsTab,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_manejarBackDelSistema());
+      },
+      child: Stack(
+        children: [
+          const ColoredBox(
+            color: ColoresApp.fondoPrincipal,
+            child: SizedBox.expand(),
+          ),
+          IndexedStack(
+            index: _currentTabIndex,
+            children: [
+              CupertinoTabView(
+                navigatorKey: _tabNavKeys[0],
+                builder: (context) =>
+                    PantallaActividad(reloadTick: _actividadReloadTick),
               ),
-            ),
-            CupertinoTabView(builder: (context) => const _PantallaCartelera()),
-            CupertinoTabView(
-              builder: (context) => PantallaNotificaciones(
-                reloadTick: _notifsReloadTick,
-                onIrATab: _irATabDesdeNotif,
+              CupertinoTabView(
+                navigatorKey: _tabNavKeys[1],
+                builder: (context) => PantallaSocial(
+                  key: ValueKey('social_$_socialNavToken'),
+                  // Siempre hub. Amigos/Squads van por push (abrirAmigosSquadsTab).
+                  vista: SocialVista.explorar,
+                  abrirAmigosSquadsTab: _socialAbrirAmigosSquadsTab,
+                ),
               ),
-            ),
-            CupertinoTabView(
-              builder: (context) =>
-                  PantallaMiPerfil(reloadTick: _perfilReloadTick),
-            ),
-          ],
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: ValueListenableBuilder<Color>(
-            valueListenable: TemaFernecito.instancia.colorActual,
-            builder: (context, accent, __) => _GlassTabBar(
-              height: kHomeTabBarHeight,
-              iconSize: _kTabBarIconSize,
-              accentColor: accent,
-              currentIndex: _currentTabIndex,
-              onTap: (index) {
-                if (_currentTabIndex == 2 && index != 2) {
-                  ServicioImpresiones.instancia.alSalirCartelera();
-                }
-                setState(() {
-                  _currentTabIndex = index;
-                  if (index == 0) _actividadReloadTick++;
-                  if (index == 1) {
-                    // Tap manual al tab Social: hub limpio, sin auto-abrir Amigos.
-                    _socialAbrirAmigosSquadsTab = null;
-                    _socialNavToken++;
-                  }
-                  if (index == 2) _srvNotificaciones.refrescarContador();
-                  if (index == 3) {
-                    _notifsReloadTick++;
-                    _srvNotificaciones.refrescarContador(forzar: true);
-                  }
-                  if (index == 4) _perfilReloadTick++;
-                });
-              },
-              fotoPerfilUrl: _fotoPerfilUrl,
+              CupertinoTabView(
+                navigatorKey: _tabNavKeys[2],
+                builder: (context) => const _PantallaCartelera(),
+              ),
+              CupertinoTabView(
+                navigatorKey: _tabNavKeys[3],
+                builder: (context) => PantallaNotificaciones(
+                  reloadTick: _notifsReloadTick,
+                  onIrATab: _irATabDesdeNotif,
+                ),
+              ),
+              CupertinoTabView(
+                navigatorKey: _tabNavKeys[4],
+                builder: (context) =>
+                    PantallaMiPerfil(reloadTick: _perfilReloadTick),
+              ),
+            ],
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ValueListenableBuilder<Color>(
+              valueListenable: TemaFernecito.instancia.colorActual,
+              builder: (context, accent, __) => _GlassTabBar(
+                height: kHomeTabBarHeight,
+                iconSize: _kTabBarIconSize,
+                accentColor: accent,
+                currentIndex: _currentTabIndex,
+                onTap: _seleccionarTab,
+                fotoPerfilUrl: _fotoPerfilUrl,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

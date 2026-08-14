@@ -38,13 +38,25 @@ BuildContext? get _ctx => navigatorKey.currentContext;
 
 Future<T?> _push<T>(Route<T> route) async => _nav?.push(route);
 
+void _activarTab(
+  NotifIrATab? onIrATab,
+  int tab, {
+  SocialVista? socialVista,
+}) {
+  if (onIrATab != null) {
+    onIrATab(tab, socialVista: socialVista);
+    return;
+  }
+  irATabHome(tab, socialVista: socialVista);
+}
+
 Future<bool> _irATabOFallback(
   int tab, {
   NotifIrATab? onIrATab,
   SocialVista? socialVista,
 }) async {
-  if (onIrATab != null) {
-    onIrATab(tab, socialVista: socialVista);
+  if (onIrATab != null || homeIrATabDisponible) {
+    _activarTab(onIrATab, tab, socialVista: socialVista);
     return true;
   }
 
@@ -309,8 +321,10 @@ Future<bool> navegarDesdeNotificacion(
 }) async {
   switch (n.tipo) {
     case 'solicitud_amistad':
+      _activarTab(onIrATab, 1, socialVista: SocialVista.amigos);
       return abrirPerfilAmistadDesdeNotificacion(n);
     case 'amistad_aceptada':
+      _activarTab(onIrATab, 1, socialVista: SocialVista.amigos);
       final id = n.ctaIdRef?.trim();
       if (id != null && id.isNotEmpty) {
         final abierta = await abrirPerfilAmistadDesdeNotificacion(
@@ -325,8 +339,10 @@ Future<bool> navegarDesdeNotificacion(
         socialVista: SocialVista.amigos,
       );
     case 'solicitud_squad':
+      _activarTab(onIrATab, 1, socialVista: SocialVista.squads);
       return abrirSquadDesdeNotificacion(n);
     case 'squad_aceptada':
+      _activarTab(onIrATab, 1, socialVista: SocialVista.squads);
       final abierta = await abrirSquadDesdeNotificacion(n);
       if (abierta) return true;
       return _irATabOFallback(
@@ -336,6 +352,7 @@ Future<bool> navegarDesdeNotificacion(
       );
     case 'match_plan':
     case 'match_mensaje':
+      _activarTab(onIrATab, 1);
       final navMatch = _nav;
       if (navMatch == null) return false;
       final idMatch = n.ctaIdRef?.trim();
@@ -354,6 +371,7 @@ Future<bool> navegarDesdeNotificacion(
       return true;
     case 'match_interes':
     case 'match_recopa':
+      _activarTab(onIrATab, 1);
       if (_nav == null) return false;
       unawaited(
         _push(
@@ -374,6 +392,7 @@ Future<bool> navegarDesdeNotificacion(
     case 'rompehielo_recibido':
     case 'rompehielo_respondido':
     case 'rompehielo_replicado':
+      _activarTab(onIrATab, 1);
       final abierta = await abrirRompehieloDesdeNotificacionUsuario(n);
       if (abierta) return true;
       return _irATabOFallback(1, onIrATab: onIrATab);
@@ -396,10 +415,12 @@ Future<bool> navegarDesdeNotificacion(
       final ruta = n.ctaRuta?.trim() ?? '';
       switch (ruta) {
         case '/rompehielo':
+          _activarTab(onIrATab, 1);
           final abierta = await abrirRompehieloDesdeNotificacionUsuario(n);
           if (abierta) return true;
           return _irATabOFallback(1, onIrATab: onIrATab);
         case '/match_chats':
+          _activarTab(onIrATab, 1);
           if (_nav == null) return false;
           unawaited(
             _push(
@@ -415,6 +436,7 @@ Future<bool> navegarDesdeNotificacion(
           );
           return true;
         case '/match':
+          _activarTab(onIrATab, 1);
           if (_nav == null) return false;
           unawaited(
             _push(
