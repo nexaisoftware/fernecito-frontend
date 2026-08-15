@@ -17,6 +17,7 @@ import '../core/navegacion_notificaciones.dart';
 import '../core/squad_helpers.dart';
 import '../models/notificacion.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 class PantallaNotificaciones extends StatefulWidget {
   /// Se incrementa desde el Home al entrar al tab Novedades para forzar recarga
@@ -124,13 +125,13 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
 
   void _mostrarError(String msg) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Error'),
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),

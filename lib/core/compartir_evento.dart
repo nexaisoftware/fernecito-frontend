@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'auth_redirect.dart';
 import '../config/supabase_config.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 /// URL pública con Open Graph para preview rica (flyer + título) en WhatsApp.
 String urlPreviewCompartirEvento(String idEvento) {
@@ -233,48 +234,19 @@ Future<void> _fallbackPortapapeles(
 void _avisar(BuildContext? context, String mensaje) {
   if (context == null || !context.mounted) return;
 
-  // CupertinoAlertDialog usa _PriorityColumn interno y puede crashear si el
-  // contenido llega al tope de altura (~392px). Popup scrollable evita eso.
-  showCupertinoDialog<void>(
+  showFernecitoDialog<void>(
     context: context,
     barrierDismissible: true,
-    builder: (ctx) => Center(
-      child: CupertinoPopupSurface(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 270, maxHeight: 320),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Compartir',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: SingleChildScrollView(
-                    child: Text(
-                      mensaje,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 14, height: 1.35),
-                    ),
-                  ),
-                ),
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          ),
+    builder: (ctx) => DialogoFernecito(
+      title: const Text('Compartir'),
+      content: Text(mensaje),
+      actions: [
+        AccionDialogoFernecito(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('OK'),
         ),
-      ),
+      ],
     ),
   );
 }

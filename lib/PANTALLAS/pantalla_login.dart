@@ -31,6 +31,7 @@ import '../core/auth_errors.dart';
 import 'pantalla_singup.dart';
 import 'pantalla_nueva_contrasena.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 class PantallaLogin extends StatefulWidget {
   const PantallaLogin({super.key});
@@ -150,9 +151,9 @@ class _PantallaLoginState extends State<PantallaLogin>
         mensaje.contains('falta confirmar') ||
         mensaje.contains('confirmar tu email');
 
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             Icon(
@@ -178,14 +179,14 @@ class _PantallaLoginState extends State<PantallaLogin>
         ),
         actions: [
           if (esErrorConfirmacion && email != null)
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               child: Text('Reenviar confirmación', style: GoogleFonts.baloo2()),
               onPressed: () async {
                 Navigator.of(context).pop();
                 await _reenviarEmailConfirmacion(email);
               },
             ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: Text('OK', style: GoogleFonts.baloo2()),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -214,9 +215,9 @@ class _PantallaLoginState extends State<PantallaLogin>
   }
 
   void _mostrarExito(String mensaje) {
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             Icon(
@@ -232,7 +233,7 @@ class _PantallaLoginState extends State<PantallaLogin>
           child: Text(mensaje, style: GoogleFonts.baloo2(fontSize: 14)),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: Text('Continuar', style: GoogleFonts.baloo2()),
             onPressed: () => Navigator.of(context).pop(),
           ),

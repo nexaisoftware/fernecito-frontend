@@ -11,6 +11,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'auth_redirect.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 /// URL pública con preview (OG) para WhatsApp / redes.
 String urlPreviewCompartirPlan(String idPlan) {
@@ -148,13 +149,13 @@ Future<void> _copiar(String payload, BuildContext? ctx) async {
 
 void _avisar(BuildContext? context, String mensaje) {
   if (context == null || !context.mounted) return;
-  showCupertinoDialog<void>(
+  showFernecitoDialog<void>(
     context: context,
     barrierDismissible: true,
-    builder: (ctx) => CupertinoAlertDialog(
+    builder: (ctx) => DialogoFernecito(
       content: Text(mensaje),
       actions: [
-        CupertinoDialogAction(
+        AccionDialogoFernecito(
           onPressed: () => Navigator.pop(ctx),
           child: const Text('Ok'),
         ),

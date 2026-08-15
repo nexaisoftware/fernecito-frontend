@@ -11,7 +11,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
 import '../core/servicio_match.dart';
+import '../widgets/fondo_foto_match.dart';
 import '../widgets/stack_avatares_squad.dart';
+import '../widgets/dialogo_fernecito.dart';
 import 'pantalla_match_chat.dart';
 import 'pantalla_perfil_squads.dart';
 import 'pantalla_perfil_usuarios.dart';
@@ -107,19 +109,19 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
   }
 
   Future<void> _bloquear(MatchItem m) async {
-    final confirmar = await showCupertinoDialog<bool>(
+    final confirmar = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: Text('¿Bloquear a ${m.otro.nombre}?'),
         content: const Text(
           'No van a volver a cruzarse en Match y este chat se cierra. Podés desbloquear más adelante desde soporte.',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Bloquear'),
@@ -192,19 +194,19 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
   /// Cancela el match: borra chat y match, pero pueden volver a cruzarse en
   /// las cards (a diferencia del bloqueo, que es definitivo).
   Future<void> _cancelarMatch(MatchItem m) async {
-    final confirmar = await showCupertinoDialog<bool>(
+    final confirmar = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: Text('¿Cancelar el match con ${m.otro.nombre}?'),
         content: const Text(
           'Se borra este chat y el match. Igual pueden volver a cruzarse en las cards: capaz este plan no pintó, pero otro sí 😉',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Volver'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Cancelar match'),
@@ -454,13 +456,13 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
       final idMatch = await _srv.aceptarInteres(p.idPlanOrigen);
       if (!mounted) return;
       if (idMatch == null || idMatch.isEmpty) {
-        await showCupertinoDialog<void>(
+        await showFernecitoDialog<void>(
           context: context,
-          builder: (ctx) => CupertinoAlertDialog(
+          builder: (ctx) => DialogoFernecito(
             title: const Text('No se pudo matchear'),
             content: const Text('Probá de nuevo en un momento.'),
             actions: [
-              CupertinoDialogAction(
+              AccionDialogoFernecito(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('OK'),
               ),
@@ -487,9 +489,9 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
       _cargar();
     } catch (e) {
       if (!mounted) return;
-      await showCupertinoDialog<void>(
+      await showFernecitoDialog<void>(
         context: context,
-        builder: (ctx) => CupertinoAlertDialog(
+        builder: (ctx) => DialogoFernecito(
           title: const Text('No se pudo matchear'),
           content: Text(
             e.toString().contains('sin_interes')
@@ -497,7 +499,7 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
                 : 'Probá de nuevo en un momento.',
           ),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('OK'),
             ),
@@ -654,21 +656,36 @@ class _PantallaMatchChatsState extends State<PantallaMatchChats> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    m.otro.esSquad
-                        ? m.otro.nombre
-                        : 'Match con ${m.otro.nombre}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.baloo2(
-                      color: ColoresApp.textoPrincipal,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15.5,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          m.esMatchSquad
+                              ? m.tituloParticipantes
+                              : 'Match con ${m.otro.nombre}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.baloo2(
+                            color: ColoresApp.textoPrincipal,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15.5,
+                            height: 1.15,
+                          ),
+                        ),
+                      ),
+                      if (m.esMatchSquad) ...[
+                        const SizedBox(width: 6),
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: BadgeMatchSquads(),
+                        ),
+                      ],
+                    ],
                   ),
                   Text(
                     m.planResumen,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.baloo2(
                       color: const Color(0xFFB79CF0),
@@ -861,27 +878,15 @@ class _TarjetaMatchPendiente extends StatelessWidget {
   final VoidCallback onMatchear;
   final VoidCallback onVerPerfil;
 
-  String get _genero => switch (pendiente.otro.sexo) {
-    'hombre' => 'Hombre',
-    'mujer' => 'Mujer',
-    'otro' => 'Otrx',
-    _ => '',
-  };
-
   @override
   Widget build(BuildContext context) {
     final otro = pendiente.otro;
-    final foto = otro.fotoUrl;
     final ancho = MediaQuery.sizeOf(context).width * 0.86;
     final recopa = pendiente.esRecopa;
     final urlsSquad = otro.avataresMiembrosUrls;
     final esSquadStack = otro.esSquad && urlsSquad.isNotEmpty;
     final plan = pendiente.planPrincipal ?? pendiente.miPlan;
-    final subtitulos = [
-      if (otro.edad != null) '${otro.edad} años',
-      if (_genero.isNotEmpty) _genero,
-      if (otro.esSquad && otro.miembros != null) '${otro.miembros} personas',
-    ].join(' · ');
+    final subtitulos = otro.subtituloIdentidad;
 
     return Center(
       child: Material(
@@ -896,7 +901,7 @@ class _TarjetaMatchPendiente extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: ColoresApp.fondoSuperficie,
                   borderRadius: BorderRadius.circular(26),
-                  border: recopa
+                  border: recopa && !otro.esSquad
                       ? Border.all(color: _kAzulRePinta, width: 2.5)
                       : null,
                   boxShadow: [
@@ -912,14 +917,7 @@ class _TarjetaMatchPendiente extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (foto != null)
-                      Image.network(
-                        foto,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _ph(),
-                      )
-                    else
-                      _ph(),
+                    Positioned.fill(child: FondoFotoMatch(card: otro)),
                     Positioned.fill(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
@@ -949,7 +947,9 @@ class _TarjetaMatchPendiente extends StatelessWidget {
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
-                            '🥂 ¡Le re pinta tu plan!',
+                            otro.esSquad
+                                ? '🥂 ¡Les re pinta el plan!'
+                                : '🥂 ¡Le re pinta tu plan!',
                             style: GoogleFonts.baloo2(
                               color: Colors.white,
                               fontWeight: FontWeight.w900,
@@ -974,17 +974,34 @@ class _TarjetaMatchPendiente extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                           ],
-                          Text(
-                            otro.esSquad
-                                ? otro.nombre
-                                : otro.nombre.split(RegExp(r'\s+')).first,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.baloo2(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 26,
-                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  otro.esSquad
+                                      ? otro.nombre
+                                      : otro.nombre
+                                          .split(RegExp(r'\s+'))
+                                          .first,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.baloo2(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 26,
+                                    height: 1.1,
+                                  ),
+                                ),
+                              ),
+                              if (otro.esSquad) ...[
+                                const SizedBox(width: 8),
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 8),
+                                  child: BadgeMatchSquads(),
+                                ),
+                              ],
+                            ],
                           ),
                           if (subtitulos.isNotEmpty)
                             Text(
@@ -1030,6 +1047,8 @@ class _TarjetaMatchPendiente extends StatelessWidget {
                       plan == null
                           ? 'tu plan'
                           : '${plan.planEtiqueta} en ${plan.lugarTexto}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.baloo2(
                         color: const Color(0xFF16161A),
                         fontWeight: FontWeight.w900,
@@ -1077,13 +1096,4 @@ class _TarjetaMatchPendiente extends StatelessWidget {
       ),
     );
   }
-
-  Widget _ph() => Container(
-    color: const Color(0xFF2A2A2A),
-    alignment: Alignment.center,
-    child: Text(
-      pendiente.otro.esSquad ? '👥' : '🙋',
-      style: const TextStyle(fontSize: 64),
-    ),
-  );
 }

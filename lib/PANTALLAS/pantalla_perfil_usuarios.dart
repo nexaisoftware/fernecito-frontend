@@ -30,6 +30,7 @@ import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/fernecito_loader.dart';
 import '../widgets/perfil_actividad_sheet.dart';
 import '../widgets/social_ui.dart';
+import '../widgets/dialogo_fernecito.dart';
 import 'pantalla_rompehielo.dart' show TipoContraparte;
 
 enum EstadoRelacionUsuario {
@@ -359,13 +360,13 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
 
   void _mostrarError(String msg) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Error'),
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),

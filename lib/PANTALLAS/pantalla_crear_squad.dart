@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -15,9 +16,12 @@ import '../core/servicio_amigos.dart';
 import '../core/servicio_squads.dart';
 import '../models/social.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
+import '../widgets/sheet_invitar_miembros_squad.dart';
 import '../widgets/social_ui.dart';
+import 'pantalla_mis_squads.dart';
 import 'pantalla_perfil_usuarios.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 class _FilaInvitacion {
   final String id;
@@ -256,7 +260,14 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
 
   Future<void> _validarUsername() async {
     final raw = _usernameController.text.trim();
-    if (raw.isEmpty || _validandoUsername) return;
+    if (_validandoUsername) return;
+    if (raw.isEmpty) {
+      setState(() {
+        _usernameValidado = false;
+        _usernameMsg = 'Escribí un @username';
+      });
+      return;
+    }
     setState(() {
       _validandoUsername = true;
       _usernameMsg = null;
@@ -292,7 +303,15 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
       if (xfile == null || !mounted) return;
       final bytes = await xfile.readAsBytes();
       if (mounted) setState(() => _bannerPreviewBytes = bytes);
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        _mostrarError(
+          source == ImageSource.camera
+              ? 'No se pudo abrir la cámara. Probá con la galería.'
+              : 'No se pudo elegir la foto. Probá de nuevo.',
+        );
+      }
+    }
   }
 
   void _mostrarOpcionesBanner() {
@@ -304,13 +323,14 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
           style: GoogleFonts.baloo2(fontSize: 17, fontWeight: FontWeight.w800),
         ),
         actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _seleccionarBanner(ImageSource.camera);
-            },
-            child: const Text('Tomar foto'),
-          ),
+          if (!kIsWeb)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _seleccionarBanner(ImageSource.camera);
+              },
+              child: const Text('Tomar foto'),
+            ),
           CupertinoActionSheetAction(
             onPressed: () {
               Navigator.pop(ctx);
@@ -328,6 +348,29 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
     );
   }
 
+  String _mensajeErrorCrear(Object e) {
+    final m = e.toString();
+    if (m.contains('username_tomado_squad')) {
+      return 'Ese @ ya lo usa otro squad.';
+    }
+    if (m.contains('username_tomado_usuario')) {
+      return 'Ese @ ya lo usa una persona.';
+    }
+    if (m.contains('username_invalido') || m.contains('formato_invalido')) {
+      return 'El @ no es válido. Usá 4-20 caracteres: letras, números o _';
+    }
+    if (m.contains('rate_limit')) {
+      return 'Creaste varios squads recién. Probá en un rato.';
+    }
+    if (m.contains('nombre_requerido')) {
+      return 'Escribí el nombre del squad.';
+    }
+    if (m.contains('no_auth')) {
+      return 'Iniciá sesión para crear un squad.';
+    }
+    return 'No se pudo crear el squad. Intentá de nuevo.';
+  }
+
   Future<void> _crearSquad() async {
     final nombre = _nombreController.text.trim();
     if (nombre.isEmpty) {
@@ -342,15 +385,26 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
 
     final descripcion = _descripcionController.text.trim();
     final vibe = _estadoController.text.trim();
-    final idGrupo = await _srvSquads.crear(
-      nombre: nombre,
-      username: _usernameNormalizado ?? _usernameController.text.trim(),
-      descripcion: descripcion.isEmpty ? null : descripcion,
-      esPublico: true,
-      vibe: vibe.isEmpty ? null : vibe,
-    );
+    final username = _usernameNormalizado ?? _usernameController.text.trim();
 
-    if (idGrupo == null) {
+    String? idGrupo;
+    try {
+      idGrupo = await _srvSquads.crear(
+        nombre: nombre,
+        username: username,
+        descripcion: descripcion.isEmpty ? null : descripcion,
+        esPublico: true,
+        vibe: vibe.isEmpty ? null : vibe,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _creando = false);
+        _mostrarError(_mensajeErrorCrear(e));
+      }
+      return;
+    }
+
+    if (idGrupo == null || idGrupo.isEmpty) {
       if (mounted) {
         setState(() => _creando = false);
         _mostrarError('No se pudo crear el squad. Intentá de nuevo.');
@@ -375,23 +429,39 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
       } catch (_) {}
     }
 
-    for (final idUsuario in _miembrosSeleccionados) {
-      await _srvSquads.invitar(idGrupo, idUsuario);
+    if (_miembrosSeleccionados.isNotEmpty) {
+      await invitarIdsASquad(idGrupo, _miembrosSeleccionados);
     }
 
     if (!mounted) return;
     setState(() => _creando = false);
-    Navigator.of(context).pop(true);
+    Navigator.of(context).pushReplacement(
+      CupertinoPageRoute(
+        builder: (_) => PantallaMisSquads(
+          squad: {
+            'id_grupo': idGrupo,
+            'id_squad': idGrupo,
+            'nombre': nombre,
+            'nombre_squad': nombre,
+            'username': username,
+            'descripcion': descripcion,
+            'vibe': vibe,
+            'mi_estado': 'aceptado',
+            'soy_lider': true,
+          },
+        ),
+      ),
+    );
   }
 
   void _mostrarError(String msg) {
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Ups'),
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('OK'),
           ),
@@ -566,6 +636,7 @@ class _PantallaCrearSquadState extends State<PantallaCrearSquad> {
                 padding: const EdgeInsets.all(14),
                 child: GestureDetector(
                   onTap: _mostrarOpcionesBanner,
+                  behavior: HitTestBehavior.opaque,
                   child: Container(
                     height: 200,
                     width: double.infinity,

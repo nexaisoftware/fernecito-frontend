@@ -3,6 +3,8 @@ library;
 
 import 'package:flutter/cupertino.dart';
 
+import '../widgets/dialogo_fernecito.dart';
+
 class SexoPerfil {
   SexoPerfil._();
 
@@ -41,10 +43,10 @@ Future<String?> mostrarDialogoPedirSexo(
       'Nos ayuda a personalizar Match y recomendaciones. Podés cambiarlo después en Mi perfil.',
   bool permitirDespues = true,
 }) {
-  return showCupertinoDialog<String>(
+  return showFernecitoDialog<String>(
     context: context,
     barrierDismissible: false,
-    builder: (ctx) => CupertinoAlertDialog(
+    builder: (ctx) => DialogoFernecito(
       title: Text(titulo),
       content: Padding(
         padding: const EdgeInsets.only(top: 8),
@@ -52,12 +54,12 @@ Future<String?> mostrarDialogoPedirSexo(
       ),
       actions: [
         for (final valor in SexoPerfil.opciones)
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.of(ctx).pop(valor),
             child: Text(SexoPerfil.etiqueta(valor)),
           ),
         if (permitirDespues)
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Después'),
           ),

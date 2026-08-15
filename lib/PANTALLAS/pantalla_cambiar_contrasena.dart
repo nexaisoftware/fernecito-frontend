@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 class PantallaCambiarContrasena extends StatefulWidget {
   const PantallaCambiarContrasena({super.key});
@@ -106,9 +107,9 @@ class _PantallaCambiarContrasenaState extends State<PantallaCambiarContrasena> {
 
   void _alert(String msg) {
     HapticFeedback.mediumImpact();
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: Text(
           'No se pudo cambiar',
           style: GoogleFonts.baloo2(fontWeight: FontWeight.w900),
@@ -118,7 +119,7 @@ class _PantallaCambiarContrasenaState extends State<PantallaCambiarContrasena> {
           child: Text(msg, style: GoogleFonts.baloo2()),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: Text('OK',
                 style: GoogleFonts.baloo2(

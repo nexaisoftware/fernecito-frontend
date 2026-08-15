@@ -29,6 +29,7 @@ import '../widgets/burbuja_estado.dart';
 import '../widgets/recortar_avatar_sheet.dart';
 import 'pantalla_home.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 // Textos legales mostrados en el modal de "Términos y Privacidad".
 // BORRADOR de partida — revisar con criterio legal antes de producción.
@@ -453,9 +454,9 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
 
   // Diálogo para continuar sin foto
   Future<bool?> _mostrarDialogoSinFoto() {
-    return showCupertinoDialog<bool>(
+    return showFernecitoDialog<bool>(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             const Icon(CupertinoIcons.photo, color: ColoresApp.promoMarca),
@@ -471,7 +472,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(
               'Agregar foto',
@@ -481,7 +482,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
               ),
             ),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(
@@ -556,9 +557,9 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
 
   // Mostrar error
   void _mostrarError(String mensaje) {
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             const Icon(
@@ -574,7 +575,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),

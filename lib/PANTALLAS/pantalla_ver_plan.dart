@@ -11,9 +11,11 @@ import '../core/compartir_plan.dart';
 import '../core/constants.dart';
 import '../core/flujo_reporte.dart';
 import '../core/servicio_planes.dart';
+import '../widgets/dialogo_fernecito.dart';
 import '../widgets/fernecito_loader.dart';
 import 'pantalla_chat_plan.dart';
 import 'pantalla_local_perfil.dart';
+import 'pantalla_perfil_squads.dart';
 import 'pantalla_perfil_usuarios.dart';
 
 class PantallaVerPlan extends StatefulWidget {
@@ -213,9 +215,9 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     final plan = _plan;
     if (plan == null) return;
     final ctrl = TextEditingController();
-    final pedido = await showCupertinoDialog<String>(
+    final pedido = await showFernecitoDialog<String>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Pedirle algo al local'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10),
@@ -227,11 +229,11 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
             child: const Text('Enviar'),
           ),
@@ -287,19 +289,19 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
   Future<void> _salirDelPlan() async {
     final plan = _plan;
     if (plan == null || !plan.soyMiembro || plan.soyModerador) return;
-    final ok = await showCupertinoDialog<bool>(
+    final ok = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('¿Salir del plan?'),
         content: const Text(
           'Vas a dejar de ser parte de este plan y del chat del grupo.',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Salir'),
@@ -324,19 +326,19 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
   }
 
   Future<void> _cancelar() async {
-    final ok = await showCupertinoDialog<bool>(
+    final ok = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Cancelar plan'),
         content: const Text(
           'Se mostrará como cancelado y se avisará en el chat.',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('No'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Cancelar plan'),
@@ -367,6 +369,36 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
             'nombre': m.nombre,
             'username': m.username ?? '',
             'avatar': m.fotoUrl ?? '',
+          },
+          estadoRelacion: EstadoRelacionUsuario.ninguno,
+        ),
+      ),
+    );
+  }
+
+  void _abrirPerfilAdmin(PlanComunidad plan) {
+    if (plan.tipoOrganizador == 'squad' && (plan.idSquad ?? '').isNotEmpty) {
+      Navigator.of(context, rootNavigator: true).push(
+        CupertinoPageRoute(
+          builder: (_) => PantallaPerfilSquads(
+            squad: {
+              'id_grupo': plan.idSquad,
+              'nombre_grupo': plan.nombreSquad ?? plan.nombreOrganizador,
+              'url_portada': plan.fotoOrganizador,
+            },
+            estadoRelacion: EstadoRelacionSquad.ninguno,
+          ),
+        ),
+      );
+      return;
+    }
+    Navigator.of(context, rootNavigator: true).push(
+      CupertinoPageRoute(
+        builder: (_) => PantallaPerfilUsuarios(
+          usuario: {
+            'id_usuario': plan.idOrganizador,
+            'nombre': plan.nombreOrganizador,
+            'avatar': plan.fotoOrganizadorUrl ?? '',
           },
           estadoRelacion: EstadoRelacionUsuario.ninguno,
         ),
@@ -429,9 +461,9 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
     final plan = _plan;
     if (plan == null) return;
     final ctrl = TextEditingController();
-    final texto = await showCupertinoDialog<String>(
+    final texto = await showFernecitoDialog<String>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Proponer otra cosa'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10),
@@ -443,11 +475,11 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
             child: const Text('Enviar'),
           ),
@@ -478,12 +510,12 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
   }
 
   void _toast(String msg) {
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Ok'),
           ),
@@ -617,14 +649,32 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                           const SizedBox(height: 114),
                           Row(
                             children: [
-                              _Avatar(
-                                url: plan.fotoOrganizadorUrl,
-                                fallback: plan.nombreOrganizador,
-                              ),
-                              const SizedBox(width: 8),
-                              _Avatar(
-                                url: plan.fotoLocalUrl,
-                                fallback: plan.nombreLocal,
+                              if (!plan.esPlanLocal &&
+                                  plan.creadorTipo != 'local') ...[
+                                GestureDetector(
+                                  onTap: () => _abrirPerfilAdmin(plan),
+                                  child: _Avatar(
+                                    url: plan.fotoOrganizadorUrl,
+                                    fallback: plan.nombreOrganizador,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              GestureDetector(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  CupertinoPageRoute(
+                                    builder: (_) => PantallaLocalPerfil(
+                                      avatarUrl: plan.fotoLocalUrl ?? '',
+                                      nombreLocal: plan.nombreLocal,
+                                      idLocal: plan.idLocal,
+                                    ),
+                                  ),
+                                ),
+                                child: _Avatar(
+                                  url: plan.fotoLocalUrl,
+                                  fallback: plan.nombreLocal,
+                                ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
@@ -679,15 +729,29 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                   Positioned(
                     top: MediaQuery.paddingOf(context).top + 8,
                     right: 10,
-                    child: CupertinoButton(
-                      padding: const EdgeInsets.all(8),
-                      minimumSize: const Size(0, 36),
-                      onPressed: _reportarPlan,
-                      child: const Icon(
-                        CupertinoIcons.ellipsis,
-                        color: Colors.white,
-                        size: 24,
-                      ),
+                    child: Column(
+                      children: [
+                        CupertinoButton(
+                          padding: const EdgeInsets.all(8),
+                          minimumSize: const Size(0, 36),
+                          onPressed: _reportarPlan,
+                          child: const Icon(
+                            CupertinoIcons.ellipsis,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        CupertinoButton(
+                          padding: const EdgeInsets.all(8),
+                          minimumSize: const Size(0, 36),
+                          onPressed: _compartir,
+                          child: const Icon(
+                            Icons.share_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -744,42 +808,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                       onTap: () => _copiarContacto(plan.contactoAnfitrion!),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: GestureDetector(
-                      onTap: _compartir,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              CupertinoIcons.share,
-                              size: 14,
-                              color: Colors.white70,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Compartir plan',
-                              style: GoogleFonts.baloo2(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white.withValues(alpha: 0.9),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: 16),
                   if (plan.soyModerador && pendientes > 0) ...[
                     const SizedBox(height: 14),
                     _FilaSolicitudesPendientes(
@@ -812,6 +841,7 @@ class _PantallaVerPlanState extends State<PantallaVerPlan> {
                           texto: plan.chatDisponible
                               ? 'Chat del plan'
                               : 'Chat bloqueado',
+                          icono: CupertinoIcons.chat_bubble_2,
                           secundario: !plan.chatDisponible,
                           onTap: plan.chatDisponible
                               ? () => Navigator.of(context, rootNavigator: true)
@@ -900,9 +930,13 @@ class _Avatar extends StatelessWidget {
     final ini = fallback.trim().isEmpty
         ? '?'
         : fallback.trim().substring(0, 1).toUpperCase();
-    return SizedBox(
+    return Container(
       width: 50,
       height: 50,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 1.6),
+      ),
       child: ClipOval(
         child: url != null && url!.isNotEmpty
             ? CachedNetworkImage(
@@ -1295,18 +1329,15 @@ class _EresParteRow extends StatelessWidget {
         if (onSalir != null)
           GestureDetector(
             onTap: onSalir,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFDC2626),
-                borderRadius: BorderRadius.circular(12),
-              ),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
               child: Text(
                 'Salir',
                 style: GoogleFonts.baloo2(
-                  fontSize: 13,
+                  fontSize: 15,
                   fontWeight: FontWeight.w900,
-                  color: Colors.white,
+                  color: const Color(0xFFFF6B6B),
                 ),
               ),
             ),
@@ -1434,12 +1465,14 @@ class _ActionButton extends StatelessWidget {
     this.secundario = false,
     this.danger = false,
     this.cargando = false,
+    this.icono,
   });
   final String texto;
   final VoidCallback? onTap;
   final bool secundario;
   final bool danger;
   final bool cargando;
+  final IconData? icono;
   @override
   Widget build(BuildContext context) => CupertinoButton(
     padding: const EdgeInsets.symmetric(vertical: 9),
@@ -1449,13 +1482,23 @@ class _ActionButton extends StatelessWidget {
     borderRadius: BorderRadius.circular(14),
     onPressed: cargando ? null : onTap,
     child: cargando
-        ? const CupertinoActivityIndicator(color: Colors.white)
-        : Text(
-            texto,
-            style: GoogleFonts.baloo2(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-            ),
+        ? const FernecitoLoader.inline(size: 16, color: Colors.white)
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icono != null) ...[
+                Icon(icono, size: 16, color: Colors.white),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                texto,
+                style: GoogleFonts.baloo2(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
           ),
   );
 }
@@ -1685,12 +1728,12 @@ class _SolicitudesSheetState extends State<_SolicitudesSheet> {
 
   void _verPerfil(PlanMiembro m) {
     if (!m.perfilPublico) {
-      showCupertinoDialog<void>(
+      showFernecitoDialog<void>(
         context: context,
-        builder: (ctx) => CupertinoAlertDialog(
+        builder: (ctx) => DialogoFernecito(
           content: Text('Perfil privado · @${m.username ?? 'usuario'}'),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Ok'),
             ),

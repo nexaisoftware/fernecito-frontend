@@ -42,6 +42,7 @@ import '../widgets/banner_perfil_usuario.dart';
 import '../widgets/fernecito_loader.dart';
 import '../widgets/recortar_avatar_sheet.dart';
 import '../widgets/skeleton_pantallas.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 class PantallaMiPerfil extends StatefulWidget {
   /// Incrementado desde [PantallaHome] al seleccionar el tab Perfil (IndexedStack).
@@ -304,7 +305,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   void _mostrarFotoFullscreen() {
     if (_fotoPerfilUrl == null) return;
 
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
       barrierDismissible: true,
       builder: (context) => GestureDetector(
@@ -867,9 +868,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   }
 
   void _mostrarPedidoCumple() {
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Queremos saber cuándo es tu cumple'),
         content: const Padding(
           padding: EdgeInsets.only(top: 8),
@@ -878,11 +879,11 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: const Text('Después'),
             onPressed: () => Navigator.of(ctx).pop(),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             child: const Text('Completar'),
             onPressed: () {
@@ -1194,7 +1195,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
   // Invoca el edge con service_role; al terminar, signOut → AuthGate va a Login.
   Future<void> _ejecutarEliminacion(String modo) async {
     // Overlay de carga (no descartable) para que NO parezca tildado.
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const FernecitoLoaderCentro(size: 36),
@@ -1240,20 +1241,20 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     required String textoConfirmar,
     bool esDestructivo = false,
   }) {
-    return showCupertinoDialog<bool>(
+    return showFernecitoDialog<bool>(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Text(titulo),
         content: Padding(
           padding: const EdgeInsets.only(top: 8.0),
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: const Text('Cancelar'),
             onPressed: () => Navigator.of(context).pop(false),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: esDestructivo,
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(textoConfirmar),
@@ -1265,9 +1266,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
 
   // Mostrar error
   void _mostrarError(String mensaje) {
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: const Row(
           children: [
             Icon(
@@ -1283,7 +1284,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -1294,9 +1295,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
 
   // Mostrar éxito
   void _mostrarExito(String mensaje) {
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             Icon(
@@ -1312,7 +1313,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -2463,9 +2464,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
         ? 'https://instagram.com/tu_usuario'
         : 'https://tiktok.com/@tu_usuario';
 
-    await showCupertinoDialog(
+    await showFernecitoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Text(etiqueta),
         content: Padding(
           padding: const EdgeInsets.only(top: 16.0),
@@ -2477,11 +2478,11 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: const Text('Cancelar'),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () {
               controlador.text = tempController.text;

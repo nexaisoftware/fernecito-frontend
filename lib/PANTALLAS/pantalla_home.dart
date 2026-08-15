@@ -63,13 +63,16 @@ import '../widgets/busqueda_ia_sheet.dart';
 import '../widgets/top_ultra_stories_overlay.dart';
 import '../widgets/mapa_ui.dart';
 import 'pantalla_actividad.dart';
+import 'pantalla_fernecito_match.dart';
 import 'pantalla_local_perfil.dart';
 import 'pantalla_mapa.dart';
 import 'pantalla_mi_perfil.dart';
 import 'pantalla_notificaciones.dart';
+import 'pantalla_planes.dart';
 import 'pantalla_social.dart';
 import 'pantalla_ver_evento.dart';
 import 'pantalla_scanner_invitacion.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 // ============================================================================
 // Helpers compartidos (top-level) que usaba la cartelera vieja.
@@ -241,19 +244,19 @@ class _PantallaHomeState extends State<PantallaHome>
     }
 
     _mostrandoSalida = true;
-    final salir = await showCupertinoDialog<bool>(
+    final salir = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('¿Querés salir de Fernecito?'),
         content: const Text(
           'Si salís ahora cerrás la app. Podés seguir explorando sin problema.',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Seguir acá'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Salir'),
@@ -1145,10 +1148,10 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
 
   Future<void> _mostrarModalUbicacionRequerida() async {
     if (!mounted) return;
-    await showCupertinoDialog<void>(
+    await showFernecitoDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Elegí tu ubicación'),
         content: const Padding(
           padding: EdgeInsets.only(top: 8),
@@ -1158,7 +1161,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Elegir ubicación'),
@@ -1718,6 +1721,23 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     if (mounted) setState(() => _poolLocalesCartelera = pool);
   }
 
+  Future<void> _abrirMatchDesdeCartelera() async {
+    if (!mounted) return;
+    await Navigator.of(context, rootNavigator: true).push(
+      CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
+    );
+  }
+
+  Future<void> _abrirPlanesDesdeCartelera() async {
+    if (!mounted) return;
+    await Navigator.of(context, rootNavigator: true).push(
+      CupertinoPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const PantallaPlanes(),
+      ),
+    );
+  }
+
   Future<void> _abrirTopUltraStories() async {
     final ultras = _eventos
         .where(
@@ -1945,24 +1965,36 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       _buildHeader(),
       _buildBarraSpotlight(),
       const SliverPadding(padding: EdgeInsets.only(top: 6)),
-      // Badge Top Ultra solo si hay stories; el mapa vive en el pill flotante.
-      if (tieneTopUltra)
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 16, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TopUltraBadgeCartelera(onTap: _abrirTopUltraStories),
-            ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 16, 0),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (tieneTopUltra)
+                TopUltraBadgeCartelera(onTap: _abrirTopUltraStories),
+              AtajoCarteleraBadge(
+                label: 'Matchs',
+                icono: CupertinoIcons.heart_fill,
+                onTap: _abrirMatchDesdeCartelera,
+              ),
+              AtajoCarteleraBadge(
+                label: 'Planes',
+                icono: CupertinoIcons.person_2_fill,
+                onTap: _abrirPlanesDesdeCartelera,
+              ),
+            ],
           ),
         ),
+      ),
       // TOP (incluye top_ultra; locales solo si <10 eventos en la sección)
       if (topsConLocales.isNotEmpty)
         _buildSeccionCarruseles(
           titulo: JerarquiasData.top.labelSeccion,
           icono: JerarquiasData.top.icono,
           eventos: topsConLocales,
-          porFila: CapacidadCartelera.topPorFila,
           variante: _Variante.grande,
           sentidoBase: false, // TOP: hacia la derecha
           seccionDeEvento: _seccionImpresionCartelera,
@@ -1975,7 +2007,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           titulo: JerarquiasData.recomendadoFernecito.labelSeccion,
           icono: CupertinoIcons.hand_thumbsup_fill,
           eventos: recosConLocales,
-          porFila: CapacidadCartelera.recomendadoPorFila,
           variante: _Variante.mediano,
           sentidoBase:
               true, // RECOMENDADOS: hacia la izquierda (contrario a TOP)
@@ -1987,7 +2018,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           titulo: JerarquiasData.normal.labelSeccion,
           icono: JerarquiasData.normal.icono,
           eventos: normalesConLocales,
-          porFila: CapacidadCartelera.normalPorFila,
           variante: _Variante.mediano,
           sentidoBase: false, // base derecha, alterna por fila
           paginar: true, // muestra 2 filas + "Ver más"
@@ -2145,24 +2175,18 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     required String titulo,
     required IconData icono,
     required List<Map<String, dynamic>> eventos,
-    required int porFila,
     required _Variante variante,
     bool sentidoBase = false,
     bool paginar = false,
     String Function(Map<String, dynamic> e)? seccionDeEvento,
     String? seccionFija,
   }) {
-    final iniciales = CapacidadCartelera.normalFilasIniciales * porFila;
-    final mostrar = (paginar && !_verMasNormal)
-        ? eventos.take(iniciales).toList()
-        : eventos;
-    final hayMas = paginar && eventos.length > iniciales;
-
-    // Split en grupos de `porFila`.
-    final filas = <List<Map<String, dynamic>>>[];
-    for (var i = 0; i < mostrar.length; i += porFila) {
-      filas.add(mostrar.sublist(i, math.min(i + porFila, mostrar.length)));
-    }
+    final inicialesFilas = CapacidadCartelera.partirFilas(eventos);
+    final filasVisibles = (paginar && !_verMasNormal)
+        ? inicialesFilas.take(CapacidadCartelera.normalFilasIniciales).toList()
+        : inicialesFilas;
+    final hayMas = paginar &&
+        inicialesFilas.length > CapacidadCartelera.normalFilasIniciales;
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -2171,11 +2195,11 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _TituloSeccion(icono: icono, titulo: titulo),
-            for (var i = 0; i < filas.length; i++)
+            for (var i = 0; i < filasVisibles.length; i++)
               _buildFilaCarrusel(
-                filas[i],
+                filasVisibles[i],
                 variante,
-                mostrarLineaSeparadora: i < filas.length - 1,
+                mostrarLineaSeparadora: i < filasVisibles.length - 1,
                 sentidoBase: sentidoBase,
                 indiceFila: i,
                 seccionDeEvento: seccionDeEvento,

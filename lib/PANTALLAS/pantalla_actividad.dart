@@ -18,6 +18,7 @@ import '../core/supabase_client.dart';
 import '../widgets/avatar_local.dart';
 import '../widgets/boton_compartir_evento.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 import 'pantalla_local_perfil.dart';
 import 'pantalla_pools.dart';
 
@@ -430,6 +431,9 @@ class _PantallaActividadState extends State<PantallaActividad> {
                           : null,
                       onComoLlegar: () => _abrirMaps(context, t),
                       onVerPromos: () => _mostrarPromos(context, t),
+                      labelPromos: _tokensPromoPorId.isNotEmpty
+                          ? 'Mis promos'
+                          : 'Ver promos',
                       onVerPool: () {
                         final idEv = t['id_evento']?.toString() ?? '';
                         if (idEv.isEmpty) return;
@@ -517,6 +521,7 @@ class _CardActividad extends StatelessWidget {
   final VoidCallback? onAbrirQR;
   final VoidCallback onComoLlegar;
   final VoidCallback onVerPromos;
+  final String labelPromos;
   final VoidCallback onVerPool;
   final VoidCallback onVerPerfilLocal;
 
@@ -532,6 +537,7 @@ class _CardActividad extends StatelessWidget {
     required this.onAbrirQR,
     required this.onComoLlegar,
     required this.onVerPromos,
+    this.labelPromos = 'Ver promos',
     required this.onVerPool,
     required this.onVerPerfilLocal,
   });
@@ -836,7 +842,7 @@ class _CardActividad extends StatelessWidget {
                           const SizedBox(width: 5),
                           Flexible(
                             child: Text(
-                              'Ver promos',
+                              labelPromos,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.baloo2(
@@ -1605,16 +1611,16 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
 
   Future<void> _dialogoPromo(String titulo, String mensaje) async {
     if (!mounted) return;
-    await showCupertinoDialog<void>(
+    await showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: Text(titulo),
         content: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),

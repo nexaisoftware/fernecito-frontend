@@ -23,6 +23,7 @@ import '../core/supabase_client.dart';
 import '../widgets/avatar_usuario.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 class PantallaResenasLocales extends StatefulWidget {
   final String nombreLocal;
@@ -181,15 +182,15 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         content: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(msg),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),
@@ -331,9 +332,9 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
 
   void _mostrarError(String msg) {
     HapticFeedback.heavyImpact();
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -351,7 +352,7 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
           child: Text(msg),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Entendido'),

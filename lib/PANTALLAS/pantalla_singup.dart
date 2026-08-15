@@ -32,6 +32,7 @@ import '../core/supabase_client.dart';
 import '../core/auth_redirect.dart';
 import '../core/auth_errors.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 class PantallaSignup extends StatefulWidget {
   const PantallaSignup({super.key});
@@ -285,9 +286,9 @@ class _PantallaSignupState extends State<PantallaSignup>
 
   // Mostrar diálogo de error
   void _mostrarError(String mensaje) {
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             const Icon(
@@ -303,7 +304,7 @@ class _PantallaSignupState extends State<PantallaSignup>
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -314,10 +315,10 @@ class _PantallaSignupState extends State<PantallaSignup>
 
   // Mostrar diálogo de éxito
   void _mostrarExito(String mensaje) {
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             Icon(
@@ -333,7 +334,7 @@ class _PantallaSignupState extends State<PantallaSignup>
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: const Text('Continuar'),
             onPressed: () => Navigator.of(context).pop(),
           ),

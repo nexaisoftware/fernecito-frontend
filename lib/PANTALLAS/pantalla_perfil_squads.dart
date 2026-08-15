@@ -24,6 +24,7 @@ import 'pantalla_perfil_usuarios.dart';
 import 'pantalla_mis_squads.dart';
 import 'pantalla_rompehielo.dart' show TipoContraparte;
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 enum EstadoRelacionSquad {
   ninguno,
@@ -235,13 +236,13 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
 
   void _mostrarError(String msg) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Error'),
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),

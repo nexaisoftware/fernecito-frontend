@@ -1,6 +1,7 @@
 library;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -21,6 +22,7 @@ import '../widgets/sheet_invitar_miembros_squad.dart';
 import '../widgets/social_ui.dart';
 import 'pantalla_perfil_usuarios.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 class PantallaMisSquads extends StatefulWidget {
   final Map<String, dynamic> squad;
@@ -288,19 +290,19 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
   }
 
   Future<void> _eliminarSquad() async {
-    final confirmado = await showCupertinoDialog<bool>(
+    final confirmado = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Eliminar squad'),
         content: const Text(
           '¿Estás seguro? Esta acción no se puede deshacer y eliminará el squad para todos.',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Eliminar'),
@@ -324,17 +326,17 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
               ? 'Sos el último miembro. Si salís, el squad se eliminará.'
               : 'Sos líder. Si salís, Fernecito pasará el liderazgo automáticamente a otro miembro para que el squad siga activo.'
         : 'Vas a dejar de formar parte de este squad.';
-    final confirmado = await showCupertinoDialog<bool>(
+    final confirmado = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Salir del squad'),
         content: Text(mensaje),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Salir'),
@@ -355,13 +357,13 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
 
   void _mostrarError(String msg) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Error'),
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),
@@ -373,13 +375,13 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
 
   void _mostrarExito(String msg) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Listo'),
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),
@@ -398,26 +400,27 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
           style: GoogleFonts.baloo2(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         actions: [
-          CupertinoActionSheetAction(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(CupertinoIcons.camera, color: ColoresApp.principalMarca),
-                const SizedBox(width: 12),
-                Text(
-                  'Tomar foto',
-                  style: GoogleFonts.baloo2(
-                    fontSize: 16,
-                    color: ColoresApp.principalMarca,
+          if (!kIsWeb)
+            CupertinoActionSheetAction(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(CupertinoIcons.camera, color: ColoresApp.principalMarca),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Tomar foto',
+                    style: GoogleFonts.baloo2(
+                      fontSize: 16,
+                      color: ColoresApp.principalMarca,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _subirBanner(ImageSource.camera);
+              },
             ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _subirBanner(ImageSource.camera);
-            },
-          ),
           CupertinoActionSheetAction(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -484,19 +487,19 @@ class _PantallaMisSquadsState extends State<PantallaMisSquads> {
     final nombreSquad = _nombreCtrl.text.trim().isEmpty
         ? 'Mi squad'
         : _nombreCtrl.text.trim();
-    final confirmado = await showCupertinoDialog<bool>(
+    final confirmado = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Quitar miembro'),
         content: Text(
           '¿Estás seguro que deseas eliminar a $username de $nombreSquad?',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Eliminar'),

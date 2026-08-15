@@ -14,6 +14,7 @@ import '../core/servicio_resena_post_visita.dart';
 import '../core/supabase_client.dart';
 import 'avatar_local.dart';
 import 'fernecito_loader.dart';
+import 'dialogo_fernecito.dart';
 
 /// Muestra el modal si hay una visita pendiente. Devuelve true si se publicó.
 Future<bool> mostrarModalResenaPostVisita(
@@ -146,16 +147,16 @@ class _ModalResenaPostVisitaState extends State<_ModalResenaPostVisita> {
   }
 
   void _mostrarError(String msg) {
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('No se pudo publicar'),
         content: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(msg),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.pop(ctx),
             child: const Text('OK'),

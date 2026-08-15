@@ -15,6 +15,8 @@ import '../core/ubicaciones_data.dart';
 import '../core/servicio_planes.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/social_ui.dart';
+import '../widgets/dialogo_fernecito.dart';
 import 'pantalla_administrar_planes.dart';
 import 'pantalla_crear_plan.dart';
 import 'pantalla_ver_plan.dart';
@@ -310,12 +312,12 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
   }
 
   void _toast(String texto) {
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         content: Text(texto),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Ok'),
           ),
@@ -326,8 +328,8 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
 
   String _textoZona(PreferenciasCartelera prefs) {
     final ciudades = prefs.ciudadesActivas;
-    if (prefs.inteligenteActiva) return 'Planes cerca tuyo';
-    if (ciudades.isEmpty) return 'Planes cerca tuyo';
+    if (prefs.inteligenteActiva) return 'Planes de la comunidad';
+    if (ciudades.isEmpty) return 'Planes de la comunidad';
     if (ciudades.length == 1) return 'Planes en ${ciudades.first}';
     return 'Planes en ${ciudades.length} ciudades';
   }
@@ -558,6 +560,27 @@ class _PantallaPlanesState extends State<PantallaPlanes> {
             Positioned(
               left: 0,
               right: 0,
+              bottom: 0,
+              child: IgnorePointer(
+                child: Container(
+                  height: 140,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0x00000000),
+                        Color(0xCC000000),
+                        Color(0xF2000000),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
               bottom: MediaQuery.paddingOf(context).bottom + 28,
               child: Center(child: _CrearPlanFab(onTap: _crearPlan)),
             ),
@@ -575,26 +598,14 @@ class _TabsPlanes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          _TabPill(
-            label: 'Ver planes',
-            active: tab == 'explorar',
-            onTap: () => onChanged('explorar'),
-          ),
-          _TabPill(
-            label: 'Mis planes',
-            active: tab == 'mis',
-            onTap: () => onChanged('mis'),
-          ),
-        ],
-      ),
+    return ToggleSegmentadoSocial(
+      opciones: const ['Ver planes', 'Mis planes'],
+      indice: tab == 'mis' ? 1 : 0,
+      onChanged: (i) => onChanged(i == 1 ? 'mis' : 'explorar'),
+      anchoMaximo: 340,
+      paddingVertical: 8,
+      fontSize: 14,
+      sinBorde: true,
     );
   }
 }
@@ -686,43 +697,6 @@ class _AdministrarPlanesButton extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _TabPill extends StatelessWidget {
-  const _TabPill({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: active ? ColoresApp.principalMarca : Colors.transparent,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.baloo2(
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              color: active ? Colors.white : ColoresApp.textoSecundario,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _CrearPlanFab extends StatelessWidget {
@@ -1028,22 +1002,11 @@ class _IconoAccionPlan extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: habilitado ? 0.15 : 0.08),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: habilitado ? 0.08 : 0.04),
-            ),
-          ),
-          child: Icon(
+        child: Icon(
             icon,
-            size: 19,
+            size: 20,
             color: Colors.white.withValues(alpha: habilitado ? 0.92 : 0.36),
           ),
-        ),
       ),
     );
   }

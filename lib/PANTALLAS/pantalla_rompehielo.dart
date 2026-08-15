@@ -18,6 +18,7 @@ import '../widgets/card_contexto_rompehielo.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/stack_avatares_squad.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 // Rompe hielo persona → persona (5 mensajes)
 const List<String> _iniciadorPersona = [
@@ -351,20 +352,20 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
 
   Future<void> _ignorar() async {
     final d = widget.data;
-    final confirmar = await showCupertinoDialog<bool>(
+    final confirmar = await showFernecitoDialog<bool>(
       context: context,
-      builder: (c) => CupertinoAlertDialog(
+      builder: (c) => DialogoFernecito(
         title: const Text('Ignorar rompehielo'),
         content: const Text(
           'No vas a seguir esta conversación y le va a quedar claro que no '
           'querés continuar. ¿Seguro?',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(c, false),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(c, true),
             child: const Text('Ignorar'),
@@ -380,13 +381,13 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
     );
     if (!mounted) return;
     if (res.error != null) {
-      showCupertinoDialog<void>(
+      showFernecitoDialog<void>(
         context: context,
-        builder: (c) => CupertinoAlertDialog(
+        builder: (c) => DialogoFernecito(
           title: const Text('Rompehielo'),
           content: const Text('No se pudo ignorar. Intentá de nuevo.'),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(c),
               child: const Text('OK'),
             ),
@@ -428,13 +429,13 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
         'mensaje_invalido' => 'El mensaje debe tener entre 1 y 100 caracteres.',
         _ => 'No se pudo enviar. Intentá de nuevo.',
       };
-      showCupertinoDialog(
+      showFernecitoDialog(
         context: context,
-        builder: (c) => CupertinoAlertDialog(
+        builder: (c) => DialogoFernecito(
           title: const Text('Rompehielo'),
           content: Text(msg),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(c),
               child: const Text('OK'),
             ),

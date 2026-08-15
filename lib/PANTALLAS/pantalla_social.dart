@@ -28,6 +28,7 @@ import '../widgets/encabezado_amigos_social.dart';
 import '../widgets/fernecito_loader.dart';
 import '../widgets/social_explorar_sheets.dart';
 import '../widgets/social_ui.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 String _arroba(String username) => username.isEmpty
     ? ''
@@ -995,13 +996,13 @@ class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
 
   void _mostrarError(String msg) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Error'),
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),
@@ -1149,7 +1150,7 @@ class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
       _abrirMisSquad(context, squad);
       return;
     }
-    Navigator.of(context)
+    Navigator.of(context, rootNavigator: true)
         .push(
           CupertinoPageRoute(
             builder: (_) => PantallaPerfilSquads(
@@ -1163,7 +1164,7 @@ class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
   }
 
   void _abrirMisSquad(BuildContext context, Map<String, dynamic> squad) {
-    Navigator.of(context)
+    Navigator.of(context, rootNavigator: true)
         .push(
           CupertinoPageRoute(builder: (_) => PantallaMisSquads(squad: squad)),
         )

@@ -12,6 +12,7 @@ import '../core/constants.dart';
 import '../core/servicio_planes.dart';
 import '../core/supabase_client.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 class PantallaChatPlan extends StatefulWidget {
   const PantallaChatPlan({super.key, required this.plan});
@@ -270,13 +271,13 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
       setState(
         () => _mensajes = _mensajes.where((m) => m.id != idTemp).toList(),
       );
-      await showCupertinoDialog<void>(
+      await showFernecitoDialog<void>(
         context: context,
-        builder: (ctx) => CupertinoAlertDialog(
+        builder: (ctx) => DialogoFernecito(
           title: const Text('No se envió'),
           content: Text(_srv.mensajeError(e, accion: 'enviar el mensaje')),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('OK'),
             ),
