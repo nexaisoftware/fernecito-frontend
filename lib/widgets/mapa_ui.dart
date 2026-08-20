@@ -338,6 +338,51 @@ class MapaSwitchModo extends StatelessWidget {
   }
 }
 
+/// Cluster +n cuando hay varios locales/eventos a ≤35 m (zoom medio/lejos).
+class PinClusterMapa extends StatelessWidget {
+  const PinClusterMapa({super.key, required this.cantidad, this.size = 48});
+
+  final int cantidad;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ColoresApp.principalMarca;
+    final label = cantidad > 99 ? '99+' : '+$cantidad';
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.45),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 2),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.baloo2(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          fontSize: cantidad > 9 ? 13 : 15,
+          height: 1,
+        ),
+      ),
+    );
+  }
+}
+
 /// Pin circular con avatar de local.
 
 class PinAvatarLocalMapa extends StatelessWidget {

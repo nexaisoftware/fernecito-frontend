@@ -119,6 +119,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   HorariosLocal _horarios = {};
   bool _verificado = false;
   bool _esPionero = false;
+  bool _esOrganizadorEventos = false;
   bool _mostrarCalificaciones = true;
   double? _calificacionPromedio;
   int _calificacionCantidad = 0;
@@ -181,7 +182,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
             'id, nombre_local, descripcion_local, '
             'url_instagram, url_tiktok, url_website, telefono_whatsapp, whatsapp_label, '
             'ciudad, provincia, direccion, url_maps, rubro, '
-            'local_verificado, es_pionero, calificacion_promedio, calificacion_cantidad, '
+            'local_verificado, es_pionero, es_organizador_eventos, calificacion_promedio, calificacion_cantidad, '
             'mostrar_calificaciones, '
             'foto_perfil_url, url_foto_banner, estado_cuenta, '
             '$_selectFotosLocales, horarios_json',
@@ -390,6 +391,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
         _rubros = rubrosList;
         _verificado = local['local_verificado'] == true;
         _esPionero = local['es_pionero'] == true;
+        _esOrganizadorEventos = local['es_organizador_eventos'] == true;
         // Switch del local: si lo apagó, no mostramos su calificación.
         _mostrarCalificaciones = local['mostrar_calificaciones'] != false;
         _calificacionPromedio = (calNum != null && calNum > 0) ? calNum : null;
@@ -1132,8 +1134,12 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (_esPionero) ...[
+                              if (_esPionero) ...[
                               _BadgeBestChoicePerfil(),
+                              const SizedBox(height: 12),
+                            ],
+                            if (_esOrganizadorEventos) ...[
+                              const _BadgeOrganizadorEventos(),
                               const SizedBox(height: 12),
                             ],
                             if (_descripcion != null &&
@@ -1861,6 +1867,38 @@ class _BadgeBestChoicePerfil extends StatelessWidget {
               fontSize: 11.5,
               fontWeight: FontWeight.w800,
               color: _dorado,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Local habilitado como organizador de eventos/planes.
+class _BadgeOrganizadorEventos extends StatelessWidget {
+  const _BadgeOrganizadorEventos();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ColoresApp.principalMarca;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(CupertinoIcons.calendar_badge_plus, size: 12, color: color),
+          const SizedBox(width: 5),
+          Text(
+            'Organizador',
+            style: GoogleFonts.baloo2(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              color: color,
             ),
           ),
         ],

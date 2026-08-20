@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Color;
 
 import '../core/constants.dart';
 import '../core/coordenadas_ciudades.dart';
@@ -72,6 +73,7 @@ class _PantallaMapaState extends State<PantallaMapa>
   bool _ubicacionActiva = false;
   bool _obteniendoUbicacion = false;
   bool _ofrecioUbicacionAlEntrar = false;
+  double _zoomActual = 14;
 
   @override
   void initState() {
@@ -445,6 +447,12 @@ class _PantallaMapaState extends State<PantallaMapa>
                 minZoom: 8,
                 maxZoom: 18,
                 backgroundColor: const Color(0xFF0D0D0F),
+                onPositionChanged: (camera, _) {
+                  final z = camera.zoom;
+                  if ((z - _zoomActual).abs() < 0.08) return;
+                  if (!mounted) return;
+                  setState(() => _zoomActual = z);
+                },
                 onTap: (_, __) {
                   setState(() {
                     _localSeleccionado = null;
@@ -584,10 +592,11 @@ class _PantallaMapaState extends State<PantallaMapa>
 
   List<Marker> _buildMarkers() {
     if (_modoIndice == 0) {
-      return _locales.map((l) {
-        final sel = _localSeleccionado?.id == l.id;
-        return Marker(
-          point: l.coordenadas,
+      return _markersDesdeClusters(
+        items: _locales,
+        puntoDe: (MapaLocalItem l) => l.coordenadas,
+        construir: (l, punto, sel) => Marker(
+          point: punto,
           width: 60,
           height: 60,
           child: GestureDetector(
@@ -598,14 +607,22 @@ class _PantallaMapaState extends State<PantallaMapa>
               seleccionado: sel,
             ),
           ),
-        );
-      }).toList();
+        ),
+        seleccionado: (l) => _localSeleccionado?.id == l.id,
+        onTapCluster: (items) {
+          // Al tocar un +n, acercamos al zoom de expansión.
+          final centro = _centroDe(items.map((e) => e.coordenadas));
+          _mapController.move(centro, 17.6);
+          setState(() => _zoomActual = 17.6);
+        },
+      );
     }
 
-    return _eventos.map((e) {
-      final sel = _eventoSeleccionado?.id == e.id;
-      return Marker(
-        point: e.coordenadas,
+    return _markersDesdeClusters(
+      items: _eventos,
+      puntoDe: (MapaEventoItem e) => e.coordenadas,
+      construir: (e, punto, sel) => Marker(
+        point: punto,
         width: e.tienePromo ? 56 : 52,
         height: e.tienePromo ? 72 : 68,
         child: GestureDetector(
@@ -618,8 +635,92 @@ class _PantallaMapaState extends State<PantallaMapa>
             alto: 64,
           ),
         ),
-      );
-    }).toList();
+      ),
+      seleccionado: (e) => _eventoSeleccionado?.id == e.id,
+      onTapCluster: (items) {
+        final centro = _centroDe(items.map((e) => e.coordenadas));
+        _mapController.move(centro, 17.6);
+        setState(() => _zoomActual = 17.6);
+      },
+    );
+  }
+
+  /// Zoom medio/lejos: agrupa pins a ≤35 m en un indicador +n.
+  /// Zoom máximo (~17.4+): desparrama levemente para que no se tapen.
+  List<Marker> _markersDesdeClusters<T>({
+    required List<T> items,
+    required LatLng Function(T) puntoDe,
+    required Marker Function(T item, LatLng punto, bool sel) construir,
+    required bool Function(T) seleccionado,
+    required void Function(List<T> items) onTapCluster,
+  }) {
+    if (items.isEmpty) return const [];
+    const radioClusterM = 35.0;
+    const zoomExpandir = 17.35;
+    final dist = const Distance();
+    final usados = List<bool>.filled(items.length, false);
+    final markers = <Marker>[];
+
+    for (var i = 0; i < items.length; i++) {
+      if (usados[i]) continue;
+      final grupo = <T>[items[i]];
+      usados[i] = true;
+      final p0 = puntoDe(items[i]);
+      for (var j = i + 1; j < items.length; j++) {
+        if (usados[j]) continue;
+        if (dist(p0, puntoDe(items[j])) <= radioClusterM) {
+          grupo.add(items[j]);
+          usados[j] = true;
+        }
+      }
+
+      if (grupo.length == 1) {
+        final it = grupo.first;
+        markers.add(construir(it, puntoDe(it), seleccionado(it)));
+        continue;
+      }
+
+      if (_zoomActual < zoomExpandir) {
+        final centro = _centroDe(grupo.map(puntoDe));
+        markers.add(
+          Marker(
+            point: centro,
+            width: 54,
+            height: 54,
+            child: GestureDetector(
+              onTap: () => onTapCluster(grupo),
+              child: PinClusterMapa(cantidad: grupo.length),
+            ),
+          ),
+        );
+      } else {
+        // Spiderfy suave: círculo pequeño (~14–20 m) alrededor del centro.
+        final centro = _centroDe(grupo.map(puntoDe));
+        final n = grupo.length;
+        final radioM = (12.0 + n * 1.4).clamp(12.0, 22.0);
+        for (var k = 0; k < n; k++) {
+          // Bearing -180..180 (API latlong2).
+          final bearing = -180.0 + (360.0 * k / n);
+          final offset = dist.offset(centro, radioM, bearing);
+          final it = grupo[k];
+          markers.add(construir(it, offset, seleccionado(it)));
+        }
+      }
+    }
+    return markers;
+  }
+
+  LatLng _centroDe(Iterable<LatLng> pts) {
+    var lat = 0.0;
+    var lng = 0.0;
+    var n = 0;
+    for (final p in pts) {
+      lat += p.latitude;
+      lng += p.longitude;
+      n++;
+    }
+    if (n == 0) return const LatLng(0, 0);
+    return LatLng(lat / n, lng / n);
   }
 }
 

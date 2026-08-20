@@ -43,7 +43,7 @@ class RankingUsuariosExplorar extends StatelessWidget {
               const Text('🔥', style: TextStyle(fontSize: 15)),
               const SizedBox(width: 6),
               Text(
-                'Personas populares',
+                'Personas populares esta semana',
                 style: GoogleFonts.baloo2(
                   color: ColoresApp.textoPrincipal,
                   fontWeight: FontWeight.w900,

@@ -509,14 +509,26 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                         usuario: usuario,
                         nombre: username,
                       ),
+                      if (_estado != EstadoRelacionUsuario.amigo) ...[
+                        const SizedBox(height: 10),
+                        _buildActionButton(),
+                      ],
                     ],
                   ] else ...[
                     if (_idUsuario != null) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: _botonesChatYHielo(
-                          usuario: usuario,
-                          nombre: nombreVisible,
+                        child: Column(
+                          children: [
+                            _botonesChatYHielo(
+                              usuario: usuario,
+                              nombre: nombreVisible,
+                            ),
+                            if (_estado != EstadoRelacionUsuario.amigo) ...[
+                              const SizedBox(height: 10),
+                              _buildActionButton(),
+                            ],
+                          ],
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -528,10 +540,6 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                     ),
                     const SizedBox(height: 12),
                     CarruselLugaresMegusta(items: _lugaresMegusta),
-                    const SizedBox(height: 24),
-                    _buildActionButtonTitulo(),
-                    const SizedBox(height: 10),
-                    _buildActionButton(),
                   ],
                   if (puedeVer && _estado == EstadoRelacionUsuario.amigo) ...[
                     const SizedBox(height: 18),
@@ -788,7 +796,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
             padding: const EdgeInsets.only(bottom: 10),
             child: _chipChatPendiente(),
           ),
-        _botonRompehielo(usuario: usuario, nombre: nombre),
+        Center(child: _botonRompehielo(usuario: usuario, nombre: nombre)),
       ],
     );
   }
@@ -1522,33 +1530,39 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
         return const SizedBox.shrink();
     }
 
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      color: esSolido ? fillColor : null,
-      borderRadius: BorderRadius.circular(50),
-      onPressed: _procesando ? null : _onAccionAmistad,
-      minimumSize: Size(0, 0),
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(50)),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-        child: _procesando
-            ? Center(child: FernecitoLoader.inline(size: 22, color: textColor))
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icono, size: 20, color: textColor),
-                  const SizedBox(width: 8),
-                  Text(
-                    texto,
-                    style: GoogleFonts.baloo2(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: textColor,
+    return Center(
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        color: esSolido ? fillColor : null,
+        borderRadius: BorderRadius.circular(50),
+        onPressed: _procesando ? null : _onAccionAmistad,
+        minimumSize: Size.zero,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(50),
+            border: esSolido
+                ? null
+                : Border.all(color: ColoresApp.principalMarca.withValues(alpha: 0.55)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 16),
+          child: _procesando
+              ? FernecitoLoader.inline(size: 16, color: textColor)
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icono, size: 15, color: textColor),
+                    const SizedBox(width: 7),
+                    Text(
+                      texto,
+                      style: GoogleFonts.baloo2(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: textColor,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+        ),
       ),
     );
   }

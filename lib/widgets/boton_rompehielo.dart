@@ -1,4 +1,4 @@
-/// CTA Rompehielo — jerarquía clara sin animaciones llamativas.
+/// CTA Rompehielo — compacto, ancho al texto, redondeado suave.
 library;
 
 import 'package:flutter/cupertino.dart';
@@ -6,7 +6,7 @@ import 'package:flutter/material.dart' show Colors;
 import 'package:google_fonts/google_fonts.dart';
 import '../core/constants.dart';
 
-/// esEmisor: true = "Responde a {nombre}", false = "Romper el hielo con {nombre}"
+/// esEmisor: true = "Responde a {nombre}", false = "Romper hielo con {nombre}"
 /// esSecundario: jerarquía baja si ya hubo interacción.
 class BotonRompehielo extends StatelessWidget {
   final String nombre;
@@ -22,11 +22,20 @@ class BotonRompehielo extends StatelessWidget {
     this.onTap,
   });
 
+  String get _nombreCorto {
+    final t = nombre.trim();
+    if (t.isEmpty) return '';
+    return t.split(RegExp(r'\s+')).first;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final corto = _nombreCorto;
     final label = esEmisor
-        ? 'Responde a $nombre'
-        : (esSecundario ? 'Ver rompehielo con $nombre' : 'Romper el hielo con $nombre');
+        ? 'Responde a $corto'
+        : (esSecundario
+            ? 'Ver rompehielo con $corto'
+            : 'Romper hielo con $corto');
 
     final bg = esSecundario
         ? ColoresApp.fondoSuperficie
@@ -35,34 +44,30 @@ class BotonRompehielo extends StatelessWidget {
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
       onPressed: onTap,
       child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 18),
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              CupertinoIcons.chat_bubble_2_fill,
-              size: 20,
-              color: fg,
-            ),
-            const SizedBox(width: 10),
+            Icon(CupertinoIcons.chat_bubble_2_fill, size: 15, color: fg),
+            const SizedBox(width: 7),
             Flexible(
               child: Text(
                 label,
                 textAlign: TextAlign.center,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.baloo2(
-                  fontSize: 15,
+                  fontSize: 13,
                   fontWeight: FontWeight.w800,
                   color: fg,
-                  height: 1.2,
+                  height: 1.15,
                 ),
               ),
             ),

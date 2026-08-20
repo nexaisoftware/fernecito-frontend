@@ -390,7 +390,9 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
   }
 
   Future<void> _editarContacto(PlanComunidad p) async {
-    var modo = p.contactoModo == 'colaborar' ? 'colaborar' : 'contactar';
+    var modo = (p.contactoModo == 'vaquita' || p.contactoModo == 'colaborar')
+        ? 'vaquita'
+        : 'contactar';
     final ctrl = TextEditingController(text: p.contactoAnfitrion ?? '');
     final guardado = await showFernecitoDialog<bool>(
       context: context,
@@ -401,26 +403,30 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
             padding: const EdgeInsets.only(top: 10),
             child: Column(
               children: [
-                CupertinoSegmentedControl<String>(
-                  groupValue: modo,
-                  children: const {
-                    'contactar': Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('Contactar', style: TextStyle(fontSize: 12)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _SegmentoContactoModo(
+                      label: 'Contactar',
+                      icono: CupertinoIcons.chat_bubble_2_fill,
+                      activo: modo == 'contactar',
+                      onTap: () => setLocal(() => modo = 'contactar'),
                     ),
-                    'colaborar': Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('Colaborar', style: TextStyle(fontSize: 12)),
+                    const SizedBox(width: 6),
+                    _SegmentoContactoModo(
+                      label: 'Vaquita',
+                      icono: CupertinoIcons.link,
+                      activo: modo == 'vaquita',
+                      onTap: () => setLocal(() => modo = 'vaquita'),
                     ),
-                  },
-                  onValueChanged: (v) => setLocal(() => modo = v),
+                  ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 CupertinoTextField(
                   controller: ctrl,
                   maxLength: 80,
-                  placeholder: modo == 'colaborar'
-                      ? 'ej: link o alias'
+                  placeholder: modo == 'vaquita'
+                      ? 'alias o link'
                       : 'ej un whatsapp o instagram',
                 ),
               ],
@@ -751,8 +757,9 @@ class _PanelEditar extends StatelessWidget {
     final miembros = detalle.miembros
         .where((m) => m.estado == 'aceptado' && m.rol != 'organizador')
         .toList(growable: false);
-    final contactoLabel = plan.contactoModo == 'colaborar'
-        ? 'Colaborar'
+    final contactoLabel = (plan.contactoModo == 'vaquita' ||
+            plan.contactoModo == 'colaborar')
+        ? 'Vaquita para el organizador'
         : 'Contactar';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1550,6 +1557,54 @@ class _MiniAvatar extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _SegmentoContactoModo extends StatelessWidget {
+  const _SegmentoContactoModo({
+    required this.label,
+    required this.icono,
+    required this.activo,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icono;
+  final bool activo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: activo ? ColoresApp.principalMarca : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, size: 14, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.baloo2(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                color: Colors.white,
+                shadows: activo
+                    ? null
+                    : const [Shadow(color: Colors.black54, blurRadius: 8)],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 String _fmtFecha(DateTime d) {

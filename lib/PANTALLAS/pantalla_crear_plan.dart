@@ -337,29 +337,34 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
         : (_fin ?? _inicio.add(const Duration(hours: 3)));
     await showCupertinoModalPopup<void>(
       context: context,
-      builder: (ctx) => Container(
-        height: 310,
-        color: const Color(0xFF1B1B1B),
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: CupertinoButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Listo'),
+      builder: (ctx) => Localizations.override(
+        context: context,
+        locale: const Locale('es', 'AR'),
+        child: Container(
+          height: 310,
+          color: const Color(0xFF1B1B1B),
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: CupertinoButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Listo'),
+                ),
               ),
-            ),
-            Expanded(
-              child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.dateAndTime,
-                initialDateTime: base.isBefore(ahora) ? ahora : base,
-                minimumDate: ahora.subtract(const Duration(minutes: 10)),
-                maximumDate: ahora.add(const Duration(days: 45)),
-                use24hFormat: true,
-                onDateTimeChanged: (v) => base = v,
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.dateAndTime,
+                  initialDateTime: base.isBefore(ahora) ? ahora : base,
+                  minimumDate: ahora.subtract(const Duration(minutes: 10)),
+                  maximumDate: ahora.add(const Duration(days: 45)),
+                  use24hFormat: true,
+                  dateOrder: DatePickerDateOrder.dmy,
+                  onDateTimeChanged: (v) => base = v,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -420,7 +425,7 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
     );
     await _bot([
       'Último detalle opcional 📲',
-      'Elegí **contactar organizador** (WhatsApp/IG) o **colaborar** (link o alias).',
+      'Elegí **contactar organizador** (WhatsApp/IG) o **vaquita para el organizador** (alias o link).',
       'Solo una opción. Si no hace falta, saltealo.',
     ]);
     _irA(_PasoPlan.contacto);
@@ -934,16 +939,18 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
                     texto: 'Contactar',
                     icono: CupertinoIcons.chat_bubble_2,
                     primario: _contactoModo == 'contactar',
+                    sinContenedorInactivo: true,
                     onTap: () => setState(() => _contactoModo = 'contactar'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: _OpcionBarraPlan(
-                    texto: 'Colaborar',
+                    texto: 'Vaquita',
                     icono: CupertinoIcons.link,
-                    primario: _contactoModo == 'colaborar',
-                    onTap: () => setState(() => _contactoModo = 'colaborar'),
+                    primario: _contactoModo == 'vaquita',
+                    sinContenedorInactivo: true,
+                    onTap: () => setState(() => _contactoModo = 'vaquita'),
                   ),
                 ),
               ],
@@ -952,8 +959,8 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
             _InputTextoPlan(
               controller: _input,
               focus: _focus,
-              hint: _contactoModo == 'colaborar'
-                  ? 'ej: link o alias'
+              hint: _contactoModo == 'vaquita'
+                  ? 'alias o link'
                   : 'ej un whatsapp o instagram',
               onSend: _onTexto,
             ),
@@ -1431,6 +1438,7 @@ class _OpcionBarraPlan extends StatelessWidget {
     required this.onTap,
     this.primario = false,
     this.skip = false,
+    this.sinContenedorInactivo = false,
   });
 
   final String texto;
@@ -1438,6 +1446,7 @@ class _OpcionBarraPlan extends StatelessWidget {
   final VoidCallback onTap;
   final bool primario;
   final bool skip;
+  final bool sinContenedorInactivo;
 
   @override
   Widget build(BuildContext context) {
@@ -1446,7 +1455,7 @@ class _OpcionBarraPlan extends StatelessWidget {
     if (primario) {
       bg = ColoresApp.principalMarca;
       fg = Colors.white;
-    } else if (skip) {
+    } else if (skip || sinContenedorInactivo) {
       bg = Colors.transparent;
       fg = ColoresApp.textoSecundario;
     } else {
@@ -1639,8 +1648,8 @@ class _ResumenPlanCard extends StatelessWidget {
             _PillPlan(cupo),
             if ((contacto ?? '').trim().isNotEmpty)
               _PillPlan(
-                contactoModo == 'colaborar'
-                    ? 'Colaborar: ${contacto!.trim()}'
+                contactoModo == 'vaquita' || contactoModo == 'colaborar'
+                    ? 'Vaquita: ${contacto!.trim()}'
                     : 'Contactar: ${contacto!.trim()}',
               ),
           ],

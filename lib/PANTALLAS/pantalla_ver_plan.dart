@@ -1012,8 +1012,9 @@ class _ContactoChip extends StatelessWidget {
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
-    final titulo = modo == 'colaborar'
-        ? 'Colaborar con organizador'
+    final esVaquita = modo == 'vaquita' || modo == 'colaborar';
+    final titulo = esVaquita
+        ? 'Vaquita para el organizador'
         : 'Contactar organizador';
     return GestureDetector(
       onTap: onTap,
@@ -1026,7 +1027,7 @@ class _ContactoChip extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              modo == 'colaborar'
+              esVaquita
                   ? CupertinoIcons.link
                   : CupertinoIcons.chat_bubble_2,
               size: 13,
@@ -1517,6 +1518,7 @@ class _GridParticipantes extends StatelessWidget {
   final ValueChanged<PlanMiembro> onTapPersona;
 
   List<List<int>> _filasAlternadas(int n) {
+    // Patrón 3-2-3-2…: 4→3+1, 5→3+2, 6→3+2+1, 7→3+2+2, 8→3+2+3.
     final filas = <List<int>>[];
     var i = 0;
     var colCount = 3;
@@ -1540,20 +1542,26 @@ class _GridParticipantes extends StatelessWidget {
 
     return Column(
       children: filas.map((indices) {
+        final incompleta = indices.length < 3;
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: indices.map((idx) {
-              return SizedBox(
-                width: tamCelda,
-                child: _CeldaPersona(
-                  miembro: personas[idx],
-                  tamCelda: tamCelda,
-                  onTap: () => onTapPersona(personas[idx]),
+            mainAxisAlignment: incompleta
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.spaceEvenly,
+            children: [
+              for (var j = 0; j < indices.length; j++) ...[
+                if (j > 0 && incompleta) SizedBox(width: _gridEspaciado),
+                SizedBox(
+                  width: tamCelda,
+                  child: _CeldaPersona(
+                    miembro: personas[indices[j]],
+                    tamCelda: tamCelda,
+                    onTap: () => onTapPersona(personas[indices[j]]),
+                  ),
                 ),
-              );
-            }).toList(),
+              ],
+            ],
           ),
         );
       }).toList(),

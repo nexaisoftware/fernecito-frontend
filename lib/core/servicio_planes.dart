@@ -82,7 +82,7 @@ class PlanComunidad {
   final bool permiteSquads;
   final int? edadMinima;
   final String? contactoAnfitrion;
-  final String contactoModo; // contactar | colaborar
+  final String contactoModo; // contactar | vaquita (legado: colaborar)
   final String? beneficioLocal;
   final String beneficioEstado;
   final String? beneficioContraoferta;
@@ -234,9 +234,11 @@ class PlanComunidad {
       permiteSquads: m['permite_squads'] != false,
       edadMinima: n(m['edad_minima']),
       contactoAnfitrion: m['contacto_anfitrion']?.toString(),
-      contactoModo: m['contacto_modo']?.toString() == 'colaborar'
-          ? 'colaborar'
-          : 'contactar',
+      contactoModo: () {
+        final mdo = m['contacto_modo']?.toString().toLowerCase() ?? '';
+        if (mdo == 'vaquita' || mdo == 'colaborar') return 'vaquita';
+        return 'contactar';
+      }(),
       beneficioLocal: m['beneficio_local']?.toString(),
       beneficioEstado: m['beneficio_estado']?.toString() ?? 'ninguno',
       beneficioContraoferta: m['beneficio_contraoferta']?.toString(),
@@ -522,8 +524,9 @@ class ServicioPlanes {
         'p_tipo_organizador': tipoOrganizador,
         if (idSquad != null) 'p_id_squad': idSquad,
         'p_contacto_anfitrion': contactoAnfitrion,
-        'p_contacto_modo': contactoModo == 'colaborar'
-            ? 'colaborar'
+        'p_contacto_modo':
+            (contactoModo == 'vaquita' || contactoModo == 'colaborar')
+            ? 'vaquita'
             : 'contactar',
         'p_portada_path': portadaPath,
         'p_color_hex': colorHex,
@@ -872,7 +875,11 @@ class ServicioPlanes {
         'p_sin_cupo': sinCupo,
         'p_ingreso_abierto': ingresoAbierto,
         'p_contacto_anfitrion': contactoAnfitrion,
-        'p_contacto_modo': contactoModo,
+        'p_contacto_modo': contactoModo == null
+            ? null
+            : ((contactoModo == 'vaquita' || contactoModo == 'colaborar')
+                ? 'vaquita'
+                : 'contactar'),
         'p_limpiar_contacto': limpiarContacto,
       },
     );
