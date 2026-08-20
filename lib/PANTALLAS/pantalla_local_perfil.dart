@@ -175,25 +175,40 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
     try {
       final sb = ServicioSupabase().cliente;
 
-      // 1) Perfil del local — columnas reales del schema
-      final local = await sb
-          .from('perfiles_locales')
-          .select(
-            'id, nombre_local, descripcion_local, '
-            'url_instagram, url_tiktok, url_website, telefono_whatsapp, whatsapp_label, '
-            'ciudad, provincia, direccion, url_maps, rubro, '
-            'local_verificado, es_pionero, es_organizador_eventos, calificacion_promedio, calificacion_cantidad, '
-            'mostrar_calificaciones, '
-            'foto_perfil_url, url_foto_banner, estado_cuenta, '
-            '$_selectFotosLocales, horarios_json',
-          )
-          .eq('id', widget.idLocal!)
-          .maybeSingle();
+      // 1) Perfil del local — columnas reales del schema.
+      // Si falta alguna columna nueva (ej. es_organizador_eventos), reintenta
+      // sin ella para no dejar el perfil vacío.
+      final selectBase =
+          'id, nombre_local, descripcion_local, '
+          'url_instagram, url_tiktok, url_website, telefono_whatsapp, whatsapp_label, '
+          'ciudad, provincia, direccion, url_maps, rubro, '
+          'local_verificado, es_pionero, calificacion_promedio, calificacion_cantidad, '
+          'mostrar_calificaciones, '
+          'foto_perfil_url, url_foto_banner, estado_cuenta, '
+          '$_selectFotosLocales, horarios_json';
+      Map<String, dynamic>? localRow;
+      try {
+        final row = await sb
+            .from('perfiles_locales')
+            .select('$selectBase, es_organizador_eventos')
+            .eq('id', widget.idLocal!)
+            .maybeSingle();
+        if (row != null) localRow = Map<String, dynamic>.from(row);
+      } catch (e) {
+        debugPrint('[LocalPerfil] select con organizador falló, fallback: $e');
+        final row = await sb
+            .from('perfiles_locales')
+            .select(selectBase)
+            .eq('id', widget.idLocal!)
+            .maybeSingle();
+        if (row != null) localRow = Map<String, dynamic>.from(row);
+      }
 
-      if (local == null) {
+      if (localRow == null) {
         if (mounted) setState(() => _cargando = false);
         return;
       }
+      final local = localRow;
 
       // 2) Eventos publicados del local
       List<Map<String, dynamic>> eventos = [];
