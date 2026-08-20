@@ -3,10 +3,13 @@
 /// Squad: elijo con qué squad rompo/respondo (stack de avatares + nombre).
 library;
 
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/constants.dart';
+import '../core/servicio_conversaciones.dart';
 import '../core/servicio_rompehielo.dart';
 import '../core/servicio_squads.dart';
 import '../core/supabase_client.dart';
@@ -18,6 +21,8 @@ import '../widgets/card_contexto_rompehielo.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/stack_avatares_squad.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
+import 'pantalla_chat_conversacion.dart';
 
 // Rompe hielo persona → persona (5 mensajes)
 const List<String> _iniciadorPersona = [
@@ -173,10 +178,13 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
   List<MiembroSquad> _miembrosContraparte = const [];
   final TextEditingController _controller = TextEditingController();
   final ServicioRompehielo _srv = ServicioRompehielo();
+  Timer? _refreshAuto;
+  late final DateTime _apertura;
 
   @override
   void initState() {
     super.initState();
+    _apertura = DateTime.now();
     final d = widget.data;
     _estado = d.estadoInicial;
     if (d.identidadFijada) {
@@ -185,6 +193,15 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
     _cargarMiAvatar();
     _cargarEstado();
     _cargarMiembrosContraparte();
+    _refreshAuto = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted) return;
+      if (DateTime.now().difference(_apertura) >= const Duration(minutes: 5)) {
+        _refreshAuto?.cancel();
+        _refreshAuto = null;
+        return;
+      }
+      unawaited(_cargarEstado());
+    });
   }
 
   Future<void> _cargarMiembrosContraparte() async {
@@ -343,28 +360,170 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
 
   @override
   void dispose() {
+    _refreshAuto?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   void _cerrar() => Navigator.of(context).pop();
 
+  bool get _esChatUsuarioUsuario =>
+      widget.data.tipoContraparte == TipoContraparte.usuario &&
+      (_idGrupoActor == null || _idGrupoActor!.isEmpty);
+
+  bool _chatOcupado = false;
+
+  Future<void> _solicitarChat() async {
+    if (_chatOcupado || !_esChatUsuarioUsuario) return;
+    setState(() => _chatOcupado = true);
+    final res = await ServicioConversaciones().solicitar(widget.data.otroId);
+    if (!mounted) return;
+    setState(() {
+      _chatOcupado = false;
+      if (res.estado != null) _estado = res.estado;
+    });
+    if (res.error != null) {
+      await showFernecitoDialog<void>(
+        context: context,
+        builder: (ctx) => DialogoFernecito(
+          title: const Text('No se pudo pedir el chat'),
+          content: Text(ServicioConversaciones().mensajeError(res.error)),
+          actions: [
+            AccionDialogoFernecito(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _responderChat({required bool aceptar}) async {
+    final id = _estado?.conversacion?.id;
+    if (_chatOcupado || id == null || id.isEmpty) return;
+    setState(() => _chatOcupado = true);
+    final res = await ServicioConversaciones().responder(
+      idConversacion: id,
+      aceptar: aceptar,
+    );
+    if (!mounted) return;
+    setState(() {
+      _chatOcupado = false;
+      if (res.estado != null) _estado = res.estado;
+    });
+    if (res.error != null) {
+      await showFernecitoDialog<void>(
+        context: context,
+        builder: (ctx) => DialogoFernecito(
+          title: const Text('No se pudo responder'),
+          content: Text(ServicioConversaciones().mensajeError(res.error)),
+          actions: [
+            AccionDialogoFernecito(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    if (aceptar && _estado?.chatAceptado == true) {
+      await _abrirChatAceptado();
+    }
+  }
+
+  Future<void> _abrirChatAceptado() async {
+    final conv = _estado?.conversacion;
+    if (conv == null || !conv.aceptada) return;
+    final d = widget.data;
+    await Navigator.of(context, rootNavigator: true).push(
+      CupertinoPageRoute(
+        builder: (_) => PantallaChatConversacion(
+          idConversacion: conv.id,
+          otroId: d.otroId,
+          nombreOtro: _nombreContraparte,
+          fotoOtro: d.contraparte['avatar']?.toString(),
+        ),
+      ),
+    );
+  }
+
+  Widget _bannerChatRompehielo() {
+    final est = _estado;
+    if (!_esChatUsuarioUsuario || est == null) return const SizedBox.shrink();
+    if (est.chatAceptado) {
+      return _BotonChatRompehielo(
+        texto: 'Ir al chat',
+        primario: true,
+        ocupado: _chatOcupado,
+        onTap: _abrirChatAceptado,
+      );
+    }
+    if (est.chatPendiente && est.conversacion?.puedeAceptar == true) {
+      return _BotonChatRompehielo(
+        texto: 'Aceptar conversación',
+        primario: true,
+        ocupado: _chatOcupado,
+        onTap: () => _responderChat(aceptar: true),
+      );
+    }
+    if (est.chatPendiente) {
+      return _BotonChatRompehielo(
+        texto: 'Solicitud de chat pendiente',
+        primario: false,
+        ocupado: false,
+        onTap: null,
+      );
+    }
+    if (est.puedeSolicitarChat) {
+      return _BotonChatRompehielo(
+        texto: 'Solicitar conversación de chat',
+        primario: true,
+        ocupado: _chatOcupado,
+        onTap: _solicitarChat,
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _contadorChatRompehielo() {
+    final est = _estado;
+    if (!_esChatUsuarioUsuario || est == null || est.ignorado) {
+      return const SizedBox.shrink();
+    }
+    if (est.chatAceptado ||
+        est.chatPendiente ||
+        est.puedeSolicitarChat) {
+      return const SizedBox.shrink();
+    }
+    return _ContadorChatRompehielo(
+      mios: est.nMensajesMios,
+      otro: est.nMensajesOtro,
+      meta: RompehieloEstado.mensajesParaChat,
+      subtitulo: est.existe
+          ? est.textoProgresoChat
+          : 'A ${RompehieloEstado.mensajesParaChat} rompehielos de cada lado '
+              'para solicitar chat',
+    );
+  }
+
   Future<void> _ignorar() async {
     final d = widget.data;
-    final confirmar = await showCupertinoDialog<bool>(
+    final confirmar = await showFernecitoDialog<bool>(
       context: context,
-      builder: (c) => CupertinoAlertDialog(
+      builder: (c) => DialogoFernecito(
         title: const Text('Ignorar rompehielo'),
         content: const Text(
           'No vas a seguir esta conversación y le va a quedar claro que no '
           'querés continuar. ¿Seguro?',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(c, false),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(c, true),
             child: const Text('Ignorar'),
@@ -380,13 +539,13 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
     );
     if (!mounted) return;
     if (res.error != null) {
-      showCupertinoDialog<void>(
+      showFernecitoDialog<void>(
         context: context,
-        builder: (c) => CupertinoAlertDialog(
+        builder: (c) => DialogoFernecito(
           title: const Text('Rompehielo'),
           content: const Text('No se pudo ignorar. Intentá de nuevo.'),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(c),
               child: const Text('OK'),
             ),
@@ -428,13 +587,13 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
         'mensaje_invalido' => 'El mensaje debe tener entre 1 y 100 caracteres.',
         _ => 'No se pudo enviar. Intentá de nuevo.',
       };
-      showCupertinoDialog(
+      showFernecitoDialog(
         context: context,
-        builder: (c) => CupertinoAlertDialog(
+        builder: (c) => DialogoFernecito(
           title: const Text('Rompehielo'),
           content: Text(msg),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(c),
               child: const Text('OK'),
             ),
@@ -512,6 +671,8 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
                 onIgnorar: _ignorar,
                 puedeIgnorar: _estado?.puedeIgnorar == true,
               ),
+              _contadorChatRompehielo(),
+              _bannerChatRompehielo(),
               CardContextoRompehielo(
                 estado: _estado,
                 esSquad: d.tipoContraparte == TipoContraparte.squad,
@@ -519,7 +680,11 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
                 miembrosSquad: _miembrosContraparte,
               ),
               Expanded(
-                child: _RompehieloHilo(
+                child: RefreshIndicator(
+                  color: ColoresApp.principalMarca,
+                  backgroundColor: ColoresApp.fondoSuperficie,
+                  onRefresh: _cargarEstado,
+                  child: _RompehieloHilo(
                   contraparteAvatar:
                       d.tipoContraparte == TipoContraparte.usuario
                       ? AvatarBordeBlanco(
@@ -571,6 +736,7 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
                   yoEtiqueta: _responderComo == null
                       ? 'Yo'
                       : (_responderComo!['nombre'] as String? ?? 'Squad'),
+                ),
                 ),
               ),
             ],
@@ -1177,6 +1343,130 @@ class _TemplatesChipsState extends State<_TemplatesChips> {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+class _ContadorChatRompehielo extends StatelessWidget {
+  const _ContadorChatRompehielo({
+    required this.mios,
+    required this.otro,
+    required this.meta,
+    required this.subtitulo,
+  });
+
+  final int mios;
+  final int otro;
+  final int meta;
+  final String subtitulo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: ColoresApp.principalMarca.withValues(alpha: 0.28),
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Icon(
+                  CupertinoIcons.chat_bubble_2,
+                  size: 15,
+                  color: ColoresApp.principalMarca.withValues(alpha: 0.9),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Vos $mios/$meta · Otro $otro/$meta',
+                    style: GoogleFonts.baloo2(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                      color: ColoresApp.textoPrincipal,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (subtitulo.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitulo,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.baloo2(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  height: 1.25,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BotonChatRompehielo extends StatelessWidget {
+  const _BotonChatRompehielo({
+    required this.texto,
+    required this.primario,
+    required this.ocupado,
+    required this.onTap,
+  });
+
+  final String texto;
+  final bool primario;
+  final bool ocupado;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: CupertinoButton(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        color: primario
+            ? ColoresApp.principalMarca
+            : ColoresApp.fondoSuperficie.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(16),
+        onPressed: ocupado || onTap == null ? null : onTap,
+        child: ocupado
+            ? const CupertinoActivityIndicator(color: Colors.white)
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    CupertinoIcons.chat_bubble_2_fill,
+                    size: 16,
+                    color: primario ? Colors.white : ColoresApp.principalMarca,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      texto,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.baloo2(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: primario
+                            ? Colors.white
+                            : ColoresApp.principalMarca,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }

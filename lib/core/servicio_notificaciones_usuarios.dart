@@ -66,14 +66,39 @@ class ServicioNotificacionesUsuarios {
           .order('fecha_creacion', ascending: false)
           .limit(limit);
 
-      return (data as List)
-          .cast<Map<String, dynamic>>()
-          .map(Notificacion.fromMap)
-          .toList();
+      return agruparHilosChat(
+        (data as List)
+            .cast<Map<String, dynamic>>()
+            .map(Notificacion.fromMap)
+            .toList(),
+      );
     } catch (e) {
       debugPrint('⚠️ listar notificaciones usuario: $e');
       return const [];
     }
+  }
+
+  /// Un hilo de Match/Planes/Squad/conversación = una card (la más reciente).
+  static List<Notificacion> agruparHilosChat(List<Notificacion> lista) {
+    const hilos = {
+      'match_mensaje',
+      'plan_mencion',
+      'squad_mensaje',
+      'squad_mencion',
+      'conversacion_mensaje',
+    };
+    final seen = <String>{};
+    final out = <Notificacion>[];
+    for (final n in lista) {
+      if (hilos.contains(n.tipo) && (n.ctaIdRef ?? '').isNotEmpty) {
+        final k = (n.tipo == 'squad_mensaje' || n.tipo == 'squad_mencion')
+            ? 'squad:${n.ctaIdRef}'
+            : '${n.tipo}:${n.ctaIdRef}';
+        if (!seen.add(k)) continue;
+      }
+      out.add(n);
+    }
+    return out;
   }
 
   /// Sincroniza el feed: cache + solo nuevas + estado leída.
@@ -85,7 +110,7 @@ class ServicioNotificacionesUsuarios {
     if (uid == null) return const [];
 
     if (forzarCompleto || !tieneCache) {
-      final lista = await listar();
+      final lista = agruparHilosChat(await listar());
       _cache = lista;
       _cacheUid = uid;
       sincronizarDesdeLista(_cache);
@@ -133,9 +158,9 @@ class ServicioNotificacionesUsuarios {
             ..sort((a, b) => b.fechaCreacion.compareTo(a.fechaCreacion));
 
       if (fusionadas.length > _limitFeed) {
-        _cache = fusionadas.sublist(0, _limitFeed);
+        _cache = agruparHilosChat(fusionadas.sublist(0, _limitFeed));
       } else {
-        _cache = fusionadas;
+        _cache = agruparHilosChat(fusionadas);
       }
       _cacheUid = uid;
       // Contador desde server (incluye no leídas fuera del limit del feed).
@@ -144,7 +169,7 @@ class ServicioNotificacionesUsuarios {
       return cache;
     } catch (e) {
       debugPrint('⚠️ sincronizar notificaciones: $e — fallback completo');
-      final lista = await listar();
+      final lista = agruparHilosChat(await listar());
       _cache = lista;
       _cacheUid = uid;
       sincronizarDesdeLista(_cache);
@@ -355,5 +380,74 @@ class ServicioNotificacionesUsuarios {
       debugPrint('⚠️ borrar notif usuario: $e');
       return false;
     }
+  }
+
+  /// Conteos de no leídas por destino del hub Social.
+  Future<ConteosNovedadesSocial> conteosDestinosSocial() async {
+    final uid = _uid;
+    if (uid == null) return const ConteosNovedadesSocial();
+    try {
+      final data = await ServicioSupabase().cliente
+          .from('notificaciones_usuarios')
+          .select('tipo')
+          .eq('id_usuario', uid)
+          .eq('leida', false)
+          .gte('fecha_expiracion', DateTime.now().toUtc().toIso8601String());
+      var explora = 0;
+      var planes = 0;
+      var match = 0;
+      var amigos = 0;
+      for (final row in data as List) {
+        final tipo = (row as Map)['tipo']?.toString() ?? '';
+        switch (ConteosNovedadesSocial.destinoDe(tipo)) {
+          case 'explora':
+            explora++;
+          case 'planes':
+            planes++;
+          case 'match':
+            match++;
+          case 'amigos':
+            amigos++;
+        }
+      }
+      return ConteosNovedadesSocial(
+        explora: explora,
+        planes: planes,
+        match: match,
+        amigos: amigos,
+      );
+    } catch (e) {
+      debugPrint('⚠️ conteosDestinosSocial: $e');
+      return const ConteosNovedadesSocial();
+    }
+  }
+}
+
+class ConteosNovedadesSocial {
+  const ConteosNovedadesSocial({
+    this.explora = 0,
+    this.planes = 0,
+    this.match = 0,
+    this.amigos = 0,
+  });
+
+  final int explora;
+  final int planes;
+  final int match;
+  final int amigos;
+
+  static String destinoDe(String tipo) {
+    if (tipo.startsWith('rompehielo_') || tipo.startsWith('ranking_top')) {
+      return 'explora';
+    }
+    if (tipo.startsWith('plan_')) return 'planes';
+    if (tipo.startsWith('match_')) return 'match';
+    if (tipo == 'solicitud_amistad' ||
+        tipo == 'amistad_aceptada' ||
+        tipo == 'solicitud_squad' ||
+        tipo == 'squad_aceptada') {
+      return 'amigos';
+    }
+    return '';
   }
 }

@@ -81,8 +81,8 @@ class JerarquiasData {
 
   static const gratis = JerarquiaEvento(
     slug: 'gratis',
-    labelChip: 'Más planes',
-    labelSeccion: 'Más planes',
+    labelChip: 'Más eventos',
+    labelSeccion: 'Más eventos',
     icono: CupertinoIcons.square_grid_2x2,
     orden: 10,
     permiteVerMas: true,
@@ -116,19 +116,39 @@ class JerarquiasData {
   }
 }
 
-/// Capacidad máxima de eventos por carrusel antes de hacer split en otra fila.
+/// Capacidad de cards por carrusel.
 ///
-/// El usuario pidió: top→10, recomendado_fernecito→15, normal→15 (hasta 2
-/// carruseles = 30, después "Ver más"), gratis→grid sin límite.
+/// Base 12; si sobran 1–3 (13–15) se quedan en la misma fila para que no
+/// quede una card suelta sin scroll. A partir de 16: 12 arriba y el resto
+/// abajo con la misma regla, infinito.
 class CapacidadCartelera {
   CapacidadCartelera._();
 
-  static const int topPorFila = 10;
-  static const int recomendadoPorFila = 15;
-  static const int normalPorFila = 15;
+  static const int porFilaBase = 12;
+  static const int porFilaMax = 15;
+
+  static const int topPorFila = porFilaBase;
+  static const int recomendadoPorFila = porFilaBase;
+  static const int normalPorFila = porFilaBase;
 
   /// Máximo de filas iniciales para `normal` antes de pedir "Ver más".
   static const int normalFilasIniciales = 2;
+
+  static List<List<T>> partirFilas<T>(List<T> items) {
+    if (items.isEmpty) return const [];
+    final filas = <List<T>>[];
+    var i = 0;
+    while (i < items.length) {
+      final restan = items.length - i;
+      if (restan <= porFilaMax) {
+        filas.add(items.sublist(i));
+        break;
+      }
+      filas.add(items.sublist(i, i + porFilaBase));
+      i += porFilaBase;
+    }
+    return filas;
+  }
 }
 
 /// Filtros de tiempo disponibles en la barra Spotlight.

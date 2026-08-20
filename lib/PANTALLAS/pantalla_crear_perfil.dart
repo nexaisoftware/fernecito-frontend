@@ -6,7 +6,7 @@
 /// - DB: foto_perfil_url guarda SOLO el path relativo (sin query params)
 /// - Anti-cache: agregar ?v=timestamp al mostrar, no al guardar
 /// - Obligatorio: username + nombre + fecha_nacimiento + sexo
-/// - Opcional: foto, perfil_publico, redes, mi_estado
+/// - Opcional: foto, redes, mi_estado (perfil nace público; privado se elige en Mi perfil)
 /// - perfil_completo = true cuando username + nombre existen
 library;
 
@@ -29,6 +29,7 @@ import '../widgets/burbuja_estado.dart';
 import '../widgets/recortar_avatar_sheet.dart';
 import 'pantalla_home.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 // Textos legales mostrados en el modal de "Términos y Privacidad".
 // BORRADOR de partida — revisar con criterio legal antes de producción.
@@ -86,8 +87,6 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
   DateTime? _fechaNacimientoSeleccionada; // Obligatorio
   String? _sexoSeleccionado; // Obligatorio — hombre | mujer | otro
   Uint8List? _imagenBytes;
-  // Nace publico: ocultarse es una decision que vive en Mi perfil, no en el alta.
-  bool _perfilPublico = true;
   bool _validandoUsername = false;
   bool _usernameDisponible = false;
   bool _usernameValidado = false;
@@ -370,13 +369,13 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
         'mi_estado': _controladorEstado.text.trim().isEmpty
             ? null
             : _controladorEstado.text.trim(),
-        'perfil_publico': _perfilPublico,
+        'perfil_publico': true,
         'instagram_url':
-            _perfilPublico && _controladorInstagram.text.trim().isNotEmpty
+            _controladorInstagram.text.trim().isNotEmpty
             ? _controladorInstagram.text.trim()
             : null,
         'tiktok_url':
-            _perfilPublico && _controladorTikTok.text.trim().isNotEmpty
+            _controladorTikTok.text.trim().isNotEmpty
             ? _controladorTikTok.text.trim()
             : null,
         // Regla: perfil_completo = true cuando username + nombre existen
@@ -453,9 +452,9 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
 
   // Diálogo para continuar sin foto
   Future<bool?> _mostrarDialogoSinFoto() {
-    return showCupertinoDialog<bool>(
+    return showFernecitoDialog<bool>(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             const Icon(CupertinoIcons.photo, color: ColoresApp.promoMarca),
@@ -471,7 +470,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.of(context).pop(false),
             child: Text(
               'Agregar foto',
@@ -481,7 +480,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
               ),
             ),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(
@@ -556,9 +555,9 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
 
   // Mostrar error
   void _mostrarError(String mensaje) {
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             const Icon(
@@ -574,7 +573,7 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -1438,6 +1437,4 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
       ),
     );
   }
-
-  // ── Switch perfil público ──
 }

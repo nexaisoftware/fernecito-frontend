@@ -13,6 +13,7 @@ import '../core/lanzador_externo.dart';
 import '../core/privacidad_perfil.dart';
 import '../core/servicio_amigos.dart';
 import '../core/rompehielo_navegacion.dart';
+import '../core/servicio_conversaciones.dart';
 import '../core/servicio_locales_megusta.dart';
 import '../core/servicio_perfil_usuario.dart';
 import '../core/flujo_bloqueo.dart';
@@ -30,6 +31,8 @@ import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/fernecito_loader.dart';
 import '../widgets/perfil_actividad_sheet.dart';
 import '../widgets/social_ui.dart';
+import '../widgets/dialogo_fernecito.dart';
+import 'pantalla_chat_conversacion.dart';
 import 'pantalla_rompehielo.dart' show TipoContraparte;
 
 enum EstadoRelacionUsuario {
@@ -73,6 +76,7 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
   String _tiktokPersistido = '';
   List<SquadResumen> _squadsDondeEsMiembro = const [];
   RompehieloEstado? _rompehieloEstado;
+  RompehieloEstado? _rompehieloYo;
   List<LocalMegustaItem> _lugaresMegusta = const [];
 
   static String _textoMiembroSquads(List<SquadResumen> squads) {
@@ -147,6 +151,10 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
       );
       if (mounted) {
         setState(() {
+          _rompehieloYo = activos
+              .where((a) => a.idGrupoActor == null)
+              .map((a) => a.estado)
+              .firstOrNull;
           _rompehieloEstado = mejorInvolucramiento(activos)?.estado;
         });
       }
@@ -359,13 +367,13 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
 
   void _mostrarError(String msg) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Error'),
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),
@@ -497,13 +505,16 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
                     _buildActionButton(),
                     if (_idUsuario != null) ...[
                       const SizedBox(height: 12),
-                      _botonRompehielo(usuario: usuario, nombre: username),
+                      _botonesChatYHielo(
+                        usuario: usuario,
+                        nombre: username,
+                      ),
                     ],
                   ] else ...[
                     if (_idUsuario != null) ...[
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: _botonRompehielo(
+                        child: _botonesChatYHielo(
                           usuario: usuario,
                           nombre: nombreVisible,
                         ),
@@ -756,6 +767,173 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
     );
   }
 
+  /// Chat 1:1 si el rompehielo ya se desbloqueó; si no, el botón de hielo.
+  Widget _botonesChatYHielo({
+    required Map<String, dynamic> usuario,
+    required String nombre,
+  }) {
+    final yo = _rompehieloYo;
+    if (yo?.chatAceptado == true && (yo?.conversacion?.id ?? '').isNotEmpty) {
+      return _botonChatChico(usuario: usuario, nombre: nombre);
+    }
+    return Column(
+      children: [
+        if (yo?.chatPendiente == true && yo?.conversacion?.puedeAceptar == true)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _botonAceptarChat(nombre: nombre),
+          )
+        else if (yo?.chatPendiente == true)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _chipChatPendiente(),
+          ),
+        _botonRompehielo(usuario: usuario, nombre: nombre),
+      ],
+    );
+  }
+
+  Widget _chipChatPendiente() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+      decoration: BoxDecoration(
+        color: ColoresApp.fondoSuperficie,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        'Solicitud de chat pendiente',
+        textAlign: TextAlign.center,
+        style: GoogleFonts.baloo2(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: ColoresApp.principalMarca,
+        ),
+      ),
+    );
+  }
+
+  Widget _botonAceptarChat({required String nombre}) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: () async {
+        final id = _rompehieloYo?.conversacion?.id;
+        if (id == null || id.isEmpty) return;
+        final res = await ServicioConversaciones().responder(
+          idConversacion: id,
+          aceptar: true,
+        );
+        if (!mounted) return;
+        if (res.estado != null) {
+          setState(() => _rompehieloYo = res.estado);
+        }
+        if (res.error != null) {
+          _mostrarError(ServicioConversaciones().mensajeError(res.error));
+          return;
+        }
+        if (res.estado?.chatAceptado == true) {
+          await _abrirChatConversacion(nombre: nombre);
+        }
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
+        decoration: BoxDecoration(
+          color: ColoresApp.principalMarca,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              CupertinoIcons.chat_bubble_2_fill,
+              size: 18,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Aceptar chat con $nombre',
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.baloo2(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _botonChatChico({
+    required Map<String, dynamic> usuario,
+    required String nombre,
+  }) {
+    return Align(
+      alignment: Alignment.center,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: () => _abrirChatConversacion(
+          nombre: nombre,
+          usuario: usuario,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          decoration: BoxDecoration(
+            color: ColoresApp.principalMarca,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                CupertinoIcons.chat_bubble_fill,
+                size: 15,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Chat',
+                style: GoogleFonts.baloo2(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _abrirChatConversacion({
+    required String nombre,
+    Map<String, dynamic>? usuario,
+  }) async {
+    final idConv = _rompehieloYo?.conversacion?.id;
+    final idOtro = _idUsuario;
+    if (idConv == null || idConv.isEmpty || idOtro == null) return;
+    final foto =
+        usuario?['avatar']?.toString() ??
+        ServicioSupabase().urlAvatar(_detalle?['foto_perfil_url']?.toString());
+    await Navigator.of(context, rootNavigator: true).push(
+      CupertinoPageRoute(
+        builder: (_) => PantallaChatConversacion(
+          idConversacion: idConv,
+          otroId: idOtro,
+          nombreOtro: nombre,
+          fotoOtro: foto,
+        ),
+      ),
+    );
+  }
+
   /// Botón de rompehielo. Disponible en cualquier perfil (público o privado):
   /// romper el hielo no depende de la visibilidad del perfil.
   Widget _botonRompehielo({
@@ -783,6 +961,10 @@ class _PantallaPerfilUsuariosState extends State<PantallaPerfilUsuarios> {
           );
           if (mounted) {
             setState(() {
+              _rompehieloYo = activos
+                  .where((a) => a.idGrupoActor == null)
+                  .map((a) => a.estado)
+                  .firstOrNull;
               _rompehieloEstado = mejorInvolucramiento(activos)?.estado;
             });
           }

@@ -4,7 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Índices de tema (0=verde, 1=rosa, 2=rojo, 3=azul, 4=violeta).
+/// Índices de tema (0=verde, 1=rosa, 2=rojo, 3=azul, 4=violeta, 5=naranja).
 class TemaFernecito {
   TemaFernecito._();
   static final TemaFernecito instancia = TemaFernecito._();
@@ -26,12 +26,16 @@ class TemaFernecito {
   /// Violeta.
   static const violeta = Color(0xFFBB8FCE);
 
+  /// Naranja cálido (misma intensidad que los demás temas).
+  static const naranja = Color(0xFFFF9F43);
+
   static const List<Color> colores = [
     verde,
     rosaPastel,
     rojoClaro,
     azulCeleste,
     violeta,
+    naranja,
   ];
 
   final ValueNotifier<Color> colorActual = ValueNotifier<Color>(verde);
@@ -48,7 +52,7 @@ class TemaFernecito {
     } catch (_) {}
   }
 
-  /// Cambia al tema en [indice] (0-4) y persiste.
+  /// Cambia al tema en [indice] (0-5) y persiste.
   Future<void> establecerIndice(int indice) async {
     if (indice < 0 || indice >= colores.length) return;
     _aplicarIndice(indice);

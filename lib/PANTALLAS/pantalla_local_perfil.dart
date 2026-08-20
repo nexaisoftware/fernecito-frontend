@@ -10,6 +10,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
+import 'package:share_plus/share_plus.dart';
+import '../core/auth_redirect.dart';
 import '../core/constants.dart';
 import '../core/flujo_bloqueo.dart';
 import '../core/flujo_reporte.dart';
@@ -25,6 +27,7 @@ import 'pantalla_resenas_locales.dart';
 import 'pantalla_ver_evento.dart';
 import '../widgets/social_ui.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 bool _avatarUrlEsAsset(String url) => url.startsWith('assets/');
 
@@ -546,13 +549,13 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
 
   void _mostrarAvisoLink(String mensaje) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('No se pudo abrir'),
         content: Text(mensaje),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Entendido'),
           ),
@@ -601,6 +604,18 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
           onPressed: () => Navigator.pop(ctx),
           child: const Text('Cancelar'),
         ),
+      ),
+    );
+  }
+
+  Future<void> _compartirLocal() async {
+    final nombre = widget.nombreLocal.trim().isEmpty
+        ? 'este local'
+        : widget.nombreLocal.trim();
+    final base = kAuthRedirectWebProduccion.replaceAll(RegExp(r'/$'), '');
+    await SharePlus.instance.share(
+      ShareParams(
+        text: 'Mirá $nombre en Fernecito 🍸\n$base',
       ),
     );
   }
@@ -1021,15 +1036,29 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                     Positioned(
                       top: padding.top + 6,
                       right: horizontalPadding - 4,
-                      child: CupertinoButton(
-                        padding: const EdgeInsets.all(8),
-                        minimumSize: const Size(0, 36),
-                        onPressed: _abrirMenuLocal,
-                        child: Icon(
-                          CupertinoIcons.ellipsis,
-                          size: 22,
-                          color: ColoresApp.textoSecundario,
-                        ),
+                      child: Column(
+                        children: [
+                          CupertinoButton(
+                            padding: const EdgeInsets.all(8),
+                            minimumSize: const Size(0, 36),
+                            onPressed: _abrirMenuLocal,
+                            child: Icon(
+                              CupertinoIcons.ellipsis,
+                              size: 22,
+                              color: ColoresApp.textoSecundario,
+                            ),
+                          ),
+                          CupertinoButton(
+                            padding: const EdgeInsets.all(8),
+                            minimumSize: const Size(0, 36),
+                            onPressed: _compartirLocal,
+                            child: Icon(
+                              Icons.share_rounded,
+                              size: 20,
+                              color: ColoresApp.textoSecundario,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     if (widget.idLocal != null &&
@@ -1135,17 +1164,14 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                 onTap: _abrirWhatsappLocal,
                               ),
                             ],
-                            _BadgeEstadoHorarioPublico(
-                              estado: estadoHorarioLocal(_horarios),
+                            _FilaCartaYHorarios(
+                              estadoHorario: estadoHorarioLocal(_horarios),
                               horarios: _horarios,
+                              cantidadCarta: _cartaItems.length,
+                              onVerCarta: _cartaItems.isEmpty
+                                  ? null
+                                  : () => _mostrarCartaLocal(context),
                             ),
-                            if (_cartaItems.isNotEmpty) ...[
-                              const SizedBox(height: 10),
-                              _BotonVerCartaLocal(
-                                cantidad: _cartaItems.length,
-                                onTap: () => _mostrarCartaLocal(context),
-                              ),
-                            ],
                             if (_ubicacionTextoComputed.isNotEmpty ||
                                 (_direccion ?? '').isNotEmpty) ...[
                               const SizedBox(height: 12),
@@ -1887,6 +1913,50 @@ class _BotonWhatsappPublicoLocal extends StatelessWidget {
   }
 }
 
+class _FilaCartaYHorarios extends StatelessWidget {
+  const _FilaCartaYHorarios({
+    required this.estadoHorario,
+    required this.horarios,
+    required this.cantidadCarta,
+    this.onVerCarta,
+  });
+
+  final EstadoHorarioLocal estadoHorario;
+  final HorariosLocal horarios;
+  final int cantidadCarta;
+  final VoidCallback? onVerCarta;
+
+  @override
+  Widget build(BuildContext context) {
+    final mostrarHorario = estadoHorario.tieneHorarios;
+    final mostrarCarta = onVerCarta != null && cantidadCarta > 0;
+    if (!mostrarHorario && !mostrarCarta) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        children: [
+          if (mostrarCarta)
+            Expanded(
+              child: _BotonVerCartaLocal(
+                cantidad: cantidadCarta,
+                onTap: onVerCarta!,
+              ),
+            ),
+          if (mostrarCarta && mostrarHorario) const SizedBox(width: 8),
+          if (mostrarHorario)
+            Expanded(
+              child: _BadgeEstadoHorarioPublico(
+                estado: estadoHorario,
+                horarios: horarios,
+                compactoFila: true,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BotonVerCartaLocal extends StatelessWidget {
   const _BotonVerCartaLocal({required this.cantidad, required this.onTap});
 
@@ -1901,36 +1971,43 @@ class _BotonVerCartaLocal extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: const Color(0xFF1B1B1E),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(13),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                CupertinoIcons.list_bullet,
-                size: 13,
-                color: Color(0xFFFFD166),
+              Row(
+                children: [
+                  const Icon(
+                    CupertinoIcons.list_bullet,
+                    size: 14,
+                    color: Color(0xFFFFD166),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Ver carta',
+                    style: GoogleFonts.baloo2(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFFFFD166),
+                      height: 1,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 7),
+              const SizedBox(height: 3),
               Text(
-                'Ver carta',
-                style: GoogleFonts.baloo2(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFFFFD166),
-                  height: 1,
-                ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                '$cantidad',
+                cantidad == 1 ? '1 item' : '$cantidad items',
                 style: GoogleFonts.baloo2(
                   fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  color: ColoresApp.textoSecundario,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFFFFD166).withValues(alpha: 0.75),
                   height: 1,
                 ),
               ),
@@ -2145,10 +2222,12 @@ class _BadgeEstadoHorarioPublico extends StatelessWidget {
   const _BadgeEstadoHorarioPublico({
     required this.estado,
     required this.horarios,
+    this.compactoFila = false,
   });
 
   final EstadoHorarioLocal estado;
   final HorariosLocal horarios;
+  final bool compactoFila;
 
   @override
   Widget build(BuildContext context) {
@@ -2157,29 +2236,26 @@ class _BadgeEstadoHorarioPublico extends StatelessWidget {
         ? const Color(0xFF27D66D)
         : ColoresApp.textoSecundario;
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Center(
-        child: GestureDetector(
-          onTap: () => _mostrarHorariosPublicos(context, horarios),
-          child: Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.sizeOf(context).width - 72,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1B1B1E),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(CupertinoIcons.clock_fill, size: 14, color: color),
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+      padding: EdgeInsets.only(top: compactoFila ? 0 : 12),
+      child: GestureDetector(
+        onTap: () => _mostrarHorariosPublicos(context, horarios),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 56),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1B1B1E),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Row(
+            children: [
+              Icon(CupertinoIcons.clock_fill, size: 14, color: color),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                       Text(
                         estado.titulo,
                         maxLines: 1,
@@ -2213,8 +2289,7 @@ class _BadgeEstadoHorarioPublico extends StatelessWidget {
                   size: 12,
                   color: ColoresApp.textoSecundario,
                 ),
-              ],
-            ),
+            ],
           ),
         ),
       ),

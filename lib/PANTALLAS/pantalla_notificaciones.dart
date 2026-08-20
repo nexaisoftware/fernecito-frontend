@@ -17,6 +17,7 @@ import '../core/navegacion_notificaciones.dart';
 import '../core/squad_helpers.dart';
 import '../models/notificacion.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 class PantallaNotificaciones extends StatefulWidget {
   /// Se incrementa desde el Home al entrar al tab Novedades para forzar recarga
@@ -41,6 +42,7 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
   bool _pushRevisado = false;
   bool _pushPermitido = false;
   bool _pushActivando = false;
+  _FiltroNovedades _filtro = _FiltroNovedades.todos;
 
   @override
   void initState() {
@@ -124,13 +126,13 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
 
   void _mostrarError(String msg) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Error'),
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),
@@ -195,6 +197,17 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
 
   int get _sinLeer => _notifs.where((n) => !n.leida).length;
 
+  List<Notificacion> get _visibles {
+    switch (_filtro) {
+      case _FiltroNovedades.mensajes:
+        return _notifs.where((n) => n.esMensaje).toList();
+      case _FiltroNovedades.actividad:
+        return _notifs.where((n) => n.esActividad).toList();
+      case _FiltroNovedades.todos:
+        return _notifs;
+    }
+  }
+
   Future<void> _revisarPush() async {
     final permitido = await ServicioPush.instancia.tienePermiso();
     if (!mounted) return;
@@ -239,7 +252,7 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
                   hasScrollBody: false,
                   child: _buildErrorState(),
                 )
-              else if (_notifs.isEmpty)
+              else if (_visibles.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: _buildEmptyState(),
@@ -248,18 +261,18 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(16, 0, 16, padding.bottom + 100),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (ctx, i) => Padding(
+                    delegate: SliverChildBuilderDelegate((ctx, i) {
+                      final n = _visibles[i];
+                      return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _CardNotif(
-                          notif: _notifs[i],
-                          procesando: _accionProcesandoId == _notifs[i].id,
-                          onTap: () => _navegar(_notifs[i]),
-                          onBoton: () => _accionCta(_notifs[i]),
+                          notif: n,
+                          procesando: _accionProcesandoId == n.id,
+                          onTap: () => _navegar(n),
+                          onBoton: () => _accionCta(n),
                         ),
-                      ),
-                      childCount: _notifs.length,
-                    ),
+                      );
+                    }, childCount: _visibles.length),
                   ),
                 ),
             ],
@@ -325,30 +338,46 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
               ],
             ],
           ),
-          if (_sinLeer > 0) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: ColoresApp.principalMarca.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: Text(
-                  '$_sinLeer sin leer',
-                  style: GoogleFonts.baloo2(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: ColoresApp.principalMarca,
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (_sinLeer > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: ColoresApp.principalMarca.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(50),
+                    ),
+                    child: Text(
+                      '$_sinLeer sin leer',
+                      style: GoogleFonts.baloo2(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: ColoresApp.principalMarca,
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                for (final f in _FiltroNovedades.values)
+                  _ChipFiltroNovedades(
+                    label: f.label,
+                    activo: _filtro == f,
+                    onTap: () {
+                      if (_filtro == f) return;
+                      HapticFeedback.selectionClick();
+                      setState(() => _filtro = f);
+                    },
+                  ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -368,7 +397,7 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
             ),
             const SizedBox(height: 14),
             Text(
-              'No tenés novedades',
+              _filtro.emptyTitle,
               textAlign: TextAlign.center,
               style: GoogleFonts.baloo2(
                 fontSize: 16,
@@ -378,7 +407,7 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Acá vas a ver tus listas, pases, promos y recordatorios de eventos.',
+              _filtro.emptySubtitle,
               textAlign: TextAlign.center,
               style: GoogleFonts.baloo2(
                 fontSize: 13,
@@ -430,6 +459,68 @@ class _PantallaNotificacionesState extends State<PantallaNotificaciones> {
   }
 }
 
+enum _FiltroNovedades { todos, mensajes, actividad }
+
+extension on _FiltroNovedades {
+  String get label => switch (this) {
+    _FiltroNovedades.todos => 'Todos',
+    _FiltroNovedades.mensajes => 'Mensajes',
+    _FiltroNovedades.actividad => 'Actividad',
+  };
+
+  String get emptyTitle => switch (this) {
+    _FiltroNovedades.todos => 'No tenés novedades',
+    _FiltroNovedades.mensajes => 'No tenés mensajes',
+    _FiltroNovedades.actividad => 'Nada en actividad',
+  };
+
+  String get emptySubtitle => switch (this) {
+    _FiltroNovedades.todos =>
+      'Acá vas a ver mensajes, listas, pases y recordatorios.',
+    _FiltroNovedades.mensajes =>
+      'Match, rompehielos y menciones de planes aparecen acá.',
+    _FiltroNovedades.actividad =>
+      'Listas, pases, promos y recordatorios de eventos.',
+  };
+}
+
+class _ChipFiltroNovedades extends StatelessWidget {
+  const _ChipFiltroNovedades({
+    required this.label,
+    required this.activo,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool activo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final marca = ColoresApp.principalMarca;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: activo ? marca : ColoresApp.fondoSuperficie,
+          borderRadius: BorderRadius.circular(50),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.baloo2(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: activo ? Colors.white : ColoresApp.textoSecundario,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 String _textoBotonCta(Notificacion n) {
   switch (n.tipo) {
     case 'solicitud_amistad':
@@ -452,6 +543,15 @@ String _textoBotonCta(Notificacion n) {
     case 'rompehielo_respondido':
     case 'rompehielo_replicado':
       return 'Ver mensaje';
+    case 'ranking_top_ciudad':
+      return 'Ver ranking';
+    case 'squad_mensaje':
+    case 'squad_mencion':
+    case 'conversacion_mensaje':
+    case 'conversacion_aceptada':
+      return 'Abrir chat';
+    case 'conversacion_solicitud':
+      return 'Aceptar';
   }
   return n.ctaTexto ?? 'Ver';
 }
@@ -521,6 +621,8 @@ class _CardNotif extends StatelessWidget {
                         Expanded(
                           child: Text(
                             notif.titulo,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.baloo2(
                               fontSize: 14,
                               fontWeight: leida
@@ -550,6 +652,8 @@ class _CardNotif extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       notif.descripcion,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.baloo2(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,

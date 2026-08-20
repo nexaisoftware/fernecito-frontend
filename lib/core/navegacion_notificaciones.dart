@@ -7,6 +7,9 @@ import 'package:flutter/cupertino.dart';
 
 import '../PANTALLAS/pantalla_actividad.dart';
 import '../PANTALLAS/pantalla_chat_plan.dart';
+import '../PANTALLAS/pantalla_chat_squad.dart';
+import '../PANTALLAS/pantalla_chat_conversacion.dart';
+import '../PANTALLAS/pantalla_explorar_social.dart';
 import '../PANTALLAS/pantalla_fernecito_match.dart';
 import '../PANTALLAS/pantalla_match_chats.dart';
 import '../PANTALLAS/pantalla_mis_squads.dart';
@@ -38,11 +41,7 @@ BuildContext? get _ctx => navigatorKey.currentContext;
 
 Future<T?> _push<T>(Route<T> route) async => _nav?.push(route);
 
-void _activarTab(
-  NotifIrATab? onIrATab,
-  int tab, {
-  SocialVista? socialVista,
-}) {
+void _activarTab(NotifIrATab? onIrATab, int tab, {SocialVista? socialVista}) {
   if (onIrATab != null) {
     onIrATab(tab, socialVista: socialVista);
     return;
@@ -182,6 +181,55 @@ Future<bool> abrirRompehieloDesdeNotificacionUsuario(Notificacion n) async {
   return true;
 }
 
+Future<bool> abrirChatSquadDesdeNotificacion(Notificacion n) async {
+  final idGrupo =
+      n.ctaIdRef?.trim() ?? n.payload?['id_grupo']?.toString().trim();
+  if (idGrupo == null || idGrupo.isEmpty) return false;
+  final det = await ServicioSquads().detalle(idGrupo);
+  final nombre = det?.nombre.trim().isNotEmpty == true
+      ? det!.nombre
+      : 'Squad';
+  if (_ctx == null || !_ctx!.mounted) return false;
+  await _push(
+    CupertinoPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => PantallaChatSquad(idGrupo: idGrupo, nombre: nombre),
+    ),
+  );
+  return true;
+}
+
+Future<bool> abrirChatConversacionDesdeNotificacion(Notificacion n) async {
+  final idConv =
+      n.payload?['id_conversacion']?.toString().trim() ?? n.ctaIdRef?.trim();
+  final idOtro = n.payload?['id_otro']?.toString().trim() ??
+      (n.tipo == 'conversacion_solicitud' ? n.ctaIdRef?.trim() : null);
+  if (idConv == null || idConv.isEmpty || idOtro == null || idOtro.isEmpty) {
+    return false;
+  }
+  String? nombre;
+  String? foto;
+  try {
+    final det = await ServicioPerfilUsuario().detalle(idOtro);
+    nombre = (det?['nombre']?.toString().trim().isNotEmpty ?? false)
+        ? det!['nombre'].toString().trim()
+        : det?['username']?.toString();
+    foto = ServicioSupabase().urlAvatar(det?['foto_perfil_url']?.toString());
+  } catch (_) {}
+  if (_ctx == null || !_ctx!.mounted) return false;
+  await _push(
+    CupertinoPageRoute(
+      builder: (_) => PantallaChatConversacion(
+        idConversacion: idConv,
+        otroId: idOtro,
+        nombreOtro: nombre,
+        fotoOtro: foto,
+      ),
+    ),
+  );
+  return true;
+}
+
 Future<bool> abrirEventoDesdeNotificacion(Notificacion n) async {
   final ctx = _ctx;
   final idEvento = n.ctaIdRef?.trim();
@@ -191,8 +239,7 @@ Future<bool> abrirEventoDesdeNotificacion(Notificacion n) async {
 }
 
 Future<bool> abrirPlanDesdeNotificacion(Notificacion n) async {
-  final idPlan =
-      n.ctaIdRef?.trim() ?? n.payload?['id_plan']?.toString().trim();
+  final idPlan = n.ctaIdRef?.trim() ?? n.payload?['id_plan']?.toString().trim();
   final accion =
       n.payload?['accion']?.toString() ??
       (n.tipo == 'plan_aceptado' || n.tipo == 'plan_mencion'
@@ -350,6 +397,19 @@ Future<bool> navegarDesdeNotificacion(
         onIrATab: onIrATab,
         socialVista: SocialVista.squads,
       );
+    case 'squad_mensaje':
+    case 'squad_mencion':
+      _activarTab(onIrATab, 1, socialVista: SocialVista.squads);
+      return abrirChatSquadDesdeNotificacion(n);
+    case 'conversacion_solicitud':
+      _activarTab(onIrATab, 1);
+      final abierta = await abrirRompehieloDesdeNotificacionUsuario(n);
+      if (abierta) return true;
+      return abrirChatConversacionDesdeNotificacion(n);
+    case 'conversacion_aceptada':
+    case 'conversacion_mensaje':
+      _activarTab(onIrATab, 1);
+      return abrirChatConversacionDesdeNotificacion(n);
     case 'match_plan':
     case 'match_mensaje':
       _activarTab(onIrATab, 1);
@@ -396,6 +456,13 @@ Future<bool> navegarDesdeNotificacion(
       final abierta = await abrirRompehieloDesdeNotificacionUsuario(n);
       if (abierta) return true;
       return _irATabOFallback(1, onIrATab: onIrATab);
+    case 'ranking_top_ciudad':
+      _activarTab(onIrATab, 1);
+      if (_nav == null) return false;
+      await _push(
+        CupertinoPageRoute(builder: (_) => const PantallaExplorarSocial()),
+      );
+      return true;
     case 'lista_aceptada':
     case 'recordatorio_evento':
       final idEvento = n.ctaIdRef?.trim();
@@ -452,6 +519,13 @@ Future<bool> navegarDesdeNotificacion(
             onIrATab: onIrATab,
             socialVista: SocialVista.amigos,
           );
+        case '/explorar':
+          _activarTab(onIrATab, 1);
+          if (_nav == null) return false;
+          await _push(
+            CupertinoPageRoute(builder: (_) => const PantallaExplorarSocial()),
+          );
+          return true;
         case 'planes':
         case '/planes':
           return abrirPlanDesdeNotificacion(n);

@@ -149,7 +149,7 @@ class _PantallaExplorarSocialState extends State<PantallaExplorarSocial> {
       'miembrosAvatares': squad.avataresResueltos,
     };
     final estado = _estadoSquad(squad.miEstado);
-    Navigator.of(context).push(
+    Navigator.of(context, rootNavigator: true).push(
       CupertinoPageRoute(
         builder: (_) => estado == EstadoRelacionSquad.miembro
             ? PantallaMisSquads(squad: map)
@@ -177,7 +177,7 @@ class _PantallaExplorarSocialState extends State<PantallaExplorarSocial> {
       'mi_estado': squad.miEstado,
     };
     final estado = _estadoSquad(squad.miEstado);
-    Navigator.of(context).push(
+    Navigator.of(context, rootNavigator: true).push(
       CupertinoPageRoute(
         builder: (_) => estado == EstadoRelacionSquad.miembro
             ? PantallaMisSquads(squad: map)

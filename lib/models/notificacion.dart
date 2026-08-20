@@ -130,6 +130,27 @@ class Notificacion {
     return '${l.day.toString().padLeft(2, '0')}/${l.month.toString().padLeft(2, '0')}';
   }
 
+  /// Chat: rompehielo, Match, Planes, Squads y conversación 1:1.
+  bool get esMensaje {
+    final t = tipo;
+    return t.startsWith('match_') ||
+        t.startsWith('rompehielo_') ||
+        t.startsWith('plan_') ||
+        t.startsWith('squad_') ||
+        t.startsWith('conversacion_');
+  }
+
+  /// Tab Actividad: listas, pases, promos, recordatorios, cuenta.
+  bool get esActividad {
+    final t = tipo;
+    return t.startsWith('lista_') ||
+        t.startsWith('pase_') ||
+        t.startsWith('promo_') ||
+        t.startsWith('recordatorio_') ||
+        t.startsWith('invitacion_rrpp') ||
+        t.startsWith('cuenta_');
+  }
+
   Notificacion copyWith({bool? leida, DateTime? fechaLectura}) {
     return Notificacion(
       id: id,

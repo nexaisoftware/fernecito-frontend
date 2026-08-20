@@ -16,6 +16,7 @@ import '../core/servicio_busqueda_ia.dart';
 import '../core/servicio_ubicacion_dispositivo.dart';
 import '../PANTALLAS/pantalla_local_perfil.dart';
 import '../PANTALLAS/pantalla_ver_evento.dart';
+import '../PANTALLAS/pantalla_ver_plan.dart';
 import 'avatar_local.dart';
 
 const _kDorado = Color(0xFFE0B800);
@@ -305,6 +306,14 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
     );
   }
 
+  void _abrirPlan(RecomendacionIa r) {
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) => PantallaVerPlan(idPlan: r.id),
+      ),
+    );
+  }
+
   void _abrirLocal(RecomendacionIa r, {bool abrirCarta = false}) {
     final idLocal = r.esCarta ? (r.idLocal ?? '') : r.id;
     final nombre = r.esCarta ? (r.nombreLocal ?? r.titulo) : r.titulo;
@@ -436,6 +445,7 @@ class _BusquedaIaChatSheetState extends State<_BusquedaIaChatSheet>
                           onVerLocal: (r) => _abrirLocal(r),
                           onVerLocalYCarta: (r) =>
                               _abrirLocal(r, abrirCarta: true),
+                          onVerPlan: _abrirPlan,
                         );
                       },
                     )
@@ -611,8 +621,8 @@ class _EmptyHint extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               n.isEmpty
-                  ? 'Hoy, el finde, un presupuesto o una vibe.\nEj: abierto ahora · cita romántica · menú por 15mil'
-                  : 'Contame el plan: hoy, el finde, presupuesto o estilo.\nTambién: abierto ahora, cumple, rock, carta…',
+                  ? 'Hoy, el finde, un presupuesto o una vibe.\nEj: abierto ahora · cita · juntada · menú por 15mil'
+                  : 'Contame el plan: hoy, el finde, presupuesto o estilo.\nTambién: abierto ahora, cumple, conocer gente, carta…',
               textAlign: TextAlign.center,
               style: GoogleFonts.baloo2(
                 color: Colors.white54,
@@ -793,6 +803,7 @@ class _ChipsSugerencias extends StatelessWidget {
   static const _items = <(String, String)>[
     ('🌙', '¿Qué hago esta noche?'),
     ('🗓️', 'Planes para el finde'),
+    ('👋', 'Dónde conocer gente esta noche'),
     ('🟢', '¿Qué hay abierto ahora?'),
     ('🍽️', 'Merendar por menos de 15mil'),
     ('💘', 'Lugar romántico para una cita'),
@@ -959,6 +970,7 @@ class _BloqueAsistente extends StatelessWidget {
     required this.onVerEvento,
     required this.onVerLocal,
     required this.onVerLocalYCarta,
+    required this.onVerPlan,
     this.refUsuario,
   });
 
@@ -966,6 +978,7 @@ class _BloqueAsistente extends StatelessWidget {
   final ValueChanged<RecomendacionIa> onVerEvento;
   final ValueChanged<RecomendacionIa> onVerLocal;
   final ValueChanged<RecomendacionIa> onVerLocalYCarta;
+  final ValueChanged<RecomendacionIa> onVerPlan;
   final LatLng? refUsuario;
 
   @override
@@ -1042,6 +1055,11 @@ class _BloqueAsistente extends StatelessWidget {
                   item: r,
                   refUsuario: refUsuario,
                   onVer: () => onVerEvento(r),
+                )
+              else if (r.esPlan)
+                _CardPlanIa(
+                  item: r,
+                  onVer: () => onVerPlan(r),
                 )
               else
                 _CardLocalIa(
@@ -1474,6 +1492,158 @@ class _CardLocalIa extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   fontSize: 13,
                   color: _kVioletaOscuro,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CardPlanIa extends StatelessWidget {
+  const _CardPlanIa({required this.item, required this.onVer});
+
+  final RecomendacionIa item;
+  final VoidCallback onVer;
+
+  @override
+  Widget build(BuildContext context) {
+    final org = (item.nombreOrganizador ?? '').trim();
+    final local = (item.nombreLocal ?? '').trim();
+    final linea = item.esPlanLocal
+        ? (local.isEmpty ? 'Plan del local' : 'Plan del local · $local')
+        : [
+            if (org.isNotEmpty) 'Plan de $org',
+            if (local.isNotEmpty) 'en $local',
+          ].join(' ');
+    final van = item.personas ?? 0;
+    final chips = <String>[
+      van <= 0 ? 'recién arranca' : (van == 1 ? '1 va' : '$van van'),
+      item.entradaLibre ? 'entrada libre' : 'con aprobación',
+      if (item.cupoMax != null) '${item.personas ?? 0}/${item.cupoMax} cupos',
+    ];
+    final avatarOrg = item.avatarOrganizador ?? item.avatarUrl;
+    final avatarLoc = item.avatarLocal ?? item.imagenUrl;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1D),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.titulo,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.baloo2(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              height: 1.15,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (item.esPlanLocal)
+                AvatarLocal(
+                  imageUrl: avatarLoc,
+                  size: 28,
+                  placeholderIcon: CupertinoIcons.house_fill,
+                )
+              else ...[
+                AvatarLocal(
+                  imageUrl: avatarOrg,
+                  size: 28,
+                  placeholderIcon: CupertinoIcons.person_fill,
+                ),
+                const SizedBox(width: 6),
+                AvatarLocal(
+                  imageUrl: avatarLoc,
+                  size: 28,
+                  placeholderIcon: CupertinoIcons.house_fill,
+                ),
+              ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  linea.isEmpty ? 'Juntada en la app' : linea,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.baloo2(
+                    color: Colors.white70,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 5,
+            children: [
+              for (final t in chips)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    t,
+                    style: GoogleFonts.baloo2(
+                      color: Colors.white.withValues(alpha: 0.88),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          if (item.porQue.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              item.porQue,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.baloo2(
+                color: Colors.white.withValues(alpha: 0.78),
+                fontSize: 13,
+                height: 1.35,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onVer,
+              style: FilledButton.styleFrom(
+                backgroundColor: _kVioleta,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Ver plan',
+                style: GoogleFonts.baloo2(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: Colors.white,
                 ),
               ),
             ),

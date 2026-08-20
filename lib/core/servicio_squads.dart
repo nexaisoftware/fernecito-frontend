@@ -1,11 +1,43 @@
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/social.dart';
 import 'cache_memoria.dart';
+import 'chat_paginacion.dart';
 import 'comprimir_imagen_storage.dart';
 import 'supabase_client.dart';
+
+class SquadMensaje {
+  const SquadMensaje({
+    required this.id,
+    required this.cuerpo,
+    required this.creadoEn,
+    this.idAutor,
+  });
+
+  final int id;
+  final String? idAutor;
+  final String cuerpo;
+  final DateTime creadoEn;
+
+  factory SquadMensaje.fromMap(Map<String, dynamic> m) {
+    final idRaw = m['id'];
+    final id = idRaw is num
+        ? idRaw.toInt()
+        : int.tryParse(idRaw?.toString() ?? '') ?? 0;
+    return SquadMensaje(
+      id: id,
+      idAutor: m['id_autor']?.toString(),
+      cuerpo: m['cuerpo']?.toString() ?? '',
+      creadoEn:
+          DateTime.tryParse(m['creado_en']?.toString() ?? '')?.toLocal() ??
+          DateTime.now(),
+    );
+  }
+}
 
 /// Servicio de squads (grupos_salidas). Usa los RPCs `squad_*` del backend.
 class ServicioSquads {
@@ -176,10 +208,12 @@ class ServicioSquads {
         },
       );
       invalidarListas();
-      return res?.toString();
+      final id = res?.toString();
+      if (id == null || id.isEmpty || id == 'null') return null;
+      return id;
     } catch (e) {
       debugPrint('⚠️ squad_crear: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -480,5 +514,118 @@ class ServicioSquads {
       debugPrint('⚠️ subirPortada squad: $e');
       return null;
     }
+  }
+
+  Future<PaginaChatMensajes<SquadMensaje>> historialChat(String idGrupo) async {
+    final limite = kChatMensajesPorPagina;
+    final rows = await ServicioSupabase().cliente
+        .from('squads_mensajes')
+        .select('id, id_autor, cuerpo, creado_en')
+        .eq('id_grupo', idGrupo)
+        .order('id', ascending: false)
+        .limit(limite + 1);
+    final parsed = (rows as List)
+        .map((e) => SquadMensaje.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    return armarPaginaAsc(parsed, limite);
+  }
+
+  Future<PaginaChatMensajes<SquadMensaje>> historialChatAntesDe(
+    String idGrupo,
+    int antesDeId,
+  ) async {
+    final limite = kChatMensajesPorPagina;
+    final rows = await ServicioSupabase().cliente
+        .from('squads_mensajes')
+        .select('id, id_autor, cuerpo, creado_en')
+        .eq('id_grupo', idGrupo)
+        .lt('id', antesDeId)
+        .order('id', ascending: false)
+        .limit(limite + 1);
+    final parsed = (rows as List)
+        .map((e) => SquadMensaje.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    return armarPaginaAsc(parsed, limite);
+  }
+
+  Future<int?> enviarMensajeChat(String idGrupo, String cuerpo) async {
+    final res = await ServicioSupabase().cliente.rpc(
+      'squads_enviar_mensaje',
+      params: {'p_id_grupo': idGrupo, 'p_cuerpo': cuerpo},
+    );
+    if (res is Map && res['id'] != null) {
+      final id = res['id'];
+      return id is num ? id.toInt() : int.tryParse(id.toString());
+    }
+    return null;
+  }
+
+  Future<void> marcarChatLeido(String idGrupo) async {
+    try {
+      await ServicioSupabase().cliente.rpc(
+        'squads_marcar_leido',
+        params: {'p_id_grupo': idGrupo},
+      );
+    } catch (e) {
+      debugPrint('⚠️ squads_marcar_leido: $e');
+    }
+  }
+
+  RealtimeChannel suscribirChat(
+    String idGrupo,
+    void Function(SquadMensaje) onMensaje,
+  ) {
+    return ServicioSupabase().cliente
+        .channel('squad_chat_$idGrupo')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'squads_mensajes',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id_grupo',
+            value: idGrupo,
+          ),
+          callback: (payload) {
+            onMensaje(
+              SquadMensaje.fromMap(
+                Map<String, dynamic>.from(payload.newRecord),
+              ),
+            );
+          },
+        )
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.channelError ||
+              status == RealtimeSubscribeStatus.timedOut) {
+            debugPrint('⚠️ squads realtime: $status $error');
+            unawaited(
+              Supabase.instance.client.auth.refreshSession().then(
+                (_) {},
+                onError: (_) {},
+              ),
+            );
+          }
+        });
+  }
+
+  Future<void> cerrarCanal(RealtimeChannel canal) async {
+    await ServicioSupabase().cliente.removeChannel(canal);
+  }
+
+  String mensajeErrorChat(Object error) {
+    final msg = error.toString().toLowerCase();
+    if (msg.contains('no_auth') || msg.contains('jwt')) {
+      return 'Tu sesión expiró. Cerrá sesión y volvé a entrar.';
+    }
+    if (msg.contains('rate')) {
+      return 'Estás mandando muy seguido. Esperá un toque.';
+    }
+    if (msg.contains('no_participante')) {
+      return 'Ya no formás parte de este squad.';
+    }
+    if (msg.contains('mensaje_invalido')) {
+      return 'El mensaje tiene que tener entre 1 y 700 caracteres.';
+    }
+    return 'No pude enviar el mensaje. Probá de nuevo.';
   }
 }

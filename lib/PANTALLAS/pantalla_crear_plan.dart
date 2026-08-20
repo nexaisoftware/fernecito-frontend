@@ -14,6 +14,7 @@ import '../core/constants.dart';
 import '../core/planes_presets.dart';
 import '../core/servicio_planes.dart';
 import '../core/supabase_client.dart';
+import '../widgets/dialogo_fernecito.dart';
 import '../widgets/fernecito_loader.dart';
 
 class PantallaCrearPlan extends StatefulWidget {
@@ -530,12 +531,13 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
   }
 
   void _toast(String msg) {
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
+            isDefaultAction: true,
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Ok'),
           ),
@@ -546,32 +548,23 @@ class _PantallaCrearPlanState extends State<PantallaCrearPlan> {
 
   Future<bool> _confirmarSalir() async {
     if (_paso == _PasoPlan.felicitacion) return true;
-    final r = await showCupertinoDialog<bool>(
+    final r = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: Text(
-          '¿Salir del asistente?',
-          style: GoogleFonts.baloo2(fontWeight: FontWeight.w800),
-        ),
-        content: Text(
+      builder: (ctx) => DialogoFernecito(
+        title: const Text('¿Salir del asistente?'),
+        content: const Text(
           'Vas a perder lo que cargaste acá. ¿Seguro querés salir?',
-          style: GoogleFonts.baloo2(height: 1.3),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
+            isDefaultAction: true,
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(
-              'Seguir acá',
-              style: GoogleFonts.baloo2(
-                color: ColoresApp.principalMarca,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+            child: const Text('Seguir acá'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Salir', style: GoogleFonts.baloo2()),
+            child: const Text('Salir'),
           ),
         ],
       ),

@@ -227,22 +227,29 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
             children: [
               Expanded(
                 flex: flexSearch,
-                child: mostrarCampo
-                    ? _buildTextFieldExpandido(t)
-                    : _buildBotonLupaCircular(),
+                child: ClipRect(
+                  child: mostrarCampo
+                      ? _buildTextFieldExpandido(t)
+                      : Align(
+                          alignment: Alignment.centerLeft,
+                          child: _buildBotonLupaCircular(),
+                        ),
+                ),
               ),
               if (mostrarFiltros) ...[
                 SizedBox(width: 10 * (1.0 - t)),
                 Expanded(
                   flex: flexFilters < 1 ? 1 : flexFilters,
                   child: Opacity(
-                    opacity: Curves.easeOut.transform((1.0 - t).clamp(0.0, 1.0)),
+                    opacity: Curves.easeOut.transform(
+                      (1.0 - t).clamp(0.0, 1.0),
+                    ),
                     child: IgnorePointer(
                       ignoring: t > 0.12,
                       child: Row(
                         children: [
                           Expanded(child: _buildDropdownPlan()),
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8 * (1.0 - t).clamp(0.0, 1.0)),
                           Expanded(child: _buildDropdownTiempo()),
                         ],
                       ),
@@ -349,11 +356,11 @@ class _SpotlightSearchBarState extends State<SpotlightSearchBar>
                   ),
                 ),
               ),
-              if (widget.onBusquedaIa != null) ...[
+              if (widget.onBusquedaIa != null && t > 0.42) ...[
                 const SizedBox(width: 6),
                 Opacity(
                   opacity: Curves.easeOut.transform(
-                    ((t - 0.35) / 0.65).clamp(0.0, 1.0),
+                    ((t - 0.42) / 0.58).clamp(0.0, 1.0),
                   ),
                   child: Listener(
                     onPointerDown: (_) => _bloquearColapsoPorIa = true,
@@ -656,37 +663,50 @@ class _Pildora extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
-          borderRadius: BorderRadius.circular(19),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icono, size: 16, color: color),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.baloo2(
-                  color: ColoresApp.textoPrincipal,
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final pad = c.maxWidth < 44 ? 4.0 : 10.0;
+          final inner = c.maxWidth - pad * 2;
+          final soloIcono = inner < 36;
+          return Container(
+            height: 38,
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: pad),
+            decoration: BoxDecoration(
+              color: ColoresApp.fondoSuperficie.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(19),
             ),
-            const SizedBox(width: 4),
-            Icon(
-              CupertinoIcons.chevron_down,
-              size: 13,
-              color: ColoresApp.textoSecundario,
-            ),
-          ],
-        ),
+            child: soloIcono
+                ? Center(child: Icon(icono, size: 16, color: color))
+                : Row(
+                    children: [
+                      Icon(icono, size: 16, color: color),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.baloo2(
+                            color: ColoresApp.textoPrincipal,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            height: 1.0,
+                          ),
+                        ),
+                      ),
+                      if (inner >= 48) ...[
+                        const SizedBox(width: 2),
+                        Icon(
+                          CupertinoIcons.chevron_down,
+                          size: 13,
+                          color: ColoresApp.textoSecundario,
+                        ),
+                      ],
+                    ],
+                  ),
+          );
+        },
       ),
     );
   }

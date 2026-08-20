@@ -33,6 +33,10 @@ class RompehieloEstado {
   final String? ladoAId;
   final String? ladoBTipo;
   final String? ladoBId;
+  final int nMensajesMios;
+  final int nMensajesOtro;
+  final bool puedeSolicitarChat;
+  final RompehieloConversacion? conversacion;
 
   const RompehieloEstado({
     required this.existe,
@@ -62,7 +66,40 @@ class RompehieloEstado {
     this.ladoAId,
     this.ladoBTipo,
     this.ladoBId,
+    this.nMensajesMios = 0,
+    this.nMensajesOtro = 0,
+    this.puedeSolicitarChat = false,
+    this.conversacion,
   });
+
+  bool get chatAceptado => conversacion?.aceptada == true;
+  bool get chatPendiente => conversacion?.pendiente == true;
+
+  /// Mensajes de cada lado para desbloquear solicitud de chat 1:1.
+  static const int mensajesParaChat = 5;
+
+  int get faltanMiosParaChat =>
+      (mensajesParaChat - nMensajesMios).clamp(0, mensajesParaChat);
+
+  int get faltanOtroParaChat =>
+      (mensajesParaChat - nMensajesOtro).clamp(0, mensajesParaChat);
+
+  /// Copy corto del progreso hacia chat (vacío si ya se desbloqueó).
+  String get textoProgresoChat {
+    if (faltanMiosParaChat == 0 && faltanOtroParaChat == 0) return '';
+    if (faltanMiosParaChat > 0 && faltanOtroParaChat > 0) {
+      return 'A $faltanMiosParaChat tuyos y $faltanOtroParaChat del otro '
+          'para solicitar chat';
+    }
+    if (faltanMiosParaChat > 0) {
+      return faltanMiosParaChat == 1
+          ? 'A 1 rompehielo tuyo para solicitar chat'
+          : 'A $faltanMiosParaChat rompehielos tuyos para solicitar chat';
+    }
+    return faltanOtroParaChat == 1
+        ? 'Al otro le falta 1 rompehielo para solicitar chat'
+        : 'Al otro le faltan $faltanOtroParaChat rompehielos para solicitar chat';
+  }
 
   /// Squad con el que participo en esta fila (`null` = yo como usuario).
   String? get idGrupoActorMio {
@@ -159,6 +196,45 @@ class RompehieloEstado {
       ladoAId: m['lado_a_id']?.toString(),
       ladoBTipo: m['lado_b_tipo'] as String?,
       ladoBId: m['lado_b_id']?.toString(),
+      nMensajesMios: _entero(m['n_mensajes_mios']),
+      nMensajesOtro: _entero(m['n_mensajes_otro']),
+      puedeSolicitarChat: m['puede_solicitar_chat'] == true,
+      conversacion: m['conversacion'] is Map
+          ? RompehieloConversacion.fromMap(
+              Map<String, dynamic>.from(m['conversacion'] as Map),
+            )
+          : null,
+    );
+  }
+}
+
+int _entero(dynamic v) {
+  if (v is num) return v.toInt();
+  return int.tryParse(v?.toString() ?? '') ?? 0;
+}
+
+class RompehieloConversacion {
+  final String id;
+  final String estado;
+  final bool soySolicitante;
+  final bool puedeAceptar;
+
+  const RompehieloConversacion({
+    required this.id,
+    required this.estado,
+    this.soySolicitante = false,
+    this.puedeAceptar = false,
+  });
+
+  bool get pendiente => estado == 'pendiente';
+  bool get aceptada => estado == 'aceptada';
+
+  factory RompehieloConversacion.fromMap(Map<String, dynamic> m) {
+    return RompehieloConversacion(
+      id: m['id']?.toString() ?? '',
+      estado: m['estado']?.toString() ?? '',
+      soySolicitante: m['soy_solicitante'] == true,
+      puedeAceptar: m['puede_aceptar'] == true,
     );
   }
 }

@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/constants.dart';
-import '../core/tema_fernecito.dart';
 import 'fernecito_loader.dart';
 
 /// Reserva inferior en tab Social embebido (navbar home).
@@ -499,57 +498,81 @@ class ToggleSegmentadoSocial extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = ColoresApp.principalMarca;
+    final n = opciones.length;
     final pill = ConstrainedBox(
       constraints: BoxConstraints(
         maxWidth: anchoMaximo,
         minWidth: anchoMinimo ?? 0,
       ),
-      child: Container(
-        padding: EdgeInsets.all(sinBorde ? 2 : 3),
-        decoration: BoxDecoration(
-          color: const Color(
-            0xFF1C1C20,
-          ).withValues(alpha: sinBorde ? 0.72 : 0.92),
-          borderRadius: BorderRadius.circular(50),
-        ),
-        child: Row(
-          children: List.generate(opciones.length, (i) {
-            final activo = i == indice;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => onChanged(i),
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final ancho = c.maxWidth;
+          final anchoSeg = n == 0 ? ancho : ancho / n;
+          return SizedBox(
+            width: ancho,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 280),
                   curve: Curves.easeOutCubic,
-                  padding: EdgeInsets.symmetric(vertical: paddingVertical),
-                  decoration: BoxDecoration(
-                    color: activo ? accent : const Color(0xFF2B2B30),
-                    borderRadius: BorderRadius.circular(50),
-                    boxShadow: activo && !sinGlowActivo
-                        ? [
-                            BoxShadow(
-                              color: accent.withValues(alpha: 0.14),
-                              blurRadius: 6,
-                              offset: const Offset(0, 1),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Text(
-                    opciones[i],
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.baloo2(
-                      fontSize: fontSize,
-                      fontWeight: FontWeight.w800,
-                      color: activo ? Colors.white : ColoresApp.textoSecundario,
+                  left: indice.clamp(0, n - 1) * anchoSeg,
+                  top: 0,
+                  bottom: 0,
+                  width: anchoSeg,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: BorderRadius.circular(50),
+                      boxShadow: sinGlowActivo
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: accent.withValues(alpha: 0.28),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                     ),
                   ),
                 ),
-              ),
-            );
-          }),
-        ),
+                Row(
+                  children: List.generate(n, (i) {
+                    final activo = i == indice;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => onChanged(i),
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: paddingVertical + 2,
+                          ),
+                          child: Text(
+                            opciones[i],
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.baloo2(
+                              fontSize: fontSize,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              shadows: activo
+                                  ? null
+                                  : const [
+                                      Shadow(
+                                        color: Colors.black54,
+                                        blurRadius: 8,
+                                      ),
+                                    ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
     if (!centrar) return pill;
@@ -569,62 +592,20 @@ class SwitchExplorarFlotanteSocial extends StatelessWidget {
   final ValueChanged<int> onChanged;
 
   static const _ancho = 300.0;
-  static const _radio = 50.0;
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<Color>(
-      valueListenable: TemaFernecito.instancia.colorActual,
-      builder: (context, accent, _) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(_radio + 14),
-            boxShadow: [
-              BoxShadow(
-                color: accent.withValues(alpha: 0.12),
-                blurRadius: 18,
-                spreadRadius: 0,
-              ),
-              BoxShadow(
-                color: accent.withValues(alpha: 0.06),
-                blurRadius: 26,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(_radio),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.44),
-                  blurRadius: 22,
-                  spreadRadius: 0.5,
-                  offset: const Offset(0, 7),
-                ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.20),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: ToggleSegmentadoSocial(
-              opciones: const ['Personas', 'Squads'],
-              indice: indice,
-              onChanged: onChanged,
-              anchoMaximo: _ancho,
-              anchoMinimo: _ancho,
-              paddingVertical: 7,
-              fontSize: 13.5,
-              sinBorde: true,
-              sinGlowActivo: false,
-              centrar: false,
-            ),
-          ),
-        );
-      },
+    return ToggleSegmentadoSocial(
+      opciones: const ['Personas', 'Squads'],
+      indice: indice,
+      onChanged: onChanged,
+      anchoMaximo: _ancho,
+      anchoMinimo: _ancho,
+      paddingVertical: 7,
+      fontSize: 13.5,
+      sinBorde: true,
+      sinGlowActivo: false,
+      centrar: false,
     );
   }
 }

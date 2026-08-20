@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../widgets/dialogo_fernecito.dart';
 import '../core/constants.dart';
 import '../core/preferencias_cartelera.dart';
 import '../core/servicio_match.dart';
@@ -20,6 +21,7 @@ import '../core/servicio_ubicacion_global.dart';
 import '../core/ubicaciones_data.dart';
 import '../models/social.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
+import '../widgets/fondo_foto_match.dart';
 import '../widgets/stack_avatares_squad.dart';
 import 'pantalla_match_chat.dart';
 import 'pantalla_match_chats.dart';
@@ -45,9 +47,10 @@ const _kAzulRecopa = Color(0xFF3B82F6);
 
 /// Overlay "¡ME RE PINTA!" que aparece 3 segundos tras el brindis.
 class _OverlayRePinta extends StatelessWidget {
-  const _OverlayRePinta({required this.detalle});
+  const _OverlayRePinta({required this.detalle, this.esSquad = false});
 
   final String detalle;
+  final bool esSquad;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +68,7 @@ class _OverlayRePinta extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              '¡ME RE PINTA!',
+              esSquad ? '¡NOS RE PINTA!' : '¡ME RE PINTA!',
               style: GoogleFonts.baloo2(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
@@ -200,14 +203,11 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   Future<void> _cargarSquads() async {
     final squads = await ServicioSquads().misSquads();
-    // Match en modo squad: solo admin/líder (el BE exige es_admin_grupo).
-    final admin = squads
-        .where(
-          (s) => s.soyLider || s.miRol == 'admin' || s.miRol == 'lider',
-        )
-        .toList();
-    if (mounted) setState(() => _misSquads = admin);
+    // Cualquier miembro puede armar el plan, swipear y matchear.
+    if (mounted) setState(() => _misSquads = squads);
   }
+
+  bool get _esModoSquad => _modo == 'squad';
 
   Future<void> _cargarCantMatches() async {
     final resultados = await Future.wait([
@@ -383,16 +383,16 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   }
 
   Future<void> _avisoRequisito(String titulo, String detalle) async {
-    await showCupertinoDialog<void>(
+    await showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: Text(titulo),
         content: Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(detalle, style: GoogleFonts.baloo2(height: 1.3)),
+          padding: const EdgeInsets.only(top: 2),
+          child: Text(detalle),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Entendido'),
@@ -536,8 +536,12 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       // Brindis 🥂 → overlay "¡ME RE PINTA!" que se va solo a los 3 seg.
       if (decision == 'recopa') {
         _rePintaDetalle = _sinPlan
-            ? 'Probaste "me re pinta" 🥂\nArmá tu plan para que le llegue de verdad'
-            : 'Le va a llegar que te re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}';
+            ? (_esModoSquad
+                ? 'Probaron "nos re pinta" 🥂\nArmá el plan del squad para que les llegue de verdad'
+                : 'Probaste "me re pinta" 🥂\nArmá tu plan para que le llegue de verdad')
+            : (_esModoSquad
+                ? 'Les va a llegar que les re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}'
+                : 'Le va a llegar que te re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}');
       }
     });
     if (decision == 'recopa') {
@@ -571,16 +575,17 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       restaurarCard();
 
       if (msg.contains('necesita_plan')) {
-        await showCupertinoDialog<void>(
+        await showFernecitoDialog<void>(
           context: context,
-          builder: (ctx) => CupertinoAlertDialog(
+          builder: (ctx) => DialogoFernecito(
             title: const Text('Armá tu plan para seguir'),
             content: const Text(
               'Ya usaste tus 3 "me pinta" / "me re pinta" de hoy en modo mirar. '
               'Creá un plan para seguir haciendo match.',
             ),
             actions: [
-              CupertinoDialogAction(
+              AccionDialogoFernecito(
+                isDefaultAction: true,
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('OK'),
               ),
@@ -594,15 +599,16 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       } else if (decision == 'interesa' &&
           msg.contains('rate_limit') &&
           !_sinPlan) {
-        await showCupertinoDialog<void>(
+        await showFernecitoDialog<void>(
           context: context,
-          builder: (ctx) => CupertinoAlertDialog(
+          builder: (ctx) => DialogoFernecito(
             title: const Text('Tope de "me pinta" por hoy'),
             content: const Text(
               'Llegaste a los 100 "me pinta" de hoy. Mañana se renueva el cupo.',
             ),
             actions: [
-              CupertinoDialogAction(
+              AccionDialogoFernecito(
+                isDefaultAction: true,
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('OK'),
               ),
@@ -796,16 +802,17 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 
   Future<void> _elegirSquad() async {
     if (_misSquads.isEmpty) {
-      await showCupertinoDialog<void>(
+      await showFernecitoDialog<void>(
         context: context,
-        builder: (ctx) => CupertinoAlertDialog(
+        builder: (ctx) => DialogoFernecito(
           title: const Text('Sin squads para Match'),
           content: const Text(
-            'Para matchear como squad tenés que ser admin o líder de uno. '
-            'Crealo o pedile al líder que te haga admin.',
+            'Entrá a un squad o creá uno para matchear juntos. '
+            'Cualquier miembro puede armar el plan y hacer match.',
           ),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
+              isDefaultAction: true,
               onPressed: () => Navigator.pop(ctx),
               child: const Text('OK'),
             ),
@@ -927,7 +934,10 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
                 child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 200),
                   opacity: 1,
-                  child: _OverlayRePinta(detalle: _rePintaDetalle!),
+                  child: _OverlayRePinta(
+                    detalle: _rePintaDetalle!,
+                    esSquad: _esModoSquad,
+                  ),
                 ),
               ),
           ],
@@ -1078,19 +1088,12 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   }
 
   Widget _switchModo() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: ColoresApp.fondoSuperficie,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _segmentoModo('usuario', CupertinoIcons.person_fill, 'Personal'),
-          _segmentoModo('squad', CupertinoIcons.person_3_fill, 'Squad'),
-        ],
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _segmentoModo('usuario', CupertinoIcons.person_fill, 'Personal'),
+        _segmentoModo('squad', CupertinoIcons.person_3_fill, 'Squad'),
+      ],
     );
   }
 
@@ -1110,9 +1113,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
         }
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
         decoration: BoxDecoration(
           color: activo ? ColoresApp.principalMarca : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
@@ -1123,7 +1126,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
             Icon(
               icono,
               size: 15,
-              color: activo ? Colors.white : ColoresApp.textoSecundario,
+              color: Colors.white,
             ),
             const SizedBox(width: 6),
             Text(
@@ -1131,7 +1134,10 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
               style: GoogleFonts.baloo2(
                 fontWeight: FontWeight.w800,
                 fontSize: 13.5,
-                color: activo ? Colors.white : ColoresApp.textoSecundario,
+                color: Colors.white,
+                shadows: activo
+                    ? null
+                    : const [Shadow(color: Colors.black54, blurRadius: 8)],
               ),
             ),
           ],
@@ -1207,8 +1213,12 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
           padding: const EdgeInsets.fromLTRB(18, 2, 18, 6),
           child: Text(
             _pendientes.length == 1
-                ? 'A 1 le pinta tu plan · tocá para matchear'
-                : 'A ${_pendientes.length} les pinta tu plan · tocá para matchear',
+                ? (_esModoSquad
+                    ? 'A 1 squad le pinta su plan · tocá para matchear'
+                    : 'A 1 le pinta tu plan · tocá para matchear')
+                : (_esModoSquad
+                    ? 'A ${_pendientes.length} squads les pinta su plan · tocá para matchear'
+                    : 'A ${_pendientes.length} les pinta tu plan · tocá para matchear'),
             style: GoogleFonts.baloo2(
               color: ColoresApp.textoSecundario,
               fontWeight: FontWeight.w800,
@@ -1510,6 +1520,32 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     final esVertical =
         _arrastre.dy < -40 && _arrastre.dy.abs() > _arrastre.dx.abs();
     final promoviendo = _swipeando || _arrastre.distance > 48;
+
+    // Stamps de swipe: ahora se posicionan sobre la FOTO (parte inferior),
+    // manteniendo la idea de "lado" (izq/der) y "centro" en re-pinta.
+    Widget? stamp;
+    _SwipeStampPos? stampPos;
+    if (esVertical) {
+      stamp = _stamp(
+        _esModoSquad ? 'NOS RE PINTA 🥂' : 'ME RE PINTA 🥂',
+        _kAzulRecopa,
+      );
+      stampPos = _SwipeStampPos.center;
+    } else if (_arrastre.dx.abs() > 40) {
+      final esMePinta = _arrastre.dx > 0;
+      stamp = _stamp(
+        esMePinta
+            ? (_esModoSquad ? 'NOS PINTA 💜' : 'ME PINTA 💜')
+            : (_esModoSquad ? 'NO NOS PINTA ✋' : 'NO ME PINTA ✋'),
+        esMePinta
+            ? const Color(0xFF27AE60)
+            : const Color(0xFFEB5757),
+      );
+      // Se mantiene la lógica anterior (aunque parezca invertida):
+      // dx>0 -> izquierda, dx<0 -> derecha.
+      stampPos = esMePinta ? _SwipeStampPos.left : _SwipeStampPos.right;
+    }
+
     return Column(
       children: [
         Expanded(
@@ -1573,28 +1609,11 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
                   transformAlignment: Alignment.center,
                   child: Stack(
                     children: [
-                      _MatchCardVisual(card: _mazo.first),
-                      if (esVertical)
-                        Positioned(
-                          top: 26,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: _stamp('ME RE PINTA 🥂', _kAzulRecopa),
-                          ),
-                        )
-                      else if (_arrastre.dx.abs() > 40)
-                        Positioned(
-                          top: 26,
-                          left: _arrastre.dx > 0 ? 22 : null,
-                          right: _arrastre.dx < 0 ? 22 : null,
-                          child: _stamp(
-                            _arrastre.dx > 0 ? 'ME PINTA 💜' : 'NO ME PINTA ✋',
-                            _arrastre.dx > 0
-                                ? const Color(0xFF27AE60)
-                                : const Color(0xFFEB5757),
-                          ),
-                        ),
+                      _MatchCardVisual(
+                        card: _mazo.first,
+                        swipeStamp: stamp,
+                        swipeStampPos: stampPos,
+                      ),
                     ],
                   ),
                 ),
@@ -1638,21 +1657,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   }
 
   Widget _stamp(String texto, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        texto,
-        style: GoogleFonts.baloo2(
-          color: Colors.white,
-          fontWeight: FontWeight.w900,
-          fontSize: 14,
-        ),
-      ),
-    );
+    return _StampSwipeAnimado(key: ValueKey(texto), texto: texto, color: color);
   }
 
   Widget _botonSwipe({
@@ -1707,9 +1712,15 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 /// Card del deck: FOTO (con nombre y edad encima) + card de info abajita
 /// (blanca, letras oscuras) con el plan y el lugar.
 class _MatchCardVisual extends StatelessWidget {
-  const _MatchCardVisual({required this.card});
+  _MatchCardVisual({
+    required this.card,
+    this.swipeStamp,
+    this.swipeStampPos,
+  });
 
   final MatchCard card;
+  final Widget? swipeStamp;
+  final _SwipeStampPos? swipeStampPos;
 
   /// Solo el primer nombre para usuarios ("Santiago Medrano" → "Santiago").
   String get _nombreCorto {
@@ -1721,7 +1732,6 @@ class _MatchCardVisual extends StatelessWidget {
   Widget build(BuildContext context) {
     final ancho = MediaQuery.sizeOf(context).width - 40;
     final alto = MediaQuery.sizeOf(context).height * 0.58;
-    final foto = card.fotoUrl;
     final urlsSquad = card.avataresMiembrosUrls;
     final esSquad = card.esSquad;
     return SizedBox(
@@ -1729,126 +1739,7 @@ class _MatchCardVisual extends StatelessWidget {
       height: alto,
       child: Column(
         children: [
-          // ─── Banner/foto con stack + nombre encima ───
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: ColoresApp.fondoSuperficie,
-                borderRadius: BorderRadius.circular(26),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    blurRadius: 22,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (foto != null)
-                    Image.network(
-                      foto,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _placeholder(),
-                    )
-                  else
-                    _placeholder(),
-                  // Degradado suave abajo, solo para que el nombre se lea
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          stops: const [0.62, 1.0],
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.78),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Badge: ya te dio "Me re pinta" 🥂
-                  if (card.teRecopo)
-                    Positioned(
-                      top: 14,
-                      right: 14,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 11,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _kAzulRecopa,
-                          borderRadius: BorderRadius.circular(999),
-                          boxShadow: [
-                            BoxShadow(
-                              color: _kAzulRecopa.withValues(alpha: 0.5),
-                              blurRadius: 12,
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          '🥂 ¡Le re pinta tu plan!',
-                          style: GoogleFonts.baloo2(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 12,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (esSquad) ...[
-                          StackAvataresSquad(
-                            avatares: urlsSquad,
-                            totalExtra: card.miembrosParaStack,
-                            size: 48,
-                            paddingExterno: 0,
-                          ),
-                          const SizedBox(height: 8),
-                        ],
-                        Text(
-                          esSquad
-                              ? '$_nombreCorto${card.miembros != null ? ' · ${card.miembros} 👥' : ''}'
-                              : '$_nombreCorto${card.edad != null ? ', ${card.edad}' : ''}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.baloo2(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 24,
-                          ),
-                        ),
-                        if (esSquad && card.edadPromedio != null)
-                          Text(
-                            'Edad prom.: ${card.edadPromedio}'
-                            '${(card.hombres ?? 0) + (card.mujeres ?? 0) > 0 ? ' · ${card.hombres ?? 0}🙋‍♂️ ${card.mujeres ?? 0}🙋‍♀️' : ''}',
-                            style: GoogleFonts.baloo2(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          // ─── Debajo: plan + lugar ───
+          // ─── Arriba: plan + lugar (prioridad de lectura) ───
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1900,44 +1791,201 @@ class _MatchCardVisual extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 10),
+          // ─── Abajo: foto con nombre encima ───
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: ColoresApp.fondoSuperficie,
+                borderRadius: BorderRadius.circular(26),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Positioned.fill(child: FondoFotoMatch(card: card)),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: const [0.62, 1.0],
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.78),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Badges de swipe sobre la FOTO (parte inferior).
+                  if (swipeStamp != null && swipeStampPos != null)
+                    if (swipeStampPos == _SwipeStampPos.center)
+                      Positioned(
+                        top: 18,
+                        left: 0,
+                        right: 0,
+                        child: Center(child: swipeStamp!),
+                      )
+                    else if (swipeStampPos == _SwipeStampPos.left)
+                      Positioned(top: 18, left: 22, child: swipeStamp!)
+                    else
+                      Positioned(top: 18, right: 22, child: swipeStamp!),
+                  if (card.teRecopo)
+                    Positioned(
+                      top: 14,
+                      right: 14,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _kAzulRecopa,
+                          borderRadius: BorderRadius.circular(999),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _kAzulRecopa.withValues(alpha: 0.5),
+                              blurRadius: 12,
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          esSquad
+                              ? '🥂 ¡Les re pinta el plan!'
+                              : '🥂 ¡Le re pinta tu plan!',
+                          style: GoogleFonts.baloo2(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 12,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (esSquad) ...[
+                          StackAvataresSquad(
+                            avatares: urlsSquad,
+                            totalExtra: card.miembrosParaStack,
+                            size: 48,
+                            paddingExterno: 0,
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        Text(
+                          esSquad
+                              ? '$_nombreCorto${card.miembros != null ? ' · ${card.miembros} 👥' : ''}'
+                              : '$_nombreCorto${card.edad != null ? ', ${card.edad}' : ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.baloo2(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 24,
+                          ),
+                        ),
+                        if (esSquad && card.subtituloIdentidad.isNotEmpty)
+                          Text(
+                            card.subtituloIdentidad,
+                            style: GoogleFonts.baloo2(
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
-      ),
-    );
-  }
-
-  /// Sin banner: color sólido estable por squad/usuario (no gris fijo).
-  Widget _placeholder() {
-    final seed = card.idGrupo ?? card.idUsuario ?? card.idPlan;
-    return Container(
-      color: _colorSolidoDesdeSeed(seed),
-      alignment: Alignment.center,
-      child: Text(
-        card.esSquad ? '👥' : '🙋',
-        style: TextStyle(
-          fontSize: 64,
-          color: Colors.white.withValues(alpha: 0.55),
-        ),
       ),
     );
   }
 }
 
-Color _colorSolidoDesdeSeed(String seed) {
-  const palette = <Color>[
-    Color(0xFF2D6A4F),
-    Color(0xFF1D3557),
-    Color(0xFF9B2226),
-    Color(0xFF6A4C93),
-    Color(0xFFBC6C25),
-    Color(0xFF0077B6),
-    Color(0xFF3A5A40),
-    Color(0xFF6D597A),
-  ];
-  var h = 0;
-  for (final c in seed.codeUnits) {
-    h = (h * 31 + c) & 0x7fffffff;
+enum _SwipeStampPos { left, right, center }
+
+/// Badge animado al deslizar (scale + shake suave).
+class _StampSwipeAnimado extends StatefulWidget {
+  const _StampSwipeAnimado({
+    super.key,
+    required this.texto,
+    required this.color,
+  });
+
+  final String texto;
+  final Color color;
+
+  @override
+  State<_StampSwipeAnimado> createState() => _StampSwipeAnimadoState();
+}
+
+class _StampSwipeAnimadoState extends State<_StampSwipeAnimado>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    )..forward();
   }
-  return palette[h % palette.length];
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, child) {
+        final t = Curves.easeOutBack.transform(_ctrl.value);
+        final shake = (1 - _ctrl.value) * 6 * (0.5 - (t - 0.5).abs());
+        return Transform.translate(
+          offset: Offset(shake, 0),
+          child: Transform.scale(scale: 0.82 + t * 0.18, child: child),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: widget.color,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          widget.texto,
+          style: GoogleFonts.baloo2(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2096,10 +2144,13 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
     if (_aplicandoFiltros) return;
     setState(() => _aplicandoFiltros = true);
     final (eMin, eMax) = _edades;
+    final (mMin, mMax) = _miembros;
     final ok = await _srv.setFiltros(
-      interesGenero: _esSquad ? null : _interes,
+      interesGenero: _interes,
       edadMin: eMin,
       edadMax: eMax,
+      miembrosMin: _esSquad ? mMin : null,
+      miembrosMax: _esSquad ? mMax : null,
       tipo: widget.modo,
       idGrupo: widget.squad?.idGrupo,
     );
@@ -2279,24 +2330,25 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                   // ── Card 1: FILTROS (aplican al instante) ──
                   _subCard(
                     titulo: 'Filtros',
-                    detalle:
-                        'Ordenan tu mazo: primero quienes más coinciden con vos.',
+                    detalle: _esSquad
+                        ? 'Edad y género se calculan con el promedio del otro squad. "Todas / cualquiera" deja de filtrar.'
+                        : 'Filtran el mazo: primero quienes más coinciden con vos.',
                     hijos: [
-                      if (!_esSquad) ...[
-                        _titulo('Género que te interesa'),
-                        _chips(
-                          opciones: const [
-                            ('todos', '✨ Todos'),
-                            ('hombres', 'Hombres'),
-                            ('mujeres', 'Mujeres'),
-                          ],
-                          valor: _interes,
-                          onTap: (v) => setState(() => _interes = v),
-                          destacada: 'todos',
-                        ),
-                        const SizedBox(height: 14),
-                      ],
-                      _titulo(_esSquad ? 'Edad del otro squad' : 'Edad'),
+                      _titulo(_esSquad
+                          ? 'Género del otro squad'
+                          : 'Género que te interesa'),
+                      _chips(
+                        opciones: const [
+                          ('todos', '✨ Todos'),
+                          ('hombres', 'Hombres'),
+                          ('mujeres', 'Mujeres'),
+                        ],
+                        valor: _interes,
+                        onTap: (v) => setState(() => _interes = v),
+                        destacada: 'todos',
+                      ),
+                      const SizedBox(height: 14),
+                      _titulo(_esSquad ? 'Edad promedio del otro squad' : 'Edad'),
                       _chips(
                         opciones: const [
                           ('todos', '✨ Todas'),
@@ -2335,9 +2387,10 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                   const SizedBox(height: 16),
                   // ── Card 2: MI PLAN (se guarda con el botón) ──
                   _subCard(
-                    titulo: 'Mis planes y preferencias',
-                    detalle:
-                        'Indicá tu plan y tu lugar para que puedan coincidir mejor con vos.',
+                    titulo: _esSquad ? 'Plan y lugar del squad' : 'Mis planes y preferencias',
+                    detalle: _esSquad
+                        ? 'Cualquier miembro puede cambiar el plan y el lugar. La ciudad del squad sale de su perfil.'
+                        : 'Indicá tu plan y tu lugar para que puedan coincidir mejor con vos.',
                     hijos: [
                   _titulo('El plan'),
                   _chips(
@@ -2657,25 +2710,13 @@ class _TarjetaPendiente extends StatelessWidget {
   final bool esRecopa;
   final VoidCallback onMatchear;
 
-  String get _genero => switch (card.sexo) {
-    'hombre' => 'Hombre',
-    'mujer' => 'Mujer',
-    'otro' => 'Otrx',
-    _ => '',
-  };
-
   @override
   Widget build(BuildContext context) {
-    final foto = card.fotoUrl;
     final ancho = MediaQuery.sizeOf(context).width * 0.86;
     final recopa = esRecopa;
     final urlsSquad = card.avataresMiembrosUrls;
     final esSquad = card.esSquad;
-    final datos = [
-      if (card.edad != null) '${card.edad} años',
-      if (_genero.isNotEmpty) _genero,
-      if (esSquad && card.miembros != null) '${card.miembros} personas',
-    ].join(' · ');
+    final datos = card.subtituloIdentidad;
 
     return Center(
       child: Material(
@@ -2690,7 +2731,7 @@ class _TarjetaPendiente extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: ColoresApp.fondoSuperficie,
                   borderRadius: BorderRadius.circular(26),
-                  border: recopa
+                  border: recopa && !esSquad
                       ? Border.all(color: _kAzulRecopa, width: 2.5)
                       : null,
                   boxShadow: [
@@ -2707,14 +2748,7 @@ class _TarjetaPendiente extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (foto != null)
-                      Image.network(
-                        foto,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _ph(),
-                      )
-                    else
-                      _ph(),
+                    Positioned.fill(child: FondoFotoMatch(card: card)),
                     Positioned.fill(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
@@ -2746,8 +2780,12 @@ class _TarjetaPendiente extends StatelessWidget {
                         ),
                         child: Text(
                           recopa
-                              ? '🥂 ¡Le RE pinta tu plan!'
-                              : '💜 ¡Le pinta tu plan!',
+                              ? (esSquad
+                                  ? '🥂 ¡Les RE pinta el plan!'
+                                  : '🥂 ¡Le RE pinta tu plan!')
+                              : (esSquad
+                                  ? '💜 ¡Les pinta el plan!'
+                                  : '💜 ¡Le pinta tu plan!'),
                           style: GoogleFonts.baloo2(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
@@ -2772,17 +2810,34 @@ class _TarjetaPendiente extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                           ],
-                          Text(
-                            esSquad
-                                ? card.nombre
-                                : card.nombre.split(RegExp(r'\s+')).first,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.baloo2(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 26,
-                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  esSquad
+                                      ? card.nombre
+                                      : card.nombre
+                                          .split(RegExp(r'\s+'))
+                                          .first,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.baloo2(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 26,
+                                    height: 1.1,
+                                  ),
+                                ),
+                              ),
+                              if (esSquad) ...[
+                                const SizedBox(width: 8),
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 8),
+                                  child: BadgeMatchSquads(),
+                                ),
+                              ],
+                            ],
                           ),
                           if (datos.isNotEmpty)
                             Text(
@@ -2880,18 +2935,6 @@ class _TarjetaPendiente extends StatelessWidget {
       ),
     );
   }
-
-  Widget _ph() => Container(
-    color: _colorSolidoDesdeSeed(card.idGrupo ?? card.idUsuario ?? card.idPlan),
-    alignment: Alignment.center,
-    child: Text(
-      card.esSquad ? '👥' : '🙋',
-      style: TextStyle(
-        fontSize: 64,
-        color: Colors.white.withValues(alpha: 0.55),
-      ),
-    ),
-  );
 }
 
 /// Avatar del local. Si todavía no tiene foto, muestra la copita como

@@ -18,7 +18,9 @@ import '../core/servicio_ubicacion_global.dart';
 import '../core/servicio_ubicacion_dispositivo.dart';
 import '../core/ubicaciones_data.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
+import '../widgets/fernecito_loader.dart';
 import '../widgets/mapa_ui.dart';
+import '../widgets/dialogo_fernecito.dart';
 import 'pantalla_local_perfil.dart';
 import 'pantalla_ver_evento.dart';
 
@@ -202,10 +204,10 @@ class _PantallaMapaState extends State<PantallaMapa>
   }
 
   void _mostrarDialogoSolicitudUbicacion({bool alEntrar = false}) {
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: Text(alEntrar ? '¿Activar ubicación?' : 'Usar tu ubicación'),
         content: Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -220,11 +222,11 @@ class _PantallaMapaState extends State<PantallaMapa>
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Ahora no'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () {
               Navigator.of(ctx).pop();
@@ -273,9 +275,9 @@ class _PantallaMapaState extends State<PantallaMapa>
     bool ofrecerAjustes = false,
   }) async {
     if (!mounted) return;
-    await showCupertinoDialog<void>(
+    await showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Ubicación'),
         content: Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -283,14 +285,14 @@ class _PantallaMapaState extends State<PantallaMapa>
         ),
         actions: [
           if (ofrecerAjustes)
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () {
                 Navigator.of(ctx).pop();
                 ServicioUbicacionDispositivo.instancia.abrirAjustes();
               },
               child: const Text('Abrir ajustes'),
             ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Entendido'),
@@ -570,9 +572,9 @@ class _PantallaMapaState extends State<PantallaMapa>
             ),
 
             if (_cargando)
-              ColoredBox(
-                color: const Color(0x88000000),
-                child: Center(child: LoaderMapaIconosAnimado(size: 40)),
+              const ColoredBox(
+                color: Color(0x88000000),
+                child: FernecitoLoaderCentro(size: 40),
               ),
           ],
         ),

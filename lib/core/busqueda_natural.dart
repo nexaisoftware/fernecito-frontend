@@ -5,6 +5,24 @@ library;
 class BusquedaNatural {
   BusquedaNatural._();
 
+  static const Set<String> _stopwords = {
+    'con',
+    'por',
+    'para',
+    'del',
+    'los',
+    'las',
+    'una',
+    'uno',
+    'que',
+    'the',
+    'and',
+    'de',
+    'en',
+    'la',
+    'el',
+  };
+
   static const Map<String, List<String>> _conceptos = {
     'hamburguesa': [
       'hamburg',
@@ -21,6 +39,8 @@ class BusquedaNatural {
       'paty',
       'patty',
       'medallon',
+      'hamburguesa',
+      'hamburguesas',
     ],
     'cerveza': [
       'cervez',
@@ -64,6 +84,13 @@ class BusquedaNatural {
       'lomito',
       'milanesa',
       'parrilla',
+      'tostado',
+      'tostados',
+      'tostada',
+      'tostadas',
+      'brunch',
+      'desayuno',
+      'merienda',
     ],
     'pizza': ['pizza', 'piza', 'pitsa', 'muzza', 'muzzarella', 'mozzarella'],
     'parrilla': [
@@ -205,20 +232,72 @@ class BusquedaNatural {
       .replaceAll(RegExp(r'[óòöô]'), 'o')
       .replaceAll(RegExp(r'[úùüû]'), 'u')
       .replaceAll('ñ', 'n')
-      .replaceAll(RegExp(r'[^a-z0-9$]+'), ' ')
+      .replaceAll(RegExp(r'[^a-z0-9\$]+'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+
+  /// Raíz liviana para plurales comunes (tostados → tostado).
+  static String raiz(String raw) {
+    var r = normalizar(raw);
+    if (r.length <= 3) return r;
+    if (r.endsWith('es') && r.length >= 5 && !r.endsWith('ss')) {
+      r = r.substring(0, r.length - 2);
+    } else if ((r.endsWith('os') || r.endsWith('as')) && r.length >= 5) {
+      r = r.substring(0, r.length - 2);
+    } else if (r.endsWith('s') && r.length >= 4 && !r.endsWith('ss')) {
+      r = r.substring(0, r.length - 1);
+    }
+    return r;
+  }
+
+  static List<String> _palabras(String raw) => normalizar(raw)
+      .split(RegExp(r'[^a-z0-9]+'))
+      .where((w) => w.length >= 2)
+      .toList(growable: false);
+
+  static List<String> _tokensConsulta(String q) => q
+      .split(' ')
+      .map((t) => t.trim())
+      .where((t) => t.length >= 2 && !_stopwords.contains(t))
+      .toList(growable: false);
 
   static bool _contiene(String texto, String aliasRaw) {
     final alias = normalizar(aliasRaw);
     if (alias.contains(' ')) {
-      return texto.contains(alias) ||
-          texto.replaceAll(' ', '').contains(alias.replaceAll(' ', ''));
+      return tokenCoincide(texto, alias);
     }
     if (alias.length <= 3) {
       return RegExp('(?:^| )${RegExp.escape(alias)}(?:\$| )').hasMatch(texto);
     }
-    return texto.contains(alias);
+    return tokenCoincide(texto, alias);
+  }
+
+  static bool tokenCoincide(String haystack, String tokenRaw) {
+    final hay = normalizar(haystack);
+    final tok = normalizar(tokenRaw);
+    if (tok.isEmpty) return true;
+    if (tok.length < 2) return false;
+
+    if (tok.length >= 4) {
+      if (hay.contains(tok) ||
+          hay.replaceAll(' ', '').contains(tok.replaceAll(' ', ''))) {
+        return true;
+      }
+    }
+
+    final raizTok = raiz(tok);
+    for (final w in _palabras(hay)) {
+      if (tok.length <= 3) {
+        if (w == tok) return true;
+        continue;
+      }
+      if (tok.length >= 4 && w.length >= tok.length && w.startsWith(tok)) {
+        return true;
+      }
+      if (raiz(w) == raizTok) return true;
+      if (raizTok.length >= 4 && w.startsWith(raizTok)) return true;
+    }
+    return false;
   }
 
   static Set<String> conceptos(String raw) {
@@ -233,13 +312,16 @@ class BusquedaNatural {
     final q = normalizar(consulta);
     if (q.isEmpty) return true;
     final texto = normalizar(campos.whereType<Object>().join(' '));
-    final directa = q.length <= 3
-        ? RegExp('(?:^| )${RegExp.escape(q)}(?:\$| )').hasMatch(texto)
-        : texto.contains(q) ||
-              texto.replaceAll(' ', '').contains(q.replaceAll(' ', ''));
-    if (directa) {
-      return true;
+    if (texto.isEmpty) return false;
+
+    if (tokenCoincide(texto, q)) return true;
+
+    final tokens = _tokensConsulta(q);
+    if (tokens.isNotEmpty) {
+      final todos = tokens.every((t) => tokenCoincide(texto, t));
+      if (todos) return true;
     }
+
     final buscados = conceptos(q);
     if (buscados.isEmpty) return false;
     final disponibles = conceptos(texto);

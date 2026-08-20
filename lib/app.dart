@@ -9,9 +9,12 @@
 /// No parecer chota ni mal pensada.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Material, ScaffoldMessenger;
-import 'package:flutter/services.dart' show AnnotatedRegion, SystemUiOverlayStyle;
+import 'package:flutter/services.dart'
+    show AnnotatedRegion, SystemUiOverlayStyle;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/constants.dart';
 import 'core/supabase_client.dart';
@@ -42,25 +45,66 @@ class _AppFernecitoState extends State<AppFernecito>
   bool _verificandoSesion = true;
   bool _tieneSesionActiva = false;
   bool _perfilCompleto = false;
+  bool _splashMinimaCumplida = false;
+  bool _splashLockupListo = false;
+  Timer? _splashHoldTimer;
+  Timer? _splashSeguridadTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     BootstrapCartelera.lista.addListener(_onBootstrapCartelera);
+    splashAnimacionCompleta.value = false;
+    splashLockupListo.value = false;
+    splashLockupListo.addListener(_onSplashLockup);
     // PWA: barra oscura desde el primer frame (no verde tipo "en llamada").
     WidgetsBinding.instance.addPostFrameCallback((_) {
       quitarSplashHtml();
       BarraSistemaFernecito.aplicar();
     });
     _verificarSesionExistente();
+    // No atar el hold al reloj de initState: en Android debug el primer
+    // vsync del splash puede llegar tarde y el timer viejo dejaba el Stack vacío.
+    _splashSeguridadTimer = Timer(kSplashSeguridadMaxima, _forzarFinSplash);
   }
 
   @override
   void dispose() {
+    _splashHoldTimer?.cancel();
+    _splashSeguridadTimer?.cancel();
+    splashLockupListo.removeListener(_onSplashLockup);
     BootstrapCartelera.lista.removeListener(_onBootstrapCartelera);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onSplashLockup() {
+    if (!mounted) return;
+    if (splashLockupListo.value == _splashLockupListo) return;
+    // Sin setState: montar Home acá reconstruye el árbol y tira la splash.
+    _splashLockupListo = splashLockupListo.value;
+    if (_splashLockupListo) _programarHoldTrasLockup();
+  }
+
+  void _programarHoldTrasLockup() {
+    if (_splashMinimaCumplida || _splashHoldTimer != null) return;
+    _splashHoldTimer = Timer(kSplashHoldTrasLockup, () {
+      if (!mounted) return;
+      splashAnimacionCompleta.value = true;
+      setState(() => _splashMinimaCumplida = true);
+    });
+  }
+
+  void _forzarFinSplash() {
+    if (!mounted) return;
+    if (_splashMinimaCumplida && _splashLockupListo) return;
+    splashLockupListo.value = true;
+    splashAnimacionCompleta.value = true;
+    setState(() {
+      _splashLockupListo = true;
+      _splashMinimaCumplida = true;
+    });
   }
 
   void _onBootstrapCartelera() {
@@ -156,10 +200,7 @@ class _AppFernecitoState extends State<AppFernecito>
             GlobalCupertinoLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
           ],
-          supportedLocales: const [
-            Locale('es', 'AR'),
-            Locale('es'),
-          ],
+          supportedLocales: const [Locale('es', 'AR'), Locale('es')],
           locale: const Locale('es', 'AR'),
           title: CadenasApp.nombreApp,
           theme: CupertinoThemeData(
@@ -221,26 +262,38 @@ class _AppFernecitoState extends State<AppFernecito>
   }
 
   Widget _buildHome() {
-    final irAHome = !_verificandoSesion &&
+    // Home/login recién después del hold: la cartelera no pelea los
+    // últimos frames del lockup ni el segundo extra de splash sola.
+    final listo = _splashMinimaCumplida;
+    final sesionLista = !_verificandoSesion;
+    final irAHome =
+        listo && sesionLista && _tieneSesionActiva && _perfilCompleto;
+
+    Widget? destino;
+    if (listo && sesionLista && !_tieneSesionActiva) {
+      destino = const PantallaLogin();
+    } else if (listo &&
+        sesionLista &&
         _tieneSesionActiva &&
-        _perfilCompleto;
-    final mostrarSplash = _verificandoSesion ||
+        !_perfilCompleto) {
+      destino = const PantallaCrearPerfil();
+    }
+
+    // Nunca sacar el splash si no hay Home ni login: si no, queda #121212 vacío.
+    final mostrarSplash =
+        !listo ||
+        !sesionLista ||
         (irAHome && !BootstrapCartelera.lista.value);
 
-    if (!_verificandoSesion && !_tieneSesionActiva) {
-      return const PantallaLogin();
-    }
-    if (!_verificandoSesion && _tieneSesionActiva && !_perfilCompleto) {
-      return const PantallaCrearPerfil();
-    }
-
-    // Home montado debajo (carga cartelera) + splash encima sin reiniciar animación.
     return Stack(
       fit: StackFit.expand,
       children: [
         if (irAHome) const PantallaHome(),
+        if (destino != null) destino,
         if (mostrarSplash)
-          const SplashCargaFernecito(key: ValueKey('splash_fernecito')),
+          const RepaintBoundary(
+            child: SplashCargaFernecito(key: ValueKey('splash_fernecito')),
+          ),
       ],
     );
   }

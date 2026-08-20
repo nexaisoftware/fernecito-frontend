@@ -109,6 +109,7 @@ void main() async {
   try {
     await GoogleFonts.pendingFonts([
       GoogleFonts.baloo2(fontWeight: FontWeight.w800),
+      GoogleFonts.baloo2(fontWeight: FontWeight.w900),
     ]);
   } catch (_) {}
 

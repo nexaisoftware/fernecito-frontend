@@ -11,15 +11,22 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
+import '../core/compartir_evento.dart' show origenCompartirDesdeContexto;
+import '../core/compartir_plan.dart';
 import '../core/constants.dart';
+import '../core/flujo_reporte.dart';
 import '../core/lanzador_externo.dart';
 import '../core/servicio_actividad_usuario.dart';
+import '../core/servicio_planes.dart';
 import '../core/supabase_client.dart';
 import '../widgets/avatar_local.dart';
 import '../widgets/boton_compartir_evento.dart';
+import '../widgets/card_plan_comunidad.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 import 'pantalla_local_perfil.dart';
 import 'pantalla_pools.dart';
+import 'pantalla_ver_plan.dart';
 
 /// Estados de `tokens_promociones` que tratamos como “tenés la promo” en listados.
 const _kEstadosTokenPromoUsuario = <String>[
@@ -97,7 +104,9 @@ class PantallaActividad extends StatefulWidget {
 
 class _PantallaActividadState extends State<PantallaActividad> {
   List<Map<String, dynamic>> _tokens = [];
+  List<PlanComunidad> _planes = [];
   bool _cargando = true;
+  _FiltroActividad _filtro = _FiltroActividad.todos;
 
   /// Tokens de promo ya obtenidos por el usuario (clave `id_promocion`), para UX sin flashes.
   Map<String, SnapshotTokenPromo> _tokensPromoPorId = {};
@@ -148,11 +157,17 @@ class _PantallaActividadState extends State<PantallaActividad> {
     }
 
     try {
-      final snap = await srv.sincronizar(forzarCompleto: forzarCompleto);
+      final resultados = await Future.wait<Object?>([
+        srv.sincronizar(forzarCompleto: forzarCompleto),
+        _fetchPlanesUnidos(),
+      ]);
       if (!mounted) return;
+      final snap = resultados[0] as ActividadSnapshot;
+      final planes = resultados[1] as List<PlanComunidad>;
       setState(() {
         _tokens = snap.tokens;
         _tokensPromoPorId = _promosDesdeCache(snap);
+        _planes = planes;
         _cargando = false;
       });
     } catch (e, st) {
@@ -160,6 +175,173 @@ class _PantallaActividadState extends State<PantallaActividad> {
       debugPrint('$st');
       if (mounted) setState(() => _cargando = false);
     }
+  }
+
+  Future<List<PlanComunidad>> _fetchPlanesUnidos() async {
+    final srv = ServicioPlanes();
+    final all = <PlanComunidad>[];
+    var offset = 0;
+    const page = 40;
+    while (true) {
+      final res = await srv.hub(modo: 'mis', limit: page, offset: offset);
+      all.addAll(res.items);
+      if (!res.hayMas || res.items.isEmpty) break;
+      offset += res.items.length;
+      if (offset >= 200) break;
+    }
+    final uid = ServicioSupabase().usuarioActual?.id.toLowerCase();
+    return all
+        .where((p) {
+          if (p.soyMiembro) return true;
+          if (uid != null && p.idOrganizador.toLowerCase() == uid) {
+            return true;
+          }
+          return false;
+        })
+        .toList(growable: false);
+  }
+
+  DateTime? _parseDt(dynamic v) {
+    if (v == null) return null;
+    if (v is DateTime) return v.toLocal();
+    return DateTime.tryParse(v.toString())?.toLocal();
+  }
+
+  bool _eventoEsHistorial(Map<String, dynamic> t) {
+    final estado = (t['estado_token']?.toString() ?? '').toLowerCase();
+    if (estado == 'canjeada' || estado == 'rechazada') return true;
+    final ahora = DateTime.now();
+    final fin = _parseDt(t['fechaFin']);
+    if (fin != null && !fin.isAfter(ahora)) return true;
+    final inicio = _parseDt(t['fechaInicio']);
+    if (fin == null &&
+        inicio != null &&
+        inicio.isBefore(ahora.subtract(const Duration(hours: 6)))) {
+      return true;
+    }
+    final exp = _parseDt(t['fechaExpiracion']);
+    if (exp != null && !exp.isAfter(ahora) && estado == 'pendiente') {
+      return true;
+    }
+    return false;
+  }
+
+  DateTime _fechaOrdenEvento(Map<String, dynamic> t) {
+    return _parseDt(t['fechaCreacion']) ??
+        _parseDt(t['fechaInicio']) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  DateTime _fechaOrdenPlan(PlanComunidad p) => p.fechaInicio;
+
+  List<_ItemActividad> get _items {
+    final out = <_ItemActividad>[
+      for (final t in _tokens)
+        _ItemActividad.evento(t, _fechaOrdenEvento(t), _eventoEsHistorial(t)),
+      for (final p in _planes)
+        _ItemActividad.plan(p, _fechaOrdenPlan(p), p.estaPasado),
+    ];
+    out.sort((a, b) => b.fechaOrden.compareTo(a.fechaOrden));
+    return out;
+  }
+
+  List<_ItemActividad> get _visibles {
+    final items = _items;
+    switch (_filtro) {
+      case _FiltroActividad.todos:
+        return items.where((i) => !i.esHistorial).toList();
+      case _FiltroActividad.planes:
+        return items.where((i) => i.esPlan && !i.esHistorial).toList();
+      case _FiltroActividad.eventos:
+        return items.where((i) => !i.esPlan && !i.esHistorial).toList();
+      case _FiltroActividad.historial:
+        return items.where((i) => i.esHistorial).toList();
+    }
+  }
+
+  String get _subtituloHeader {
+    final n = _visibles.length;
+    switch (_filtro) {
+      case _FiltroActividad.todos:
+        if (n == 0) return 'Todavía no hay nada en curso';
+        return n == 1 ? '1 en curso' : '$n en curso';
+      case _FiltroActividad.planes:
+        if (n == 0) return 'No tenés planes activos';
+        return n == 1 ? '1 plan' : '$n planes';
+      case _FiltroActividad.eventos:
+        if (n == 0) return 'Todavía no reservaste nada';
+        return n == 1 ? '1 reserva activa' : '$n reservas activas';
+      case _FiltroActividad.historial:
+        if (n == 0) return 'Todavía no hay historial';
+        return n == 1 ? '1 pasado' : '$n pasados';
+    }
+  }
+
+  Future<void> _abrirPlan(PlanComunidad plan) async {
+    final changed = await Navigator.of(context, rootNavigator: true).push<bool>(
+      CupertinoPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => PantallaVerPlan(idPlan: plan.id, inicial: plan),
+      ),
+    );
+    if (changed == true) await _cargarActividad(forzarCompleto: true);
+  }
+
+  Future<void> _reportarPlan(PlanComunidad plan) async {
+    await mostrarFlujoReporte(
+      context: context,
+      entidad: 'este plan',
+      targetTipo: 'plan',
+      targetId: plan.id,
+    );
+  }
+
+  Widget _tileEvento(BuildContext context, Map<String, dynamic> t) {
+    final estado = t['estado_token'] as String? ?? 'pendiente';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: _CardActividad(
+        token: t,
+        flyerUrl: t['flyer'] as String? ?? '',
+        avatarLocal: t['avatarLocal'] as String? ?? '',
+        localEsPionero: t['localEsPionero'] == true,
+        estadoTexto: _estadoTextoReal(estado),
+        estadoColor: _estadoColorReal(estado),
+        fechaHora: _formatearFecha(t['fechaInicio'] as String?),
+        codigoPuerta: t['codigo_puerta'] as String? ?? '',
+        onAbrirQR: estado == 'aceptada' ? () => _mostrarQR(context, t) : null,
+        onComoLlegar: () => _abrirMaps(context, t),
+        onVerPromos: () => _mostrarPromos(context, t),
+        labelPromos: _tokensPromoPorId.isNotEmpty ? 'Mis promos' : 'Ver promos',
+        onVerPool: () {
+          final idEv = t['id_evento']?.toString() ?? '';
+          if (idEv.isEmpty) return;
+          Navigator.of(context).push(
+            CupertinoPageRoute(
+              builder: (_) => PantallaPools(
+                idEvento: idEv,
+                nombreEvento: t['titulo'] as String? ?? 'Evento',
+                flyerUrl: t['flyer'] as String?,
+                nombreLocal: t['nombreLocal'] as String? ?? 'Local',
+                avatarLocal: t['avatarLocal'] as String? ?? '',
+                localEsPionero: t['localEsPionero'] == true,
+              ),
+            ),
+          );
+        },
+        onVerPerfilLocal: () {
+          Navigator.of(context).push(
+            CupertinoPageRoute(
+              builder: (_) => PantallaLocalPerfil(
+                avatarUrl: t['avatarLocal'] as String? ?? '',
+                nombreLocal: t['nombreLocal'] as String? ?? 'Local',
+                idLocal: t['idLocal'] as String?,
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   String _estadoTextoReal(String estado) {
@@ -323,46 +505,54 @@ class _PantallaActividadState extends State<PantallaActividad> {
       child: FernecitoRefreshScrollView(
         onRefresh: () => _cargarActividad(forzarCompleto: true),
         slivers: [
-          // Header
           SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(20, padding.top + 12, 20, 0),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Mi Actividad',
-                          style: GoogleFonts.baloo2(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            color: ColoresApp.textoPrincipal,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        Text(
-                          _tokens.isEmpty
-                              ? 'Todavía no reservaste nada'
-                              : '${_tokens.length} ${_tokens.length == 1 ? "reserva" : "reservas"} activas',
-                          style: GoogleFonts.baloo2(
-                            fontSize: 13,
-                            color: ColoresApp.textoSecundario,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'Mi Actividad',
+                    style: GoogleFonts.baloo2(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: ColoresApp.textoPrincipal,
+                      letterSpacing: -0.5,
                     ),
+                  ),
+                  Text(
+                    _subtituloHeader,
+                    style: GoogleFonts.baloo2(
+                      fontSize: 13,
+                      color: ColoresApp.textoSecundario,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final f in _FiltroActividad.values)
+                        _ChipFiltroActividad(
+                          label: f.label,
+                          activo: _filtro == f,
+                          onTap: () {
+                            if (_filtro == f) return;
+                            HapticFeedback.selectionClick();
+                            setState(() => _filtro = f);
+                          },
+                        ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
           if (_cargando)
             const SliverFillRemaining(child: FernecitoLoaderCentro(size: 34))
-          else if (_tokens.isEmpty)
+          else if (_visibles.isEmpty)
             SliverFillRemaining(
               child: Center(
                 child: Column(
@@ -376,14 +566,14 @@ class _PantallaActividadState extends State<PantallaActividad> {
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        CupertinoIcons.ticket,
+                        _filtro.iconoVacio,
                         size: 38,
                         color: ColoresApp.principalMarca,
                       ),
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'Sin reservas aún',
+                      _filtro.tituloVacio,
                       style: GoogleFonts.baloo2(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
@@ -394,7 +584,7 @@ class _PantallaActividadState extends State<PantallaActividad> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 40),
                       child: Text(
-                        'Explorá la cartelera y reservá tu lugar en los mejores eventos',
+                        _filtro.subtituloVacio,
                         style: GoogleFonts.baloo2(
                           fontSize: 14,
                           color: ColoresApp.textoSecundario,
@@ -412,60 +602,124 @@ class _PantallaActividadState extends State<PantallaActividad> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
-                  final t = _tokens[index];
-                  final estado = t['estado_token'] as String? ?? 'pendiente';
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _CardActividad(
-                      token: t,
-                      flyerUrl: t['flyer'] as String? ?? '',
-                      avatarLocal: t['avatarLocal'] as String? ?? '',
-                      localEsPionero: t['localEsPionero'] == true,
-                      estadoTexto: _estadoTextoReal(estado),
-                      estadoColor: _estadoColorReal(estado),
-                      fechaHora: _formatearFecha(t['fechaInicio'] as String?),
-                      codigoPuerta: t['codigo_puerta'] as String? ?? '',
-                      onAbrirQR: estado == 'aceptada'
-                          ? () => _mostrarQR(context, t)
-                          : null,
-                      onComoLlegar: () => _abrirMaps(context, t),
-                      onVerPromos: () => _mostrarPromos(context, t),
-                      onVerPool: () {
-                        final idEv = t['id_evento']?.toString() ?? '';
-                        if (idEv.isEmpty) return;
-                        Navigator.of(context).push(
-                          CupertinoPageRoute(
-                            builder: (_) => PantallaPools(
-                              idEvento: idEv,
-                              nombreEvento: t['titulo'] as String? ?? 'Evento',
-                              flyerUrl: t['flyer'] as String?,
-                              nombreLocal:
-                                  t['nombreLocal'] as String? ?? 'Local',
-                              avatarLocal: t['avatarLocal'] as String? ?? '',
-                              localEsPionero: t['localEsPionero'] == true,
-                            ),
-                          ),
-                        );
-                      },
-                      onVerPerfilLocal: () {
-                        Navigator.of(context).push(
-                          CupertinoPageRoute(
-                            builder: (_) => PantallaLocalPerfil(
-                              avatarUrl: t['avatarLocal'] as String? ?? '',
-                              nombreLocal:
-                                  t['nombreLocal'] as String? ?? 'Local',
-                              idLocal: t['idLocal'] as String?,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                }, childCount: _tokens.length),
+                  final item = _visibles[index];
+                  if (item.esPlan) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: CardPlanComunidad(
+                        plan: item.plan!,
+                        onTap: () => _abrirPlan(item.plan!),
+                        onUnirse: () {},
+                        onReportar: () => _reportarPlan(item.plan!),
+                        onCompartir: item.plan!.estaFinalizado
+                            ? null
+                            : () => compartirPlan(
+                                idPlan: item.plan!.id,
+                                titulo: item.plan!.titulo,
+                                nombreLocal: item.plan!.nombreLocal,
+                                ciudad: item.plan!.ciudad,
+                                fechaInicio: item.plan!.fechaInicio,
+                                sharePositionOrigin:
+                                    origenCompartirDesdeContexto(context),
+                                feedbackContext: context,
+                              ),
+                      ),
+                    );
+                  }
+                  return _tileEvento(context, item.token!);
+                }, childCount: _visibles.length),
               ),
             ),
           SliverToBoxAdapter(child: SizedBox(height: padding.bottom + 80)),
         ],
+      ),
+    );
+  }
+}
+
+class _ItemActividad {
+  const _ItemActividad.plan(this.plan, this.fechaOrden, this.esHistorial)
+    : token = null;
+
+  const _ItemActividad.evento(this.token, this.fechaOrden, this.esHistorial)
+    : plan = null;
+
+  final PlanComunidad? plan;
+  final Map<String, dynamic>? token;
+  final DateTime fechaOrden;
+  final bool esHistorial;
+
+  bool get esPlan => plan != null;
+}
+
+enum _FiltroActividad { todos, planes, eventos, historial }
+
+extension on _FiltroActividad {
+  String get label => switch (this) {
+    _FiltroActividad.todos => 'Todos',
+    _FiltroActividad.planes => 'Planes',
+    _FiltroActividad.eventos => 'Eventos',
+    _FiltroActividad.historial => 'Historial',
+  };
+
+  IconData get iconoVacio => switch (this) {
+    _FiltroActividad.todos => CupertinoIcons.square_list,
+    _FiltroActividad.planes => CupertinoIcons.calendar,
+    _FiltroActividad.eventos => CupertinoIcons.ticket,
+    _FiltroActividad.historial => CupertinoIcons.clock,
+  };
+
+  String get tituloVacio => switch (this) {
+    _FiltroActividad.todos => 'Sin actividad aún',
+    _FiltroActividad.planes => 'No tenés planes activos',
+    _FiltroActividad.eventos => 'Sin reservas aún',
+    _FiltroActividad.historial => 'Todavía no hay historial',
+  };
+
+  String get subtituloVacio => switch (this) {
+    _FiltroActividad.todos =>
+      'Cuando te unas a un plan o reserves un evento, aparece acá.',
+    _FiltroActividad.planes =>
+      'Los planes a los que te aceptaron o te uniste van a aparecer acá.',
+    _FiltroActividad.eventos =>
+      'Explorá la cartelera y reservá tu lugar en los mejores eventos',
+    _FiltroActividad.historial =>
+      'Acá van a aparecer los planes y eventos que ya pasaron.',
+  };
+}
+
+class _ChipFiltroActividad extends StatelessWidget {
+  const _ChipFiltroActividad({
+    required this.label,
+    required this.activo,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool activo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final marca = ColoresApp.principalMarca;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: activo ? marca : ColoresApp.fondoSuperficie,
+          borderRadius: BorderRadius.circular(50),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.baloo2(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: activo ? Colors.white : ColoresApp.textoSecundario,
+          ),
+        ),
       ),
     );
   }
@@ -517,6 +771,7 @@ class _CardActividad extends StatelessWidget {
   final VoidCallback? onAbrirQR;
   final VoidCallback onComoLlegar;
   final VoidCallback onVerPromos;
+  final String labelPromos;
   final VoidCallback onVerPool;
   final VoidCallback onVerPerfilLocal;
 
@@ -532,6 +787,7 @@ class _CardActividad extends StatelessWidget {
     required this.onAbrirQR,
     required this.onComoLlegar,
     required this.onVerPromos,
+    this.labelPromos = 'Ver promos',
     required this.onVerPool,
     required this.onVerPerfilLocal,
   });
@@ -836,7 +1092,7 @@ class _CardActividad extends StatelessWidget {
                           const SizedBox(width: 5),
                           Flexible(
                             child: Text(
-                              'Ver promos',
+                              labelPromos,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.baloo2(
@@ -1605,16 +1861,16 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
 
   Future<void> _dialogoPromo(String titulo, String mensaje) async {
     if (!mounted) return;
-    await showCupertinoDialog<void>(
+    await showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: Text(titulo),
         content: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),

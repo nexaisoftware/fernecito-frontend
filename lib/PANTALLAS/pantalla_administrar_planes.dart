@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/constants.dart';
 import '../core/servicio_planes.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 import 'pantalla_perfil_usuarios.dart';
 
 class PantallaAdministrarPlanes extends StatefulWidget {
@@ -70,9 +71,9 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
 
   Future<void> _editarDescripcion(PlanComunidad p) async {
     final ctrl = TextEditingController(text: p.descripcion);
-    final nuevo = await showCupertinoDialog<String>(
+    final nuevo = await showFernecitoDialog<String>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Editar descripción'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10),
@@ -84,11 +85,11 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
             child: const Text('Guardar'),
           ),
@@ -144,9 +145,9 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
 
   Future<void> _editarCupo(PlanComunidad p) async {
     final ctrl = TextEditingController(text: p.cupoMax?.toString() ?? '');
-    final res = await showCupertinoDialog<String>(
+    final res = await showFernecitoDialog<String>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Editar cupo'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10),
@@ -157,11 +158,11 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
             child: const Text('Guardar'),
           ),
@@ -238,9 +239,9 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
 
   Future<void> _pedirAlLocal(PlanComunidad p) async {
     final ctrl = TextEditingController();
-    final pedido = await showCupertinoDialog<String>(
+    final pedido = await showFernecitoDialog<String>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Pedirle algo al local'),
         content: Padding(
           padding: const EdgeInsets.only(top: 10),
@@ -252,11 +253,11 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
           ),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
             child: const Text('Enviar'),
           ),
@@ -283,19 +284,19 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
   }
 
   Future<void> _borrarPlan(PlanComunidad p) async {
-    final ok = await showCupertinoDialog<bool>(
+    final ok = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Borrar plan'),
         content: const Text(
           'Esta acción no se puede deshacer. El plan se elimina para todos.',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('No'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Borrar'),
@@ -326,19 +327,19 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
   }
 
   Future<void> _cancelarPlan(PlanComunidad p) async {
-    final ok = await showCupertinoDialog<bool>(
+    final ok = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Cancelar plan'),
         content: const Text(
           'Se va a mostrar como cancelado y se avisa en el chat.',
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('No'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Cancelar plan'),
@@ -366,17 +367,17 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
   }
 
   Future<void> _expulsar(PlanMiembro m) async {
-    final ok = await showCupertinoDialog<bool>(
+    final ok = await showFernecitoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: Text('¿Expulsar a ${m.nombre}?'),
         content: const Text('Va a salir del plan y del chat del grupo.'),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancelar'),
           ),
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDestructiveAction: true,
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Expulsar'),
@@ -391,10 +392,10 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
   Future<void> _editarContacto(PlanComunidad p) async {
     var modo = p.contactoModo == 'colaborar' ? 'colaborar' : 'contactar';
     final ctrl = TextEditingController(text: p.contactoAnfitrion ?? '');
-    final guardado = await showCupertinoDialog<bool>(
+    final guardado = await showFernecitoDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => CupertinoAlertDialog(
+        builder: (ctx, setLocal) => DialogoFernecito(
           title: const Text('Contacto del organizador'),
           content: Padding(
             padding: const EdgeInsets.only(top: 10),
@@ -426,11 +427,11 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
             ),
           ),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar'),
             ),
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Guardar'),
             ),
@@ -478,12 +479,12 @@ class _PantallaAdministrarPlanesState extends State<PantallaAdministrarPlanes> {
   }
 
   void _toast(String msg) {
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Ok'),
           ),
@@ -827,6 +828,7 @@ class _PanelEditar extends StatelessWidget {
               : '$pendientes ${pendientes == 1 ? "pendiente" : "pendientes"}',
           onTap: onSolicitudes,
           destacado: pendientes > 0,
+          badgeCount: pendientes > 0 ? pendientes : null,
         ),
         const SizedBox(height: 14),
         if (plan.beneficioEstado == 'ninguno')
@@ -835,6 +837,7 @@ class _PanelEditar extends StatelessWidget {
             label: 'Pedirle al local',
             valor: 'Pedir un beneficio para el grupo',
             onTap: onPedirAlLocal,
+            mostrarPuntito: true,
           )
         else
           _PedidoBox(plan: plan),
@@ -945,6 +948,8 @@ class _EditRow extends StatelessWidget {
     required this.onTap,
     this.destacado = false,
     this.soloLectura = false,
+    this.badgeCount,
+    this.mostrarPuntito = false,
   });
 
   final IconData icono;
@@ -953,6 +958,8 @@ class _EditRow extends StatelessWidget {
   final VoidCallback onTap;
   final bool destacado;
   final bool soloLectura;
+  final int? badgeCount;
+  final bool mostrarPuntito;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -1002,7 +1009,40 @@ class _EditRow extends StatelessWidget {
             ),
           ),
           if (!soloLectura) ...[
-            const SizedBox(width: 6),
+            if (badgeCount != null && badgeCount! > 0) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: ColoresApp.principalMarca.withValues(alpha: 0.88),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$badgeCount',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ] else if (mostrarPuntito) ...[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: ColoresApp.principalMarca,
+                  boxShadow: [
+                    BoxShadow(
+                      color: ColoresApp.principalMarca.withValues(alpha: 0.45),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             Icon(
               CupertinoIcons.chevron_right,
               size: 14,
@@ -1240,12 +1280,12 @@ class _SolicitudesSheetState extends State<_SolicitudesSheet> {
 
   void _verPerfil(PlanMiembro m) {
     if (!m.perfilPublico) {
-      showCupertinoDialog<void>(
+      showFernecitoDialog<void>(
         context: context,
-        builder: (ctx) => CupertinoAlertDialog(
+        builder: (ctx) => DialogoFernecito(
           content: Text('Perfil privado · @${m.username ?? 'usuario'}'),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('Ok'),
             ),

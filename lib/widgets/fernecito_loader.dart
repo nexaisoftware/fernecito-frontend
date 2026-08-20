@@ -2,9 +2,8 @@
 ///
 /// Usar siempre [FernecitoLoader] / [FernecitoLoaderCentro] en lugar de
 /// [CupertinoActivityIndicator] o [CircularProgressIndicator].
+/// Sin cápsula: solo el ícono con aureola negra.
 library;
-
-import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Icons;
@@ -14,15 +13,14 @@ import '../core/tema_fernecito.dart';
 /// Widget único de carga Fernecito (íconos que rotan).
 ///
 /// - Pantalla / sheet: [FernecitoLoaderCentro]
-/// - Cápsula (default): `FernecitoLoader(size: 28)`
-/// - Botón / placeholder chico: `FernecitoLoader.inline(size: 16)`
+/// - Default / botón / placeholder: solo ícono + aureola
 class FernecitoLoader extends StatelessWidget {
   const FernecitoLoader({
     super.key,
     this.size = 28,
     this.compact = true,
     this.circular = true,
-    this.bare = false,
+    this.bare = true,
     this.color,
     this.animar = true,
     this.shadows,
@@ -43,7 +41,7 @@ class FernecitoLoader extends StatelessWidget {
   final bool compact;
   final bool circular;
 
-  /// Sin fondo/cápsula: solo el ícono.
+  /// Sin fondo/cápsula: solo el ícono. Se mantiene por compatibilidad.
   final bool bare;
   final Color? color;
   final bool animar;
@@ -55,7 +53,7 @@ class FernecitoLoader extends StatelessWidget {
       size: size,
       compact: compact,
       circular: circular,
-      bare: bare,
+      bare: true,
       color: color,
       animar: animar,
       shadows: shadows,
@@ -84,6 +82,7 @@ class FernecitoLoaderCentro extends StatelessWidget {
         size: size,
         compact: esCompacto,
         circular: circular,
+        bare: true,
       ),
     );
   }
@@ -96,7 +95,7 @@ class LoaderIconosAnimado extends StatefulWidget {
     this.size = 40,
     this.compact = false,
     this.circular = false,
-    this.bare = false,
+    this.bare = true,
     this.color,
     this.animar = true,
     this.shadows,
@@ -117,11 +116,15 @@ class LoaderIconosAnimado extends StatefulWidget {
 class _LoaderIconosAnimadoState extends State<LoaderIconosAnimado> {
   static const _iconos = <IconData>[
     Icons.local_cafe_rounded,
-    CupertinoIcons.map_fill,
-    CupertinoIcons.location_fill,
     Icons.restaurant_rounded,
-    CupertinoIcons.ticket_fill,
+    Icons.local_bar_rounded,
+    Icons.nightlife_rounded,
     CupertinoIcons.music_note_2,
+    CupertinoIcons.mic_fill,
+    CupertinoIcons.ticket_fill,
+    CupertinoIcons.heart_fill,
+    Icons.icecream_outlined,
+    CupertinoIcons.map_fill,
   ];
 
   int _indice = 0;
@@ -161,13 +164,28 @@ class _LoaderIconosAnimadoState extends State<LoaderIconosAnimado> {
   }
 
   Widget _iconoAnimado(Color colorIcono) {
+    final aureola = widget.shadows ??
+        [
+          Shadow(
+            color: const Color(0xF2000000),
+            blurRadius: widget.size * 0.38,
+          ),
+          Shadow(
+            color: const Color(0xCC000000),
+            blurRadius: widget.size * 0.72,
+          ),
+          Shadow(
+            color: const Color(0x88000000),
+            blurRadius: widget.size * 1.15,
+          ),
+        ];
     final indice = widget.animar ? _indice : 0;
     final icono = Icon(
       widget.animar ? _iconos[indice] : _iconos[0],
       key: widget.animar ? ValueKey<int>(indice) : null,
       size: widget.size,
       color: colorIcono,
-      shadows: widget.shadows,
+      shadows: aureola,
     );
     if (!widget.animar) return icono;
     return AnimatedSwitcher(
@@ -189,49 +207,28 @@ class _LoaderIconosAnimadoState extends State<LoaderIconosAnimado> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.bare) {
-      if (widget.color != null) {
-        return _iconoAnimado(widget.color!);
-      }
-      return ValueListenableBuilder<Color>(
-        valueListenable: TemaFernecito.instancia.colorActual,
-        builder: (context, accent, _) => _iconoAnimado(accent),
+    Widget iconoConAureola(Color colorIcono) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xB3000000),
+              blurRadius: widget.size * 0.7,
+              spreadRadius: widget.size * 0.06,
+            ),
+          ],
+        ),
+        child: _iconoAnimado(colorIcono),
       );
     }
 
-    final padding = widget.compact ? 10.0 : 18.0;
-    final lado = widget.size + padding * 2;
-    final radio = widget.circular
-        ? BorderRadius.circular(lado / 2)
-        : BorderRadius.circular(widget.compact ? 14 : 20);
-
+    if (widget.color != null) {
+      return iconoConAureola(widget.color!);
+    }
     return ValueListenableBuilder<Color>(
       valueListenable: TemaFernecito.instancia.colorActual,
-      builder: (context, accent, _) {
-        final colorIcono = widget.color ?? accent;
-        return ClipRRect(
-          borderRadius: radio,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Container(
-              width: lado,
-              height: lado,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1E).withValues(alpha: 0.82),
-                borderRadius: radio,
-                boxShadow: [
-                  BoxShadow(
-                    color: accent.withValues(alpha: 0.22),
-                    blurRadius: widget.compact ? 12 : 18,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-              child: Center(child: _iconoAnimado(colorIcono)),
-            ),
-          ),
-        );
-      },
+      builder: (context, accent, _) => iconoConAureola(accent),
     );
   }
 }
@@ -347,10 +344,8 @@ class _FernecitoRefreshScrollViewState extends State<FernecitoRefreshScrollView>
                         : 0.8 + 0.2 * progreso,
                     duration: const Duration(milliseconds: 120),
                     curve: Curves.easeOut,
-                    child: FernecitoLoader(
-                      size: 20,
-                      compact: true,
-                      circular: true,
+                    child: FernecitoLoader.inline(
+                      size: 22,
                       animar: enPuntoDulce || refrescando,
                     ),
                   ),

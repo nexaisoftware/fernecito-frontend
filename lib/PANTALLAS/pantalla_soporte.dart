@@ -8,6 +8,7 @@ import '../core/servicio_soporte_usuario.dart';
 import '../core/supabase_client.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 /// Ayuda y soporte del usuario. El usuario ABRE una solicitud (no la cierra):
 /// se genera un código anti-estafa que queda visible hasta que el owner la
@@ -116,16 +117,16 @@ class _PantallaSoporteState extends State<PantallaSoporte> {
 
   void _aviso(String titulo, String mensaje) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: Text(titulo),
         content: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Entendido'),

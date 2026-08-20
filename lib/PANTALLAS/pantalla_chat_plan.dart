@@ -8,10 +8,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/chat_paginacion.dart';
 import '../core/constants.dart';
 import '../core/servicio_planes.dart';
 import '../core/supabase_client.dart';
+import '../widgets/boton_cargar_mas_mensajes.dart';
+import '../widgets/encabezado_chat.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
+import 'pantalla_ver_plan.dart';
 
 class PantallaChatPlan extends StatefulWidget {
   const PantallaChatPlan({super.key, required this.plan});
@@ -32,6 +37,8 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
   bool _cargando = true;
   bool _enviando = false;
   bool _bannerCerrado = false;
+  bool _hayMasAntiguos = false;
+  bool _cargandoMas = false;
   RealtimeChannel? _canal;
   final Map<String, String> _nombresAutores = {};
   String? _queryMencion;
@@ -94,19 +101,60 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
       ]);
       await _srv.marcarLeido(widget.plan.id);
       if (!mounted) return;
-      final mensajes = resultados[0] as List<PlanMensaje>;
+      final pag = resultados[0] as PaginaChatMensajes<PlanMensaje>;
       final det = resultados[1] as ({PlanDetalle? detalle, String? error});
       setState(() {
-        _mensajes = mensajes;
+        _mensajes = pag.items;
+        _hayMasAntiguos = pag.hayMas;
         _miembros = det.detalle?.miembros ?? const [];
         _cargando = false;
       });
-      for (final m in mensajes) {
+      for (final m in pag.items) {
         _resolverNombre(m);
       }
       _bajar();
     } catch (_) {
       if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  int? get _idMinimoPositivo {
+    var min = 0;
+    var hay = false;
+    for (final m in _mensajes) {
+      if (m.id <= 0) continue;
+      if (!hay || m.id < min) {
+        min = m.id;
+        hay = true;
+      }
+    }
+    return hay ? min : null;
+  }
+
+  Future<void> _cargarMasAntiguos() async {
+    if (_cargandoMas || !_hayMasAntiguos) return;
+    final minId = _idMinimoPositivo;
+    if (minId == null) return;
+    final prevMax = _scroll.hasClients ? _scroll.position.maxScrollExtent : 0.0;
+    final prevOffset = _scroll.hasClients ? _scroll.offset : 0.0;
+    setState(() => _cargandoMas = true);
+    try {
+      final pag = await _srv.historialAntesDe(widget.plan.id, minId);
+      if (!mounted) return;
+      final ids = _mensajes.map((m) => m.id).toSet();
+      final nuevos = pag.items.where((m) => !ids.contains(m.id)).toList();
+      setState(() {
+        _cargandoMas = false;
+        _hayMasAntiguos = pag.hayMas;
+        _mensajes = [...nuevos, ..._mensajes]
+          ..sort((a, b) => a.id.compareTo(b.id));
+      });
+      for (final m in nuevos) {
+        _resolverNombre(m);
+      }
+      scrollTrasPrepend(_scroll, prevMax, prevOffset);
+    } catch (_) {
+      if (mounted) setState(() => _cargandoMas = false);
     }
   }
 
@@ -270,13 +318,13 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
       setState(
         () => _mensajes = _mensajes.where((m) => m.id != idTemp).toList(),
       );
-      await showCupertinoDialog<void>(
+      await showFernecitoDialog<void>(
         context: context,
-        builder: (ctx) => CupertinoAlertDialog(
+        builder: (ctx) => DialogoFernecito(
           title: const Text('No se envió'),
           content: Text(_srv.mensajeError(e, accion: 'enviar el mensaje')),
           actions: [
-            CupertinoDialogAction(
+            AccionDialogoFernecito(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('OK'),
             ),
@@ -286,6 +334,18 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
+  }
+
+  void _verPlan() {
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (_) => PantallaVerPlan(
+          idPlan: widget.plan.id,
+          inicial: widget.plan,
+        ),
+      ),
+    );
   }
 
   @override
@@ -303,35 +363,13 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
       child: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
-              child: Row(
-                children: [
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: () => Navigator.pop(context),
-                    child: Icon(
-                      CupertinoIcons.chevron_left,
-                      color: ColoresApp.principalMarca,
-                      size: 30,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      widget.plan.titulo,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.baloo2(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        color: ColoresApp.textoPrincipal,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            EncabezadoChat(
+              nombre: widget.plan.titulo,
+              subtitulo: widget.plan.nombreLocal.trim().isNotEmpty
+                  ? widget.plan.nombreLocal
+                  : 'Chat del plan',
+              onBack: () => Navigator.pop(context),
+              onTapPerfil: _verPlan,
             ),
             if (!_bannerCerrado &&
                 (widget.plan.beneficioEstado == 'aceptado' ||
@@ -407,14 +445,24 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                   : ListView.builder(
                       controller: _scroll,
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                      itemCount: _mensajes.length,
-                      itemBuilder: (_, i) => _BurbujaMensaje(
-                        m: _mensajes[i],
-                        esMio: _mensajes[i].idAutor == _miUid,
-                        esAdmin:
-                            _mensajes[i].idAutor == widget.plan.idOrganizador,
-                        nombreAutor: _nombreAutor(_mensajes[i]),
-                      ),
+                      itemCount:
+                          _mensajes.length + (_hayMasAntiguos ? 1 : 0),
+                      itemBuilder: (_, i) {
+                        if (_hayMasAntiguos && i == 0) {
+                          return BotonCargarMasMensajes(
+                            cargando: _cargandoMas,
+                            onTap: _cargarMasAntiguos,
+                          );
+                        }
+                        final idx = _hayMasAntiguos ? i - 1 : i;
+                        final m = _mensajes[idx];
+                        return _BurbujaMensaje(
+                          m: m,
+                          esMio: m.idAutor == _miUid,
+                          esAdmin: m.idAutor == widget.plan.idOrganizador,
+                          nombreAutor: _nombreAutor(m),
+                        );
+                      },
                     ),
             ),
             if (candidatos.isNotEmpty)

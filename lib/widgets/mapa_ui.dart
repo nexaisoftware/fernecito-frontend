@@ -322,58 +322,18 @@ class MapaSwitchModo extends StatelessWidget {
 
   static const _ancho = 300.0;
 
-  static const _radio = 50.0;
-
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<Color>(
-      valueListenable: TemaFernecito.instancia.colorActual,
-
-      builder: (context, accent, _) {
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(_radio),
-
-            boxShadow: [
-              BoxShadow(
-                color: accent.withValues(alpha: 0.16),
-
-                blurRadius: 16,
-
-                spreadRadius: 0,
-              ),
-
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.38),
-
-                blurRadius: 14,
-
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-
-          child: ToggleSegmentadoSocial(
-            opciones: const ['Locales', 'Eventos'],
-
-            indice: indice,
-
-            onChanged: onChanged,
-
-            anchoMaximo: _ancho,
-
-            anchoMinimo: _ancho,
-
-            paddingVertical: 7,
-
-            fontSize: 13.5,
-
-            sinBorde: true,
-
-            centrar: false,
-          ),
-        );
-      },
+    return ToggleSegmentadoSocial(
+      opciones: const ['Locales', 'Eventos'],
+      indice: indice,
+      onChanged: onChanged,
+      anchoMaximo: _ancho,
+      anchoMinimo: _ancho,
+      paddingVertical: 7,
+      fontSize: 13.5,
+      sinBorde: true,
+      centrar: false,
     );
   }
 }

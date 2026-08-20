@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'chat_paginacion.dart';
 import 'comprimir_imagen_storage.dart';
 import 'supabase_client.dart';
 
@@ -123,9 +124,17 @@ class PlanComunidad {
   bool get soyPendiente => miEstado == 'pendiente';
   bool get estaAbierto => estado == 'abierto';
   bool get estaFinalizado =>
-      estado == 'cancelado' ||
-      estado == 'finalizado' ||
-      estado == 'eliminado';
+      estado == 'cancelado' || estado == 'finalizado' || estado == 'eliminado';
+
+  /// Plan ya cerrado o cuya fecha ya pasó (historial de Mi Actividad).
+  bool get estaPasado {
+    if (estaFinalizado) return true;
+    final ahora = DateTime.now();
+    if (fechaFin != null && !fechaFin!.isAfter(ahora)) return true;
+    if (expiraEn != null && !expiraEn!.isAfter(ahora)) return true;
+    return false;
+  }
+
   bool get cupoLleno => cupoMax != null && cupoUsados >= cupoMax!;
   bool get puedeUnirse =>
       estaAbierto &&
@@ -144,49 +153,47 @@ class PlanComunidad {
     String? beneficioEstado,
     String? pedidoBeneficio,
     int? pedidoVotos,
-  }) =>
-      PlanComunidad(
-        id: id,
-        titulo: titulo,
-        descripcion: descripcion,
-        ciudad: ciudad,
-        fechaInicio: fechaInicio,
-        modoLista: modoLista,
-        cupoUsados: cupoUsados ?? this.cupoUsados,
-        idLocal: idLocal,
-        nombreLocal: nombreLocal,
-        idOrganizador: idOrganizador,
-        nombreOrganizador: nombreOrganizador,
-        tipoOrganizador: tipoOrganizador,
-        provincia: provincia,
-        fechaFin: fechaFin,
-        expiraEn: expiraEn,
-        cupoMax: cupoMax,
-        idSquad: idSquad,
-        nombreSquad: nombreSquad,
-        fotoLocal: fotoLocal,
-        fotoOrganizador: fotoOrganizador,
-        miEstado: miEstado ?? this.miEstado,
-        estado: estado ?? this.estado,
-        creadorTipo: creadorTipo,
-        idCreadorLocal: idCreadorLocal,
-        portadaPath: portadaPath,
-        colorHex: colorHex,
-        permiteSquads: permiteSquads,
-        edadMinima: edadMinima,
-        contactoAnfitrion: contactoAnfitrion,
-        contactoModo: contactoModo,
-        beneficioLocal: beneficioLocal,
-        beneficioEstado: beneficioEstado ?? this.beneficioEstado,
-        beneficioContraoferta:
-            beneficioContraoferta ?? this.beneficioContraoferta,
-        pedidoBeneficio: pedidoBeneficio ?? this.pedidoBeneficio,
-        pedidoVotos: pedidoVotos ?? this.pedidoVotos,
-        soyModerador: soyModerador,
-        esPlanLocal: esPlanLocal,
-        personasAceptadas: personasAceptadas,
-        ingresoAbierto: ingresoAbierto ?? this.ingresoAbierto,
-      );
+  }) => PlanComunidad(
+    id: id,
+    titulo: titulo,
+    descripcion: descripcion,
+    ciudad: ciudad,
+    fechaInicio: fechaInicio,
+    modoLista: modoLista,
+    cupoUsados: cupoUsados ?? this.cupoUsados,
+    idLocal: idLocal,
+    nombreLocal: nombreLocal,
+    idOrganizador: idOrganizador,
+    nombreOrganizador: nombreOrganizador,
+    tipoOrganizador: tipoOrganizador,
+    provincia: provincia,
+    fechaFin: fechaFin,
+    expiraEn: expiraEn,
+    cupoMax: cupoMax,
+    idSquad: idSquad,
+    nombreSquad: nombreSquad,
+    fotoLocal: fotoLocal,
+    fotoOrganizador: fotoOrganizador,
+    miEstado: miEstado ?? this.miEstado,
+    estado: estado ?? this.estado,
+    creadorTipo: creadorTipo,
+    idCreadorLocal: idCreadorLocal,
+    portadaPath: portadaPath,
+    colorHex: colorHex,
+    permiteSquads: permiteSquads,
+    edadMinima: edadMinima,
+    contactoAnfitrion: contactoAnfitrion,
+    contactoModo: contactoModo,
+    beneficioLocal: beneficioLocal,
+    beneficioEstado: beneficioEstado ?? this.beneficioEstado,
+    beneficioContraoferta: beneficioContraoferta ?? this.beneficioContraoferta,
+    pedidoBeneficio: pedidoBeneficio ?? this.pedidoBeneficio,
+    pedidoVotos: pedidoVotos ?? this.pedidoVotos,
+    soyModerador: soyModerador,
+    esPlanLocal: esPlanLocal,
+    personasAceptadas: personasAceptadas,
+    ingresoAbierto: ingresoAbierto ?? this.ingresoAbierto,
+  );
 
   factory PlanComunidad.fromMap(Map<String, dynamic> m) {
     DateTime? dt(dynamic v) {
@@ -481,10 +488,7 @@ class ServicioPlanes {
       );
     } catch (e) {
       debugPrint('⚠️ planes_detalle: $e');
-      return (
-        detalle: null,
-        error: mensajeError(e, accion: 'abrir el plan'),
-      );
+      return (detalle: null, error: mensajeError(e, accion: 'abrir el plan'));
     }
   }
 
@@ -518,7 +522,9 @@ class ServicioPlanes {
         'p_tipo_organizador': tipoOrganizador,
         if (idSquad != null) 'p_id_squad': idSquad,
         'p_contacto_anfitrion': contactoAnfitrion,
-        'p_contacto_modo': contactoModo == 'colaborar' ? 'colaborar' : 'contactar',
+        'p_contacto_modo': contactoModo == 'colaborar'
+            ? 'colaborar'
+            : 'contactar',
         'p_portada_path': portadaPath,
         'p_color_hex': colorHex,
         'p_permite_squads': permiteSquads,
@@ -710,18 +716,40 @@ class ServicioPlanes {
     );
   }
 
-  Future<List<PlanMensaje>> historial(String idPlan) async {
+  Future<PaginaChatMensajes<PlanMensaje>> historial(String idPlan) async {
+    final limite = kChatMensajesPorPagina;
     final rows = await _c
         .from('planes_mensajes')
         .select(
           'id, id_autor, id_autor_local, autor_tipo, tipo, cuerpo, creado_en',
         )
         .eq('id_plan', idPlan)
-        .order('id', ascending: true)
-        .limit(300);
-    return (rows as List)
+        .order('id', ascending: false)
+        .limit(limite + 1);
+    final parsed = (rows as List)
         .map((e) => PlanMensaje.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
+    return armarPaginaAsc(parsed, limite);
+  }
+
+  Future<PaginaChatMensajes<PlanMensaje>> historialAntesDe(
+    String idPlan,
+    int antesDeId,
+  ) async {
+    final limite = kChatMensajesPorPagina;
+    final rows = await _c
+        .from('planes_mensajes')
+        .select(
+          'id, id_autor, id_autor_local, autor_tipo, tipo, cuerpo, creado_en',
+        )
+        .eq('id_plan', idPlan)
+        .lt('id', antesDeId)
+        .order('id', ascending: false)
+        .limit(limite + 1);
+    final parsed = (rows as List)
+        .map((e) => PlanMensaje.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    return armarPaginaAsc(parsed, limite);
   }
 
   Future<int?> enviarMensaje(String idPlan, String cuerpo) async {

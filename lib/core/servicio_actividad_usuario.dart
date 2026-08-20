@@ -17,10 +17,7 @@ class SnapshotTokenPromoCache {
 }
 
 class ActividadSnapshot {
-  const ActividadSnapshot({
-    required this.tokens,
-    required this.promosPorId,
-  });
+  const ActividadSnapshot({required this.tokens, required this.promosPorId});
 
   final List<Map<String, dynamic>> tokens;
   final Map<String, SnapshotTokenPromoCache> promosPorId;
@@ -31,11 +28,7 @@ class ServicioActividadUsuario {
   static final instancia = ServicioActividadUsuario._();
 
   static const _ttlSuave = Duration(seconds: 90);
-  static const _estadosPromo = [
-    'activo',
-    'canjeado',
-    'reservado',
-  ];
+  static const _estadosPromo = ['activo', 'canjeado', 'reservado'];
 
   final _cache = CacheMemoria<ActividadSnapshot>();
 
@@ -43,8 +36,7 @@ class ServicioActividadUsuario {
 
   bool get tieneCache => _cache.tiene(_uid);
 
-  ActividadSnapshot? get cache =>
-      _cache.tiene(_uid) ? _cache.data : null;
+  ActividadSnapshot? get cache => _cache.tiene(_uid) ? _cache.data : null;
 
   void invalidar() => _cache.clear();
 
@@ -73,20 +65,23 @@ class ServicioActividadUsuario {
         .from('tokens_asistencia')
         .select(
           'id_token, codigo_puerta, estado_token, fecha_expiracion, '
-          'snapshot_squad, id_reserva_grupal, '
+          'fecha_creacion, snapshot_squad, id_reserva_grupal, '
           'eventos!tokens_asistencia_id_evento_fkey('
           'id_evento, titulo_evento, descripcion_evento, url_flyer, '
           'fecha_inicio, fecha_fin, id_local'
           ')',
         )
         .eq('id_usuario', userId)
-        .inFilter('estado_token', ['pendiente', 'aceptada', 'canjeada'])
+        .inFilter('estado_token', [
+          'pendiente',
+          'aceptada',
+          'canjeada',
+          'rechazada',
+        ])
         .order('fecha_creacion', ascending: false);
 
     if (kDebugMode) {
-      debugPrint(
-        '[Actividad] userId=$userId tokens: ${(rows as List).length}',
-      );
+      debugPrint('[Actividad] userId=$userId tokens: ${(rows as List).length}');
     }
 
     final idsLocales = <String>{};
@@ -167,14 +162,13 @@ class ServicioActividadUsuario {
         final totalRaw = snap['cantidad_total'] ?? snap['cantidad'];
         totalSquad = totalRaw is int
             ? totalRaw
-            : (totalRaw is num
-                ? totalRaw.toInt()
-                : int.tryParse('$totalRaw'));
+            : (totalRaw is num ? totalRaw.toInt() : int.tryParse('$totalRaw'));
         reservadoPorId = snap['reservado_por']?.toString().trim();
         if (reservadoPorId != null && reservadoPorId.isEmpty) {
           reservadoPorId = null;
         }
-        esSquad = indiceSquad != null ||
+        esSquad =
+            indiceSquad != null ||
             (totalSquad != null && totalSquad > 1) ||
             snap['id_grupo'] != null;
         if (reservadoPorId != null) {
@@ -190,6 +184,8 @@ class ServicioActividadUsuario {
         'id_token': r['id_token'],
         'codigo_puerta': r['codigo_puerta'] ?? '',
         'estado_token': r['estado_token'] ?? 'pendiente',
+        'fechaCreacion': r['fecha_creacion'],
+        'fechaExpiracion': r['fecha_expiracion'],
         'id_reserva_grupal': r['id_reserva_grupal'],
         'es_squad': esSquad,
         'nombre_squad': nombreSquad,
@@ -203,8 +199,8 @@ class ServicioActividadUsuario {
         'flyer': ev['url_flyer'] ?? '',
         'fechaInicio': ev['fecha_inicio'],
         'fechaFin': ev['fecha_fin'],
-        'nombreLocal': perfil?['nombre_local']?.toString().trim().isNotEmpty ==
-                true
+        'nombreLocal':
+            perfil?['nombre_local']?.toString().trim().isNotEmpty == true
             ? perfil!['nombre_local'].toString()
             : 'Local',
         'avatarLocal': _resolverAvatarLocal(perfil?['foto_perfil_url']),
@@ -230,8 +226,10 @@ class ServicioActividadUsuario {
         final codigo = t['token_codigo']?.toString() ?? '';
         final est = t['estado_token']?.toString().toLowerCase() ?? 'activo';
         if (idP.isNotEmpty && codigo.isNotEmpty) {
-          promoPorId[idP] =
-              SnapshotTokenPromoCache(codigo: codigo, estadoToken: est);
+          promoPorId[idP] = SnapshotTokenPromoCache(
+            codigo: codigo,
+            estadoToken: est,
+          );
         }
       }
     } catch (e, st) {
@@ -244,9 +242,7 @@ class ServicioActividadUsuario {
   String _resolverAvatarLocal(dynamic avatarRaw) {
     final avatar = avatarRaw?.toString() ?? '';
     if (avatar.isEmpty || avatar.startsWith('http')) return avatar;
-    return ServicioSupabase()
-        .cliente
-        .storage
+    return ServicioSupabase().cliente.storage
         .from('perfiles-locales')
         .getPublicUrl(avatar);
   }

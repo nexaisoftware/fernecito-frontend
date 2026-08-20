@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
+import '../widgets/dialogo_fernecito.dart';
 import 'servicio_bloqueos.dart';
 
 /// Flujo simple de bloqueo (perfiles de usuario y locales), en el mismo estilo
@@ -18,23 +19,20 @@ Future<bool> mostrarFlujoBloqueo({
   if (targetId.trim().isEmpty) return false;
 
   // 1) Confirmar
-  final confirmado = await showCupertinoDialog<bool>(
+  final confirmado = await showFernecitoDialog<bool>(
     context: context,
-    builder: (ctx) => CupertinoAlertDialog(
+    builder: (ctx) => DialogoFernecito(
       title: const Text('¿Bloquear?'),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(
-          'Si bloqueás $entidad, no van a poder contactarte ni interactuar con vos, '
-          'y dejarás de ver su contenido.',
-        ),
+      content: Text(
+        'Si bloqueás $entidad, no van a poder contactarte ni interactuar con vos, '
+        'y dejarás de ver su contenido.',
       ),
       actions: [
-        CupertinoDialogAction(
+        AccionDialogoFernecito(
           onPressed: () => Navigator.pop(ctx, false),
           child: const Text('Cancelar'),
         ),
-        CupertinoDialogAction(
+        AccionDialogoFernecito(
           isDestructiveAction: true,
           onPressed: () => Navigator.pop(ctx, true),
           child: const Text('Bloquear'),
@@ -67,20 +65,17 @@ Future<bool> mostrarFlujoBloqueo({
   if (!context.mounted) return ok;
 
   // 3) Aviso final
-  await showCupertinoDialog<void>(
+  await showFernecitoDialog<void>(
     context: context,
-    builder: (ctx) => CupertinoAlertDialog(
+    builder: (ctx) => DialogoFernecito(
       title: Text(ok ? 'Cuenta bloqueada' : 'No se pudo bloquear'),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(
-          ok
-              ? 'Ya no vas a ver ni recibir interacciones de $entidad.'
-              : (error ?? 'Intentá de nuevo en unos momentos.'),
-        ),
+      content: Text(
+        ok
+            ? 'Ya no vas a ver ni recibir interacciones de $entidad.'
+            : (error ?? 'Intentá de nuevo en unos momentos.'),
       ),
       actions: [
-        CupertinoDialogAction(
+        AccionDialogoFernecito(
           isDefaultAction: true,
           onPressed: () => Navigator.pop(ctx),
           child: const Text('Entendido'),

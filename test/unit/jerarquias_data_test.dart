@@ -105,10 +105,26 @@ void main() {
   });
 
   group('CapacidadCartelera', () {
-    test('topPorFila == 10', () => expect(CapacidadCartelera.topPorFila, 10));
-    test('recomendadoPorFila == 15', () => expect(CapacidadCartelera.recomendadoPorFila, 15));
-    test('normalPorFila == 15', () => expect(CapacidadCartelera.normalPorFila, 15));
+    test('base 12 y max 15', () {
+      expect(CapacidadCartelera.porFilaBase, 12);
+      expect(CapacidadCartelera.porFilaMax, 15);
+      expect(CapacidadCartelera.topPorFila, 12);
+      expect(CapacidadCartelera.recomendadoPorFila, 12);
+      expect(CapacidadCartelera.normalPorFila, 12);
+    });
     test('normalFilasIniciales == 2', () => expect(CapacidadCartelera.normalFilasIniciales, 2));
+    test('partirFilas: 12 → una fila', () {
+      expect(CapacidadCartelera.partirFilas(List.generate(12, (i) => i)).map((f) => f.length).toList(), [12]);
+    });
+    test('partirFilas: 13–15 quedan juntas', () {
+      expect(CapacidadCartelera.partirFilas(List.generate(15, (i) => i)).map((f) => f.length).toList(), [15]);
+    });
+    test('partirFilas: 16 → 12 + 4', () {
+      expect(CapacidadCartelera.partirFilas(List.generate(16, (i) => i)).map((f) => f.length).toList(), [12, 4]);
+    });
+    test('partirFilas: 27 → 12 + 15', () {
+      expect(CapacidadCartelera.partirFilas(List.generate(27, (i) => i)).map((f) => f.length).toList(), [12, 15]);
+    });
   });
 
   group('FiltroTiempoUI.label', () {

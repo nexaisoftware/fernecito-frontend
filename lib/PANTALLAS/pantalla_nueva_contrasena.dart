@@ -19,6 +19,7 @@ import '../core/supabase_client.dart';
 import '../core/auth_redirect.dart';
 import 'pantalla_login.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 enum _PasoRecuperacion { email, codigo, password }
 
@@ -79,10 +80,10 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
   void _intentarConfirmarSiListo() {}
 
   Future<void> _mostrarExitoYEnfocarCodigo(String mensaje) async {
-    await showCupertinoDialog<void>(
+    await showFernecitoDialog<void>(
       context: context,
       barrierDismissible: true,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             Icon(CupertinoIcons.checkmark_circle,
@@ -96,7 +97,7 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
@@ -310,10 +311,10 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
   }
 
   void _mostrarError(String mensaje) {
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
       barrierDismissible: true,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             Icon(CupertinoIcons.exclamationmark_triangle,
@@ -327,7 +328,7 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -337,10 +338,10 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
   }
 
   void _mostrarExito(String mensaje) {
-    showCupertinoDialog(
+    showFernecitoDialog(
       context: context,
       barrierDismissible: true,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => DialogoFernecito(
         title: Row(
           children: [
             Icon(CupertinoIcons.checkmark_circle,
@@ -354,7 +355,7 @@ class _PantallaNuevaContrasenaState extends State<PantallaNuevaContrasena> {
           child: Text(mensaje),
         ),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             child: const Text('OK'),
             onPressed: () => Navigator.of(context).pop(),

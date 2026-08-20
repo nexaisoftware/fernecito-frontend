@@ -31,9 +31,17 @@ class RecomendacionIa {
     this.precioHasta,
     this.tipoPrecio,
     this.precioTxt,
+    this.nombreOrganizador,
+    this.avatarOrganizador,
+    this.avatarLocal,
+    this.personas,
+    this.cupoMax,
+    this.entradaLibre = true,
+    this.modoLista,
+    this.esPlanLocal = false,
   });
 
-  /// `evento` | `local` | `carta`
+  /// `evento` | `local` | `carta` | `plan`
   final String tipo;
   final String id;
   final String titulo;
@@ -60,9 +68,20 @@ class RecomendacionIa {
   final String? tipoPrecio;
   final String? precioTxt;
 
+  /// Campos de plan de comunidad (tipo == plan).
+  final String? nombreOrganizador;
+  final String? avatarOrganizador;
+  final String? avatarLocal;
+  final int? personas;
+  final int? cupoMax;
+  final bool entradaLibre;
+  final String? modoLista;
+  final bool esPlanLocal;
+
   bool get esEvento => tipo == 'evento';
   bool get esLocal => tipo == 'local';
   bool get esCarta => tipo == 'carta';
+  bool get esPlan => tipo == 'plan';
 
   String get precioMostrar {
     final t = precioTxt?.trim();
@@ -93,6 +112,12 @@ class RecomendacionIa {
     double? n(dynamic v) {
       if (v is num) return v.toDouble();
       return double.tryParse(v?.toString() ?? '');
+    }
+
+    int? ni(dynamic v) {
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse(v?.toString() ?? '');
     }
 
     double? cal;
@@ -141,6 +166,16 @@ class RecomendacionIa {
       precioHasta: n(j['precio_hasta']),
       tipoPrecio: j['tipo_precio']?.toString(),
       precioTxt: j['precio_txt']?.toString(),
+      nombreOrganizador: j['nombre_organizador']?.toString(),
+      avatarOrganizador: j['avatar_organizador']?.toString(),
+      avatarLocal: j['avatar_local']?.toString(),
+      personas: ni(j['personas'] ?? j['cupo_usados']),
+      cupoMax: ni(j['cupo_max']),
+      entradaLibre: j.containsKey('entrada_libre')
+          ? j['entrada_libre'] == true
+          : j['modo_lista']?.toString() != 'manual',
+      modoLista: j['modo_lista']?.toString(),
+      esPlanLocal: j['es_plan_local'] == true,
     );
   }
 }

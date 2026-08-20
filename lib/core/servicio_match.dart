@@ -5,9 +5,12 @@
 /// suscribe por Supabase Realtime; los envíos van por RPC.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'chat_paginacion.dart';
 import 'supabase_client.dart';
 
 class MatchCard {
@@ -73,12 +76,23 @@ class MatchCard {
 
   bool get esSquad => tipo == 'squad';
 
-  /// Usuario → bucket avatars; squad → portada en squad-banners.
-  String? get fotoUrl => esSquad
-      ? ServicioSupabase().urlPortadaSquad(fotoPath)
-      : ServicioSupabase().urlAvatar(fotoPath);
+  /// Usuario → bucket avatars; squad → portada/banner en squad-banners.
+  String? get fotoUrl {
+    final path = fotoPath?.trim();
+    if (path == null || path.isEmpty || path.toLowerCase() == 'null') {
+      return null;
+    }
+    if (esSquad) {
+      return ServicioSupabase().urlPortadaSquadDisplay(
+        path,
+        fallbackSeed: idGrupo ?? path,
+      );
+    }
+    return ServicioSupabase().urlAvatar(path);
+  }
 
-  String? get lugarFotoUrl => ServicioSupabase().urlAvatarLocal(lugarFoto) ??
+  String? get lugarFotoUrl =>
+      ServicioSupabase().urlAvatarLocal(lugarFoto) ??
       ServicioSupabase().urlAvatar(lugarFoto);
 
   /// URLs listas para [StackAvataresSquad].
@@ -91,6 +105,29 @@ class MatchCard {
   /// Total de miembros para el badge +n (fallback a avatares disponibles).
   int get miembrosParaStack => miembros ?? avataresMiembrosUrls.length;
 
+  /// Género visible en cards: en squads es el mayoritario (o mixto).
+  String get etiquetaSexo => switch (sexo) {
+    'hombre' => esSquad ? 'Mayoría hombres' : 'Hombre',
+    'mujer' => esSquad ? 'Mayoría mujeres' : 'Mujer',
+    'mixto' => 'Mixto',
+    'otro' => 'Otrx',
+    _ => '',
+  };
+
+  /// Edad + género + tamaño, según sea persona o squad.
+  String get subtituloIdentidad {
+    final partes = <String>[];
+    if (esSquad) {
+      if (edadPromedio != null) partes.add('Edad prom. $edadPromedio');
+      if (etiquetaSexo.isNotEmpty) partes.add(etiquetaSexo);
+      if (miembros != null) partes.add('$miembros personas');
+    } else {
+      if (edad != null) partes.add('$edad años');
+      if (etiquetaSexo.isNotEmpty) partes.add(etiquetaSexo);
+    }
+    return partes.join(' · ');
+  }
+
   factory MatchCard.fromMap(Map<String, dynamic> m) {
     int? n(dynamic v) =>
         v is num ? v.toInt() : int.tryParse(v?.toString() ?? '');
@@ -100,10 +137,18 @@ class MatchCard {
     final avatarsRaw = m['avatares_miembros'];
     final avatares = avatarsRaw is List
         ? avatarsRaw
-            .map((e) => e?.toString().trim() ?? '')
-            .where((s) => s.isNotEmpty)
-            .toList()
+              .map((e) => e?.toString().trim() ?? '')
+              .where((s) => s.isNotEmpty)
+              .toList()
         : const <String>[];
+    String? pathFoto() {
+      final raw = (m['foto_perfil_url'] ?? m['url_portada'])?.toString().trim();
+      if (raw == null || raw.isEmpty || raw.toLowerCase() == 'null') {
+        return null;
+      }
+      return raw;
+    }
+
     return MatchCard(
       idPlan: m['id_plan']?.toString() ?? '',
       tipo: m['tipo']?.toString() ?? 'usuario',
@@ -116,7 +161,7 @@ class MatchCard {
       edad: n(m['edad']),
       sexo: m['sexo']?.toString(),
       perfilPublico: m['perfil_publico'] == true,
-      fotoPath: m['foto_perfil_url']?.toString(),
+      fotoPath: pathFoto(),
       planKey: m['plan_key']?.toString() ?? '',
       planEtiqueta: m['plan_etiqueta']?.toString() ?? '',
       lugarTexto: m['lugar_texto']?.toString() ?? '',
@@ -175,6 +220,19 @@ class MatchItem {
   String get planResumen {
     final p = planPrincipal ?? miPlan ?? otro;
     return '${p.planEtiqueta} en ${p.lugarTexto}';
+  }
+
+  bool get esMatchSquad => tipo == 'squad' || otro.esSquad;
+
+  /// Squads: "Los del oeste → Los reyes del after". 1:1: el nombre del otro.
+  String get tituloParticipantes {
+    if (!esMatchSquad) return otro.nombre;
+    final mio = (miPlan?.nombre ?? '').trim();
+    final otroNombre = otro.nombre.trim();
+    if (mio.isEmpty || mio.toLowerCase() == otroNombre.toLowerCase()) {
+      return otroNombre.isEmpty ? 'Squad' : otroNombre;
+    }
+    return '$mio → $otroNombre';
   }
 
   factory MatchItem.fromMap(Map<String, dynamic> m) {
@@ -490,14 +548,51 @@ class ServicioMatch {
     }
   }
 
-  /// Histórico del chat (RLS: solo participantes).
-  Future<List<MatchMensaje>> historial(String idMatch) async {
+  Future<PaginaChatMensajes<MatchMensaje>> historial(String idMatch) async {
+    final limite = kChatMensajesPorPagina;
     final rows = await _c
         .from('match_mensajes')
         .select('id, id_autor, cuerpo, creado_en')
         .eq('id_match', idMatch)
+        .order('id', ascending: false)
+        .limit(limite + 1);
+    final parsed = (rows as List)
+        .map((e) => MatchMensaje.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    return armarPaginaAsc(parsed, limite);
+  }
+
+  Future<PaginaChatMensajes<MatchMensaje>> historialAntesDe(
+    String idMatch,
+    int antesDeId,
+  ) async {
+    final limite = kChatMensajesPorPagina;
+    final rows = await _c
+        .from('match_mensajes')
+        .select('id, id_autor, cuerpo, creado_en')
+        .eq('id_match', idMatch)
+        .lt('id', antesDeId)
+        .order('id', ascending: false)
+        .limit(limite + 1);
+    final parsed = (rows as List)
+        .map((e) => MatchMensaje.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    return armarPaginaAsc(parsed, limite);
+  }
+
+  /// Trae mensajes nuevos posteriores a [ultimoId]. Se usa como respaldo
+  /// liviano cuando el socket realtime no entrega el evento en web/mobile.
+  Future<List<MatchMensaje>> mensajesDespuesDe(
+    String idMatch,
+    int ultimoId,
+  ) async {
+    final rows = await _c
+        .from('match_mensajes')
+        .select('id, id_autor, cuerpo, creado_en')
+        .eq('id_match', idMatch)
+        .gt('id', ultimoId)
         .order('id', ascending: true)
-        .limit(300);
+        .limit(80);
     return (rows as List)
         .map((e) => MatchMensaje.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
@@ -524,7 +619,18 @@ class ServicioMatch {
             onMensaje(MatchMensaje.fromMap(Map<String, dynamic>.from(data)));
           },
         )
-        .subscribe();
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.channelError ||
+              status == RealtimeSubscribeStatus.timedOut) {
+            debugPrint('⚠️ match realtime: $status $error');
+            unawaited(
+              Supabase.instance.client.auth.refreshSession().then(
+                (_) {},
+                onError: (_) {},
+              ),
+            );
+          }
+        });
     return canal;
   }
 
@@ -532,12 +638,14 @@ class ServicioMatch {
     await _c.removeChannel(canal);
   }
 
-  /// Filtros que ORDENAN el mazo (género/edad). Se aplican al instante: no
-  /// tocan el plan ni esperan confirmación.
+  /// Filtros del mazo (género / edad / tamaño de squad). Null = sin filtro
+  /// ("todas" / "cualquiera"). Se aplican al instante, sin tocar el plan.
   Future<bool> setFiltros({
     String? interesGenero,
     int? edadMin,
     int? edadMax,
+    int? miembrosMin,
+    int? miembrosMax,
     String tipo = 'usuario',
     String? idGrupo,
   }) async {
@@ -550,6 +658,8 @@ class ServicioMatch {
           'p_edad_max': edadMax,
           'p_tipo': tipo,
           if (idGrupo != null) 'p_id_grupo': idGrupo,
+          'p_miembros_min': miembrosMin,
+          'p_miembros_max': miembrosMax,
         },
       );
       return res is Map && res['ok'] == true;

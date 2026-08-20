@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 
 import '../PANTALLAS/pantalla_ver_plan.dart';
 import 'servicio_planes.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 Future<void> abrirPlanCompartidoPorId(
   BuildContext context,
@@ -16,12 +17,12 @@ Future<void> abrirPlanCompartidoPorId(
   final res = await ServicioPlanes().detalle(id);
   if (!context.mounted) return;
   if (res.detalle == null) {
-    await showCupertinoDialog<void>(
+    await showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         content: Text(res.error ?? 'Este plan ya no está disponible.'),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Ok'),
           ),

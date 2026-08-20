@@ -8,6 +8,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../core/constants.dart';
 import '../core/privacidad_perfil.dart';
 import '../core/servicio_amigos.dart';
+import '../core/servicio_match.dart';
+import '../core/servicio_notificaciones_usuarios.dart';
 import '../core/servicio_perfil_usuario.dart';
 import '../core/servicio_squads.dart';
 import '../core/servicio_tendencias_social.dart';
@@ -28,6 +30,7 @@ import '../widgets/encabezado_amigos_social.dart';
 import '../widgets/fernecito_loader.dart';
 import '../widgets/social_explorar_sheets.dart';
 import '../widgets/social_ui.dart';
+import '../widgets/dialogo_fernecito.dart';
 
 String _arroba(String username) => username.isEmpty
     ? ''
@@ -147,6 +150,9 @@ class _PantallaSocialHubState extends State<PantallaSocial>
 
   late final AnimationController _fuegoController;
   List<LocalTendenciaSocial> _locales = const [];
+  int _novedadesExplora = 0;
+  int _novedadesPlanes = 0;
+  int _novedadesMatch = 0;
   int _novedadesSociales = 0;
   bool _cargandoTendencias = true;
 
@@ -201,16 +207,31 @@ class _PantallaSocialHubState extends State<PantallaSocial>
           dias: 7,
           limite: 6,
         ),
+        ServicioNotificacionesUsuarios().conteosDestinosSocial(),
+        ServicioMatch().pendientes(),
+        ServicioMatch().misMatches(),
       ]);
       if (!mounted) return;
       final amistades = resultados[0] as AmistadesData;
       final invitaciones = resultados[1] as List<SquadResumen>;
+      final conteos = resultados[3] as ConteosNovedadesSocial;
+      final pendientesMatch = resultados[4] as List<MatchPendiente>;
+      final matches = resultados[5] as List<MatchItem>;
+      final amigosLive =
+          amistades.recibidas.length +
+          invitaciones
+              .where((item) => item.origenPendiente != 'solicitud')
+              .length;
+      final matchLive =
+          pendientesMatch.length +
+          matches.where((m) => m.noLeidos > 0 || m.sinChat).length;
       setState(() {
-        _novedadesSociales =
-            amistades.recibidas.length +
-            invitaciones
-                .where((item) => item.origenPendiente != 'solicitud')
-                .length;
+        _novedadesExplora = conteos.explora;
+        _novedadesPlanes = conteos.planes;
+        _novedadesMatch = matchLive > 0 ? matchLive : conteos.match;
+        _novedadesSociales = amigosLive > conteos.amigos
+            ? amigosLive
+            : conteos.amigos;
         _locales = resultados[2] as List<LocalTendenciaSocial>;
         _cargandoTendencias = false;
       });
@@ -284,6 +305,7 @@ class _PantallaSocialHubState extends State<PantallaSocial>
                     titulo: 'Explora 🧭',
                     descripcion: 'Personas, rompehielos y squads cerca tuyo.',
                     asset: 'assets/imagenes/social_hub/explora.webp',
+                    novedades: _novedadesExplora,
                     onTap: () => _abrir(
                       PantallaExplorarSocial(
                         provinciaInicial: widget.provinciaInicial,
@@ -299,6 +321,7 @@ class _PantallaSocialHubState extends State<PantallaSocial>
                     descripcion: 'Juntadas de la comunidad para conocer gente.',
                     asset: 'assets/imagenes/social_hub/planes.webp',
                     etiqueta: 'Nuevo',
+                    novedades: _novedadesPlanes,
                     // Root navigator: escapa del shell de tabs (como Match).
                     onTap: () => Navigator.of(context, rootNavigator: true)
                         .push(
@@ -315,6 +338,7 @@ class _PantallaSocialHubState extends State<PantallaSocial>
                     descripcion: 'Conectá con personas o squads para salir.',
                     asset: 'assets/imagenes/social_hub/match.webp',
                     etiqueta: 'Nuevo',
+                    novedades: _novedadesMatch,
                     // Root navigator: escapa del shell de tabs para que la
                     // glass tab bar no tape el deck de cards.
                     onTap: () => Navigator.of(context, rootNavigator: true)
@@ -610,16 +634,48 @@ class _CardDestinoSocial extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                           ],
-                          Text(
-                            titulo,
-                            maxLines: 1,
-                            overflow: TextOverflow.visible,
-                            style: GoogleFonts.baloo2(
-                              fontSize: 18.5,
-                              height: 1,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                            ),
+                          Row(
+                            children: [
+                              if (novedades > 0) ...[
+                                Container(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 22,
+                                    minHeight: 22,
+                                  ),
+                                  alignment: Alignment.center,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFF4D5D),
+                                    borderRadius: BorderRadius.circular(50),
+                                  ),
+                                  child: Text(
+                                    novedades > 99 ? '99+' : '$novedades',
+                                    style: GoogleFonts.baloo2(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white,
+                                      height: 1.0,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 7),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  titulo,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.baloo2(
+                                    fontSize: 18.5,
+                                    height: 1,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -637,48 +693,18 @@ class _CardDestinoSocial extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.42),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            CupertinoIcons.chevron_right,
-                            size: 18,
-                            color: Colors.white,
-                          ),
-                        ),
-                        if (novedades > 0)
-                          Positioned(
-                            right: -6,
-                            top: -8,
-                            child: Container(
-                              constraints: const BoxConstraints(minWidth: 23),
-                              height: 23,
-                              alignment: Alignment.center,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                              ),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFFF4D5D),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                novedades > 99 ? '99+' : '$novedades',
-                                style: GoogleFonts.baloo2(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.42),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.chevron_right,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                     ),
                   ],
                 ),
@@ -747,14 +773,6 @@ class _LocalTendenciaItem extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: acento,
-                        boxShadow: [
-                          BoxShadow(
-                            color: acento.withValues(
-                              alpha: esPodio ? 0.36 : 0.24,
-                            ),
-                            blurRadius: esPodio ? 9 : 7,
-                          ),
-                        ],
                       ),
                       child: ClipOval(
                         child: Container(
@@ -995,13 +1013,13 @@ class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
 
   void _mostrarError(String msg) {
     if (!mounted) return;
-    showCupertinoDialog<void>(
+    showFernecitoDialog<void>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
+      builder: (ctx) => DialogoFernecito(
         title: const Text('Error'),
         content: Text(msg),
         actions: [
-          CupertinoDialogAction(
+          AccionDialogoFernecito(
             isDefaultAction: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),
@@ -1149,7 +1167,7 @@ class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
       _abrirMisSquad(context, squad);
       return;
     }
-    Navigator.of(context)
+    Navigator.of(context, rootNavigator: true)
         .push(
           CupertinoPageRoute(
             builder: (_) => PantallaPerfilSquads(
@@ -1163,7 +1181,7 @@ class _PantallaSocialLegacyState extends State<PantallaSocialLegacy> {
   }
 
   void _abrirMisSquad(BuildContext context, Map<String, dynamic> squad) {
-    Navigator.of(context)
+    Navigator.of(context, rootNavigator: true)
         .push(
           CupertinoPageRoute(builder: (_) => PantallaMisSquads(squad: squad)),
         )

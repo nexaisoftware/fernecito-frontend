@@ -214,6 +214,106 @@ class _TopUltraBadgeCarteleraState extends State<TopUltraBadgeCartelera>
   }
 }
 
+/// Atajo compacto (Matchs / Planes) al lado de Top Ultra.
+class AtajoCarteleraBadge extends StatefulWidget {
+  const AtajoCarteleraBadge({
+    super.key,
+    required this.label,
+    required this.icono,
+    this.iconoExtra,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icono;
+  final IconData? iconoExtra;
+  final VoidCallback onTap;
+
+  @override
+  State<AtajoCarteleraBadge> createState() => _AtajoCarteleraBadgeState();
+}
+
+class _AtajoCarteleraBadgeState extends State<AtajoCarteleraBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Color>(
+      valueListenable: TemaFernecito.instancia.colorActual,
+      builder: (context, colorTema, _) {
+        return GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorTema.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedBuilder(
+                    animation: _pulse,
+                    builder: (context, child) {
+                      final t = Curves.easeInOut.transform(_pulse.value);
+                      return Transform.scale(
+                        scale: 0.94 + t * 0.12,
+                        child: child,
+                      );
+                    },
+                    child: widget.iconoExtra == null
+                        ? Icon(widget.icono, color: colorTema, size: 14)
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(widget.icono, color: colorTema, size: 14),
+                              const SizedBox(width: 3),
+                              Icon(
+                                widget.iconoExtra,
+                                color: colorTema,
+                                size: 13,
+                              ),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.label,
+                    style: GoogleFonts.baloo2(
+                      color: ColoresApp.textoPrincipal,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _TopUltraStories extends StatefulWidget {
   const _TopUltraStories({required this.eventos, required this.onVerEvento});
   final List<EventoTopUltra> eventos;

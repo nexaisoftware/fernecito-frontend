@@ -52,4 +52,11 @@ void main() {
     expect(BusquedaNatural.coincide('bar', ['Comida barata']), isFalse);
     expect(BusquedaNatural.coincide('ipa', ['Chipa XL']), isFalse);
   });
+
+  test('flexibiliza plurales, prefijos y sinónimos', () {
+    expect(BusquedaNatural.coincide('tostados', ['Café con tostado']), isTrue);
+    expect(BusquedaNatural.coincide('tostad', ['Brunch de tostado']), isTrue);
+    expect(BusquedaNatural.coincide('burguer', ['Hamburguesas caseras']), isTrue);
+    expect(BusquedaNatural.coincide('hamburg', ['Burger night']), isTrue);
+  });
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 
+import '../widgets/dialogo_fernecito.dart';
 import 'servicio_reportes.dart';
 
 /// Flujo unificado de reporte para toda la app (perfiles de usuario, locales y
@@ -42,22 +43,19 @@ Future<void> mostrarFlujoReporte({
   if (motivo == null || !context.mounted) return;
 
   // 2) Confirmar el envío
-  final confirmado = await showCupertinoDialog<bool>(
+  final confirmado = await showFernecitoDialog<bool>(
     context: context,
-    builder: (ctx) => CupertinoAlertDialog(
+    builder: (ctx) => DialogoFernecito(
       title: const Text('Confirmar reporte'),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(
-          'Vas a reportar $entidad por "${motivo.label}".\n¿Querés enviar el reporte?',
-        ),
+      content: Text(
+        'Vas a reportar $entidad por "${motivo.label}".\n¿Querés enviar el reporte?',
       ),
       actions: [
-        CupertinoDialogAction(
+        AccionDialogoFernecito(
           onPressed: () => Navigator.pop(ctx, false),
           child: const Text('Cancelar'),
         ),
-        CupertinoDialogAction(
+        AccionDialogoFernecito(
           isDestructiveAction: true,
           onPressed: () => Navigator.pop(ctx, true),
           child: const Text('Enviar reporte'),
@@ -93,21 +91,18 @@ Future<void> mostrarFlujoReporte({
 
   // 4) Modal de gracias (o error)
   final ok = res['ok'] == true;
-  await showCupertinoDialog<void>(
+  await showFernecitoDialog<void>(
     context: context,
-    builder: (ctx) => CupertinoAlertDialog(
+    builder: (ctx) => DialogoFernecito(
       title: Text(ok ? 'Gracias por tu reporte' : 'No se pudo enviar'),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(
-          ok
-              ? 'Analizaremos $entidad y tomaremos medidas para que Fernecito siga siendo una plataforma segura.'
-              : (res['error']?.toString() ??
-                    'Intentá de nuevo en unos momentos.'),
-        ),
+      content: Text(
+        ok
+            ? 'Analizaremos $entidad y tomaremos medidas para que Fernecito siga siendo una plataforma segura.'
+            : (res['error']?.toString() ??
+                  'Intentá de nuevo en unos momentos.'),
       ),
       actions: [
-        CupertinoDialogAction(
+        AccionDialogoFernecito(
           isDefaultAction: true,
           onPressed: () => Navigator.pop(ctx),
           child: const Text('Entendido'),
