@@ -52,7 +52,13 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Play Console uses these symbols to decode native Flutter/Android
+            // crashes from release bundles. This avoids the common "native debug
+            // symbols not uploaded" warning without enabling R8 obfuscation.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
+            isMinifyEnabled = true
             isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

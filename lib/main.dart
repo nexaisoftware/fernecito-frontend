@@ -204,5 +204,7 @@ String _config(String key) {
     'CLAVE_PUBLICA_SUPABASE' => clavePublicaSupabase,
     _ => '',
   };
-  return fromDefine.isNotEmpty ? fromDefine : (dotenv.env[key] ?? '').trim();
+  if (fromDefine.isNotEmpty) return fromDefine;
+  if (!dotenv.isInitialized) return '';
+  return (dotenv.env[key] ?? '').trim();
 }

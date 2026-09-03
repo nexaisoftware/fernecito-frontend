@@ -111,18 +111,32 @@ class ServicioMapaExplorar {
     }
     final sb = ServicioSupabase().cliente;
     try {
-      final rows = await sb
-          .from('perfiles_locales')
-          .select(
-            'id, nombre_local, local_username, foto_perfil_url, ciudad, '
-            'provincia, direccion, url_maps, descripcion_local, es_pionero',
-          )
-          .eq('estado_cuenta', 'activa')
-          .limit(100);
+      List<dynamic> rows;
+      try {
+        rows = await sb
+            .from('perfiles_locales')
+            .select(
+              'id, nombre_local, local_username, foto_perfil_url, ciudad, '
+              'provincia, direccion, url_maps, descripcion_local, es_pionero, '
+              'es_organizador_eventos',
+            )
+            .eq('estado_cuenta', 'activa')
+            .limit(100) as List<dynamic>;
+      } catch (_) {
+        rows = await sb
+            .from('perfiles_locales')
+            .select(
+              'id, nombre_local, local_username, foto_perfil_url, ciudad, '
+              'provincia, direccion, url_maps, descripcion_local, es_pionero',
+            )
+            .eq('estado_cuenta', 'activa')
+            .limit(100) as List<dynamic>;
+      }
 
       final filtrados = (rows as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
           .where((m) => _coincideCiudad(m['ciudad']?.toString(), ciudades))
+          .where((m) => m['es_organizador_eventos'] != true)
           .toList();
 
       final resultado = <MapaLocalItem>[];

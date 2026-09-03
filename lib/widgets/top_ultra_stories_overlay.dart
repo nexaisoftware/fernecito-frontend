@@ -215,6 +215,10 @@ class _TopUltraBadgeCarteleraState extends State<TopUltraBadgeCartelera>
 }
 
 /// Atajo compacto (Matchs / Planes) al lado de Top Ultra.
+///
+/// Micro-bounce discreto cada [intervalo] (estilo mapa/megusta), no pulse
+/// continuo. Usá [delayInicial] distinto en cada badge para que Match
+/// “salude” primero y Planes después.
 class AtajoCarteleraBadge extends StatefulWidget {
   const AtajoCarteleraBadge({
     super.key,
@@ -222,6 +226,8 @@ class AtajoCarteleraBadge extends StatefulWidget {
     required this.icono,
     this.iconoExtra,
     required this.onTap,
+    this.delayInicial = Duration.zero,
+    this.intervalo = const Duration(seconds: 3),
   });
 
   final String label;
@@ -229,26 +235,57 @@ class AtajoCarteleraBadge extends StatefulWidget {
   final IconData? iconoExtra;
   final VoidCallback onTap;
 
+  /// Desfase antes del primer bounce (Match = 0, Planes ≈ 1.1s).
+  final Duration delayInicial;
+
+  /// Pausa entre bounces de este badge.
+  final Duration intervalo;
+
   @override
   State<AtajoCarteleraBadge> createState() => _AtajoCarteleraBadgeState();
 }
 
 class _AtajoCarteleraBadgeState extends State<AtajoCarteleraBadge>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse;
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+  bool _loopArmado = false;
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(
+    _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
+      duration: const Duration(milliseconds: 420),
+    );
+    // Íconos chicos (14px): amplitud más marcada o no se nota.
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1, end: 1.32), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 1.32, end: 0.90), weight: 24),
+      TweenSequenceItem(tween: Tween(begin: 0.90, end: 1.14), weight: 22),
+      TweenSequenceItem(tween: Tween(begin: 1.14, end: 1), weight: 24),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _iniciarLoop());
+  }
+
+  Future<void> _iniciarLoop() async {
+    if (_loopArmado) return;
+    _loopArmado = true;
+    if (widget.delayInicial > Duration.zero) {
+      await Future<void>.delayed(widget.delayInicial);
+    }
+    while (mounted) {
+      if (!_controller.isAnimating) {
+        await _controller.forward(from: 0);
+      }
+      if (!mounted) return;
+      await Future<void>.delayed(widget.intervalo);
+    }
   }
 
   @override
   void dispose() {
-    _pulse.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -270,15 +307,8 @@ class _AtajoCarteleraBadgeState extends State<AtajoCarteleraBadge>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AnimatedBuilder(
-                    animation: _pulse,
-                    builder: (context, child) {
-                      final t = Curves.easeInOut.transform(_pulse.value);
-                      return Transform.scale(
-                        scale: 0.94 + t * 0.12,
-                        child: child,
-                      );
-                    },
+                  ScaleTransition(
+                    scale: _scale,
                     child: widget.iconoExtra == null
                         ? Icon(widget.icono, color: colorTema, size: 14)
                         : Row(

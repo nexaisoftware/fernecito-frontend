@@ -27,6 +27,7 @@ import '../core/servicio_ubicacion_global.dart';
 import '../core/sexo_perfil.dart';
 import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
+import '../core/textos_legales.dart';
 import '../core/ubicaciones_data.dart';
 import 'pantalla_cambiar_contrasena.dart';
 import 'pantalla_eliminar_todo.dart';
@@ -47,8 +48,13 @@ import '../widgets/dialogo_fernecito.dart';
 class PantallaMiPerfil extends StatefulWidget {
   /// Incrementado desde [PantallaHome] al seleccionar el tab Perfil (IndexedStack).
   final int reloadTick;
+  final int abrirTerminosTick;
 
-  const PantallaMiPerfil({super.key, this.reloadTick = 0});
+  const PantallaMiPerfil({
+    super.key,
+    this.reloadTick = 0,
+    this.abrirTerminosTick = 0,
+  });
 
   @override
   State<PantallaMiPerfil> createState() => _PantallaMiPerfilState();
@@ -111,6 +117,12 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     if (oldWidget.reloadTick != widget.reloadTick && widget.reloadTick > 0) {
       final uid = ServicioSupabase().usuarioActual?.id;
       if (uid != null) _cargarMetricasPerfil(uid);
+    }
+    if (oldWidget.abrirTerminosTick != widget.abrirTerminosTick &&
+        widget.abrirTerminosTick > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _mostrarTerminosYPrivacidad();
+      });
     }
   }
 
@@ -1012,8 +1024,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     } catch (error) {
       debugPrint('❌ Error actualizando perfil_publico: $error');
       await _cargarDatosPerfil();
-      if (mounted)
+      if (mounted) {
         _mostrarError('No se pudo cambiar la visibilidad del perfil');
+      }
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
@@ -1133,6 +1146,120 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
     }
   }
 
+  void _mostrarTerminosYPrivacidad() {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) {
+        final marca = ColoresApp.principalMarca;
+        Widget seccion(String titulo, String cuerpo) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                titulo,
+                style: GoogleFonts.baloo2(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: ColoresApp.textoPrincipal,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                cuerpo,
+                style: GoogleFonts.baloo2(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: ColoresApp.textoSecundario,
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          );
+        }
+
+        return Container(
+          height: MediaQuery.of(ctx).size.height * 0.82,
+          decoration: BoxDecoration(
+            color: ColoresApp.fondoPrincipal,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: ColoresApp.textoSecundario.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Términos y Privacidad',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: ColoresApp.textoPrincipal,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(22, 4, 22, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        seccion(
+                          'Términos y Condiciones',
+                          textoTerminosFernecito,
+                        ),
+                        seccion(
+                          'Política de Privacidad',
+                          textoPrivacidadFernecito,
+                        ),
+                        Text(
+                          'Última actualización: $fechaTextosLegalesFernecito.',
+                          style: GoogleFonts.baloo2(
+                            fontSize: 11,
+                            color: ColoresApp.textoSecundario.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      color: marca,
+                      borderRadius: BorderRadius.circular(50),
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(
+                        'Entendido',
+                        style: GoogleFonts.baloo2(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // Eliminar cuenta — el usuario elige el alcance.
   Future<void> _eliminarCuenta() async {
     showCupertinoModalPopup<void>(
@@ -1221,8 +1348,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
         throw Exception('Respuesta no OK (status ${res.status}): ${res.data}');
       }
       print('✅ Cuenta eliminada ($modo). Cerrando sesión...');
-      if (mounted)
+      if (mounted) {
         Navigator.of(context, rootNavigator: true).pop(); // cierra loader
+      }
       await supabase.cliente.auth.signOut();
       // AuthGate detecta signedOut y navega a Login.
     } catch (error) {
@@ -2030,8 +2158,7 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           onPressed: () => Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  const PantallaCambiarContrasena(),
+                              builder: (_) => const PantallaCambiarContrasena(),
                             ),
                           ),
                           child: Text(
@@ -2041,8 +2168,9 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                               fontWeight: FontWeight.w600,
                               color: Colors.white.withValues(alpha: 0.52),
                               decoration: TextDecoration.underline,
-                              decorationColor:
-                                  Colors.white.withValues(alpha: 0.35),
+                              decorationColor: Colors.white.withValues(
+                                alpha: 0.35,
+                              ),
                             ),
                           ),
                         ),
@@ -2072,6 +2200,36 @@ class _PantallaMiPerfilState extends State<PantallaMiPerfil> {
                               color: ColoresApp.peligroMarca.withOpacity(0.7),
                               decoration: TextDecoration.underline,
                             ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    onPressed: _mostrarTerminosYPrivacidad,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          CupertinoIcons.doc_text,
+                          size: 16,
+                          color: ColoresApp.textoSecundario,
+                        ),
+                        const SizedBox(width: 7),
+                        Text(
+                          'Términos y privacidad',
+                          style: GoogleFonts.baloo2(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: ColoresApp.textoSecundario,
+                            decoration: TextDecoration.underline,
+                            decorationColor: ColoresApp.textoSecundario
+                                .withValues(alpha: 0.55),
                           ),
                         ),
                       ],

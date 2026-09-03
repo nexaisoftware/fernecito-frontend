@@ -17,6 +17,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../core/comprimir_imagen_storage.dart';
@@ -24,47 +25,13 @@ import '../core/constants.dart';
 import '../core/sexo_perfil.dart';
 import '../core/supabase_client.dart';
 import '../core/tema_fernecito.dart';
+import '../core/textos_legales.dart';
 import '../widgets/fondo_gradiente_fernecito.dart';
 import '../widgets/burbuja_estado.dart';
 import '../widgets/recortar_avatar_sheet.dart';
 import 'pantalla_home.dart';
 import '../widgets/fernecito_loader.dart';
 import '../widgets/dialogo_fernecito.dart';
-
-// Textos legales mostrados en el modal de "Términos y Privacidad".
-// BORRADOR de partida — revisar con criterio legal antes de producción.
-const String _kTextoTerminos =
-    'Al crear tu perfil aceptás usar Fernecito de forma responsable.\n\n'
-    'Fernecito solo difunde eventos de terceros: no los organizamos ni nos '
-    'responsabilizamos por ellos, por las decisiones del local (como el '
-    'ingreso) ni por lo que ocurra en ellos.\n\n'
-    '• Debés brindar información veraz y tener la edad mínima requerida para usar '
-    'la app y para asistir a los eventos que reserves.\n\n'
-    '• Te comprometés a respetar a los demás usuarios y a no usar la app para '
-    'acoso, spam, estafas, suplantación de identidad ni contenido ilegal o que '
-    'infrinja derechos de terceros.\n\n'
-    '• Podemos suspender o eliminar cuentas que incumplan estas normas o que '
-    'reciban reportes fundados.\n\n'
-    '• El servicio se ofrece "tal cual", sin garantías de disponibilidad '
-    'ininterrumpida.\n\n'
-    '• Podemos actualizar estos términos; te avisaremos de los cambios '
-    'importantes dentro de la app.';
-
-const String _kTextoPrivacidad =
-    'Tu privacidad nos importa.\n\n'
-    '• Datos que usamos: nombre o apodo, edad, género, ciudad y provincia, foto '
-    'de perfil, email de tu cuenta y, solo si lo permitís, tus redes sociales y '
-    'una ubicación aproximada.\n\n'
-    '• Para qué los usamos: mostrar tu perfil, armar la cartelera de tu zona, '
-    'gestionar tus reservas y conectarte con otras personas y eventos.\n\n'
-    '• No vendemos tus datos a terceros. Usamos proveedores de infraestructura '
-    '(como Supabase) únicamente para operar el servicio.\n\n'
-    '• Tu perfil público muestra solo lo que elegís; podés ponerlo privado '
-    'cuando quieras.\n\n'
-    '• Podés editar tus datos o eliminar tu cuenta en cualquier momento desde '
-    '"Mi Perfil".\n\n'
-    '• Por dudas o para ejercer tus derechos sobre tus datos, escribinos desde '
-    '"Ayuda y soporte".';
 
 class PantallaCrearPerfil extends StatefulWidget {
   const PantallaCrearPerfil({super.key});
@@ -370,12 +337,10 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
             ? null
             : _controladorEstado.text.trim(),
         'perfil_publico': true,
-        'instagram_url':
-            _controladorInstagram.text.trim().isNotEmpty
+        'instagram_url': _controladorInstagram.text.trim().isNotEmpty
             ? _controladorInstagram.text.trim()
             : null,
-        'tiktok_url':
-            _controladorTikTok.text.trim().isNotEmpty
+        'tiktok_url': _controladorTikTok.text.trim().isNotEmpty
             ? _controladorTikTok.text.trim()
             : null,
         // Regla: perfil_completo = true cuando username + nombre existen
@@ -388,6 +353,8 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
 
       // 3. Upsert en base de datos
       await supabase.cliente.from('perfiles_usuarios').upsert(datosPerfil);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(claveAvisoTerminosVistoFernecito, true);
 
       print('✅ Perfil creado exitosamente');
 
@@ -897,10 +864,16 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        seccion('Términos y Condiciones', _kTextoTerminos),
-                        seccion('Política de Privacidad', _kTextoPrivacidad),
+                        seccion(
+                          'Términos y Condiciones',
+                          textoTerminosFernecito,
+                        ),
+                        seccion(
+                          'Política de Privacidad',
+                          textoPrivacidadFernecito,
+                        ),
                         Text(
-                          'Última actualización: junio 2026.',
+                          'Última actualización: $fechaTextosLegalesFernecito.',
                           style: GoogleFonts.baloo2(
                             fontSize: 11,
                             color: ColoresApp.textoSecundario.withValues(
@@ -1315,10 +1288,14 @@ class _PantallaCrearPerfilState extends State<PantallaCrearPerfil> {
         padding: const EdgeInsets.symmetric(vertical: 11),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: sel ? marca.withValues(alpha: 0.18) : ColoresApp.fondoPrincipal,
+          color: sel
+              ? marca.withValues(alpha: 0.18)
+              : ColoresApp.fondoPrincipal,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: sel ? marca : ColoresApp.textoSecundario.withValues(alpha: 0.22),
+            color: sel
+                ? marca
+                : ColoresApp.textoSecundario.withValues(alpha: 0.22),
             width: sel ? 1.6 : 1,
           ),
         ),

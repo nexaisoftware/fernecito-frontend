@@ -30,14 +30,16 @@ class ConfiguracionSupabase {
 
   /// Obtiene la URL de Supabase desde --dart-define o .env local.
   static String? obtenerUrl() {
-    return _urlDefine.isNotEmpty ? _urlDefine : dotenv.env[_nombreVariableUrl];
+    return _urlDefine.isNotEmpty
+        ? _urlDefine
+        : (dotenv.isInitialized ? dotenv.env[_nombreVariableUrl] : null);
   }
 
   /// Obtiene la clave publica (anon key) desde --dart-define o .env local.
   static String? obtenerClavePublica() {
     return _claveDefine.isNotEmpty
         ? _claveDefine
-        : dotenv.env[_nombreVariableClave];
+        : (dotenv.isInitialized ? dotenv.env[_nombreVariableClave] : null);
   }
 
   /// Verifica si Supabase está correctamente configurado

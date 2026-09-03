@@ -29,6 +29,8 @@ class MatchCard {
     required this.planEtiqueta,
     required this.lugarTexto,
     required this.lugarTipo,
+    this.idLocal,
+    this.idEvento,
     required this.cuandoEtiqueta,
     this.ciudad,
     this.miembros,
@@ -55,6 +57,8 @@ class MatchCard {
   final String planEtiqueta;
   final String lugarTexto;
   final String lugarTipo;
+  final String? idLocal;
+  final String? idEvento;
   final String cuandoEtiqueta;
   final String? ciudad;
   final int? miembros;
@@ -166,6 +170,8 @@ class MatchCard {
       planEtiqueta: m['plan_etiqueta']?.toString() ?? '',
       lugarTexto: m['lugar_texto']?.toString() ?? '',
       lugarTipo: m['lugar_tipo']?.toString() ?? 'custom',
+      idLocal: m['id_local']?.toString(),
+      idEvento: m['id_evento']?.toString(),
       cuandoEtiqueta: m['cuando_etiqueta']?.toString() ?? '',
       ciudad: m['ciudad']?.toString(),
       miembros: n(m['miembros']),

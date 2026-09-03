@@ -24,6 +24,7 @@ fi
 
 : "${URL_SUPABASE:?Falta URL_SUPABASE en fernecito_frontend/.env o entorno}"
 : "${CLAVE_PUBLICA_SUPABASE:?Falta CLAVE_PUBLICA_SUPABASE en fernecito_frontend/.env o entorno}"
+: "${CARTO_BASEMAPS_KEY:?Falta CARTO_BASEMAPS_KEY en fernecito_frontend/.env o entorno}"
 
 echo "==> [1/3] flutter build web --release --base-href /"
 flutter build web --release --base-href / --no-wasm-dry-run \
@@ -36,7 +37,8 @@ flutter build web --release --base-href / --no-wasm-dry-run \
   --dart-define=FIREBASE_WEB_PROJECT_ID="${FIREBASE_WEB_PROJECT_ID:-}" \
   --dart-define=FIREBASE_WEB_AUTH_DOMAIN="${FIREBASE_WEB_AUTH_DOMAIN:-}" \
   --dart-define=FIREBASE_WEB_STORAGE_BUCKET="${FIREBASE_WEB_STORAGE_BUCKET:-}" \
-  --dart-define=FCM_WEB_VAPID_KEY="${FCM_WEB_VAPID_KEY:-}"
+  --dart-define=FCM_WEB_VAPID_KEY="${FCM_WEB_VAPID_KEY:-}" \
+  --dart-define=CARTO_BASEMAPS_KEY="${CARTO_BASEMAPS_KEY:-}"
 
 echo "==> [1b/3] version.json siempre desde pubspec + deploy_id único"
 python3 - <<'PY'
@@ -123,6 +125,8 @@ cat > build/web/vercel.json <<'JSON'
   "rewrites": [
     { "source": "/share-evento", "destination": "/api/share-evento" },
     { "source": "/descargar", "destination": "/descargar.html" },
+    { "source": "/privacy", "destination": "/privacy.html" },
+    { "source": "/child-safety", "destination": "/child-safety.html" },
     {
       "source": "/((?!descargar\\.html|firebase-messaging-sw\\.js|firebase-config-sw\\.js|flutter_service_worker\\.js|flutter_bootstrap\\.js|main\\.dart\\.js|version\\.json|manifest\\.json|favicon\\.png|assets/|icons/|splash/|canvaskit/|api/).*)",
       "destination": "/index.html"

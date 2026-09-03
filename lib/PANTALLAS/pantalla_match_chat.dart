@@ -7,7 +7,6 @@ library;
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -35,6 +34,7 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
   final _srv = ServicioMatch();
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  final _focus = FocusNode();
 
   List<MatchMensaje> _mensajes = const [];
   RealtimeChannel? _canal;
@@ -67,6 +67,7 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
     final canal = _canal;
     if (canal != null) _srv.cerrarCanal(canal);
     _input.dispose();
+    _focus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -217,10 +218,19 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
     });
   }
 
+  void _mantenerComposerActivo() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focus.requestFocus();
+      _bajar();
+    });
+  }
+
   Future<void> _enviar() async {
     final texto = _input.text.trim();
     if (texto.isEmpty || _enviando) return;
     _input.clear();
+    _mantenerComposerActivo();
     // Id temporal negativo y único: identifica ESTA burbuja optimista aunque
     // se manden dos mensajes idénticos seguidos.
     final idTemp = -(DateTime.now().microsecondsSinceEpoch);
@@ -283,7 +293,10 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _enviando = false);
+      if (mounted) {
+        setState(() => _enviando = false);
+        _mantenerComposerActivo();
+      }
     }
   }
 
@@ -395,14 +408,11 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
 
   @override
   Widget build(BuildContext context) {
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
-    // Web/PWA: el viewport ya se achica con el teclado. Si además sumamos
-    // viewInsets, queda un hueco enorme entre input y teclado.
-    // Nativo: CupertinoPageScaffold no se reacomoda solo → sí usamos viewInsets.
-    final bottomGap = kIsWeb
-        ? (keyboard > 0 ? 8.0 : safeBottom)
-        : (keyboard > 0 ? keyboard : safeBottom);
+    final tecladoAbierto = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final bottomGap = tecladoAbierto
+        ? 0.0
+        : (safeBottom == 0 ? 8.0 : safeBottom);
     final otro = widget.match.otro;
     final foto = otro.fotoUrl;
     final urlsSquad = otro.avataresMiembrosUrls;
@@ -454,9 +464,10 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
                     )
                   : ListView.builder(
                       controller: _scroll,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                      itemCount:
-                          _mensajes.length + (_hayMasAntiguos ? 1 : 0),
+                      itemCount: _mensajes.length + (_hayMasAntiguos ? 1 : 0),
                       itemBuilder: (_, i) {
                         if (_hayMasAntiguos && i == 0) {
                           return BotonCargarMasMensajes(
@@ -478,6 +489,7 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
                   Expanded(
                     child: CupertinoTextField(
                       controller: _input,
+                      focusNode: _focus,
                       minLines: 1,
                       maxLines: 4,
                       placeholder: widget.match.otro.esSquad
@@ -498,6 +510,7 @@ class _PantallaMatchChatState extends State<PantallaMatchChat> {
                         color: ColoresApp.fondoPrincipal,
                         borderRadius: BorderRadius.circular(18),
                       ),
+                      textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _enviar(),
                       onTap: _bajar,
                     ),

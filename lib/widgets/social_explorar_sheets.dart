@@ -348,11 +348,9 @@ class _ExplorarPersonasContenidoState extends State<ExplorarPersonasContenido> {
     if (!mounted) return;
     final prefs = PreferenciasCartelera.instancia;
     final ciudadesWidget = _ciudadesDesdeWidget;
-    final ciudadesActuales = ciudadesWidget != null
-        ? ciudadesWidget
-        : prefs.ciudadesActivas.isNotEmpty
+    final ciudadesActuales = ciudadesWidget ?? (prefs.ciudadesActivas.isNotEmpty
         ? prefs.ciudadesActivas
-        : _ciudades;
+        : _ciudades);
     final provinciaActual =
         widget.provinciaInicial ?? prefs.provinciaActiva ?? _provincia;
     final res = await mostrarFiltroUbicacionesSheet(
@@ -939,11 +937,9 @@ class _ExplorarSquadsContenidoState extends State<ExplorarSquadsContenido> {
     if (!mounted) return;
     final prefs = PreferenciasCartelera.instancia;
     final ciudadesWidget = _ciudadesDesdeWidget;
-    final ciudadesActuales = ciudadesWidget != null
-        ? ciudadesWidget
-        : prefs.ciudadesActivas.isNotEmpty
+    final ciudadesActuales = ciudadesWidget ?? (prefs.ciudadesActivas.isNotEmpty
         ? prefs.ciudadesActivas
-        : _ciudades;
+        : _ciudades);
     final provinciaActual =
         widget.provinciaInicial ?? prefs.provinciaActiva ?? _provincia;
     final res = await mostrarFiltroUbicacionesSheet(

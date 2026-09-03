@@ -29,6 +29,7 @@ const double _textoDurMs = 1680;
 const double _lockupListoMs = _textoDelayMs + _textoDurMs;
 const double _barridoDurMs = 740;
 const double _residuoDurMs = 1760;
+
 /// Lockup: isotipo y texto juntos, con un huelgo mínimo para que no se toquen.
 const double _lockupDx = -116;
 const double _textoLeftFrac = 0.296;
@@ -106,6 +107,74 @@ class SplashCargaFernecito extends StatefulWidget {
 
   @override
   State<SplashCargaFernecito> createState() => _SplashCargaFernecitoState();
+}
+
+class IsotipoFernecitoLoader extends StatefulWidget {
+  const IsotipoFernecitoLoader({super.key, this.size = 96});
+
+  final double size;
+
+  @override
+  State<IsotipoFernecitoLoader> createState() => _IsotipoFernecitoLoaderState();
+}
+
+class _IsotipoFernecitoLoaderState extends State<IsotipoFernecitoLoader>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  final ValueNotifier<double> _ms = ValueNotifier<double>(0);
+  bool _reducir = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((d) {
+      if (!mounted || _reducir) return;
+      _ms.value = d.inMilliseconds.toDouble();
+    })..start();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reducir = MediaQuery.disableAnimationsOf(context);
+    if (_reducir) {
+      _ms.value = _lockupListoMs;
+      _ticker.stop();
+    } else if (!_ticker.isActive) {
+      _ticker.start();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    _ms.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = widget.size.clamp(56.0, 132.0);
+    final logoH = size * (_vbH / _vbW);
+    final u = size / (_telRef * 0.45);
+
+    return SizedBox(
+      width: size,
+      height: logoH,
+      child: ListenableBuilder(
+        listenable: _ms,
+        builder: (context, _) {
+          return _LogoVivo(
+            ms: _reducir ? _lockupListoMs : _ms.value,
+            u: u,
+            reducir: _reducir,
+            width: size,
+            height: logoH,
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _SplashCargaFernecitoState extends State<SplashCargaFernecito>
@@ -205,19 +274,21 @@ class _EscenarioSplash extends StatelessWidget {
             final topLockup = height * 0.514 - logoH / 2 - logoH * 0.09;
             final leftCentro =
                 width * 0.5 - (logoW * 0.5) * (1.0 - entrada.scale);
-            final topCentro = height * 0.5 -
+            final topCentro =
+                height * 0.5 -
                 originY -
                 (logoH * 0.5 - originY) * entrada.scale;
             const scaleFinEntrada = 0.70;
             final leftDespegue =
                 width * 0.5 - (logoW * 0.5) * (1.0 - scaleFinEntrada);
-            final topDespegue = height * 0.5 -
+            final topDespegue =
+                height * 0.5 -
                 originY -
                 (logoH * 0.5 - originY) * scaleFinEntrada;
-            final left =
-                tL <= 0 ? leftCentro : _lerp(leftDespegue, leftLockup, tL);
-            final top =
-                tL <= 0 ? topCentro : _lerp(topDespegue, topLockup, tL);
+            final left = tL <= 0
+                ? leftCentro
+                : _lerp(leftDespegue, leftLockup, tL);
+            final top = tL <= 0 ? topCentro : _lerp(topDespegue, topLockup, tL);
             return Positioned(
               left: left,
               top: top,
@@ -935,19 +1006,12 @@ class _Entrada {
 }
 
 class _Dot {
-  const _Dot(
-    this.x,
-    this.y,
-    this.r,
-    this.delayMs, [
-    this.color = const Color(0xFFD4B198),
-  ]);
+  const _Dot(this.x, this.y, this.r, this.delayMs);
 
   final double x;
   final double y;
   final double r;
   final double delayMs;
-  final Color color;
 }
 
 class _HtmlDot {

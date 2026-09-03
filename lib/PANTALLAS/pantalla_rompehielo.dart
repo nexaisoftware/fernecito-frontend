@@ -193,6 +193,8 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
     _cargarMiAvatar();
     _cargarEstado();
     _cargarMiembrosContraparte();
+    // Poll solo mientras esperamos al otro (no es nuestro turno de escribir).
+    // Si es nuestro turno, no refrescar: evita borrar lo escrito en el input.
     _refreshAuto = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted) return;
       if (DateTime.now().difference(_apertura) >= const Duration(minutes: 5)) {
@@ -200,7 +202,9 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
         _refreshAuto = null;
         return;
       }
-      unawaited(_cargarEstado());
+      final est = _estado;
+      if (est == null || est.puedeActuar == true) return;
+      unawaited(_cargarEstado(silencioso: true));
     });
   }
 
@@ -219,7 +223,7 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
       widget.data.idGrupoActorInicial ??
       _responderComo?['id_grupo']?.toString();
 
-  Future<void> _cargarEstado() async {
+  Future<void> _cargarEstado({bool silencioso = false}) async {
     final d = widget.data;
     final idGrupo = _idGrupoActor;
     final est = await _srv.estado(
@@ -233,19 +237,26 @@ class _PantallaRompehieloState extends State<PantallaRompehielo> {
         (est.accionSugerida == RompehieloAccion.replicar ||
             est.accionSugerida == RompehieloAccion.responder ||
             est.accionSugerida == RompehieloAccion.iniciar);
+    // Nunca pisar texto local que el usuario está escribiendo.
+    final escribiendoLocal =
+        !_mensajeEnviado && _controller.text.trim().isNotEmpty;
 
     setState(() {
       _estado = est;
       if (modoNuevo) {
-        _miMensaje = '';
-        _controller.clear();
-        _mensajeEnviado = false;
-        _replicaAbierta = false;
+        if (!silencioso && !escribiendoLocal) {
+          _miMensaje = '';
+          _controller.clear();
+          _mensajeEnviado = false;
+          _replicaAbierta = false;
+        }
       } else if (est.mensajeMio != null && est.mensajeMio!.isNotEmpty) {
         _miMensaje = est.mensajeMio;
-        _controller.text = est.mensajeMio!;
+        if (!escribiendoLocal) {
+          _controller.text = est.mensajeMio!;
+        }
         _mensajeEnviado = true;
-      } else {
+      } else if (!escribiendoLocal) {
         _mensajeEnviado = false;
       }
     });

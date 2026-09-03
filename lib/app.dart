@@ -13,8 +13,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Material, ScaffoldMessenger;
-import 'package:flutter/services.dart'
-    show AnnotatedRegion, SystemUiOverlayStyle;
+import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/constants.dart';
 import 'core/supabase_client.dart';
@@ -271,19 +270,21 @@ class _AppFernecitoState extends State<AppFernecito>
 
     Widget? destino;
     if (listo && sesionLista && !_tieneSesionActiva) {
-      destino = const PantallaLogin();
-    } else if (listo &&
-        sesionLista &&
-        _tieneSesionActiva &&
-        !_perfilCompleto) {
+      destino = PantallaCarteleraInvitado(
+        onIrALogin: () {
+          navigatorKey.currentState?.pushAndRemoveUntil(
+            CupertinoPageRoute(builder: (_) => const PantallaLogin()),
+            (route) => false,
+          );
+        },
+      );
+    } else if (listo && sesionLista && _tieneSesionActiva && !_perfilCompleto) {
       destino = const PantallaCrearPerfil();
     }
 
     // Nunca sacar el splash si no hay Home ni login: si no, queda #121212 vacío.
     final mostrarSplash =
-        !listo ||
-        !sesionLista ||
-        (irAHome && !BootstrapCartelera.lista.value);
+        !listo || !sesionLista || (irAHome && !BootstrapCartelera.lista.value);
 
     return Stack(
       fit: StackFit.expand,

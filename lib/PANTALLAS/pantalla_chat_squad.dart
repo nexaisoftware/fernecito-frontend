@@ -3,7 +3,6 @@ library;
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -265,10 +264,19 @@ class _PantallaChatSquadState extends State<PantallaChatSquad> {
     });
   }
 
+  void _mantenerComposerActivo() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focus.requestFocus();
+      _bajar();
+    });
+  }
+
   Future<void> _enviar() async {
     final texto = _ctrl.text.trim();
     if (texto.isEmpty || _enviando) return;
     _ctrl.clear();
+    _mantenerComposerActivo();
     setState(() {
       _queryMencion = null;
       _inicioMencion = null;
@@ -325,7 +333,10 @@ class _PantallaChatSquadState extends State<PantallaChatSquad> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _enviando = false);
+      if (mounted) {
+        setState(() => _enviando = false);
+        _mantenerComposerActivo();
+      }
     }
   }
 
@@ -340,10 +351,7 @@ class _PantallaChatSquadState extends State<PantallaChatSquad> {
       context,
       CupertinoPageRoute(
         builder: (_) => PantallaPerfilSquads(
-          squad: {
-            'id_grupo': widget.idGrupo,
-            'nombre_grupo': widget.nombre,
-          },
+          squad: {'id_grupo': widget.idGrupo, 'nombre_grupo': widget.nombre},
           estadoRelacion: EstadoRelacionSquad.ninguno,
         ),
       ),
@@ -352,17 +360,18 @@ class _PantallaChatSquadState extends State<PantallaChatSquad> {
 
   @override
   Widget build(BuildContext context) {
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
-    final bottomGap = kIsWeb
-        ? (keyboard > 0 ? 8.0 : safeBottom)
-        : (keyboard > 0 ? keyboard : safeBottom);
+    final tecladoAbierto = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final bottomGap = tecladoAbierto
+        ? 0.0
+        : (safeBottom == 0 ? 8.0 : safeBottom);
     final candidatos = _queryMencion != null
         ? _candidatos
         : const <_CandidatoMencionSquad>[];
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
       child: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             EncabezadoChat(
@@ -407,9 +416,10 @@ class _PantallaChatSquadState extends State<PantallaChatSquad> {
                   ? const Center(child: FernecitoLoader.inline(size: 26))
                   : ListView.builder(
                       controller: _scroll,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                      itemCount:
-                          _mensajes.length + (_hayMasAntiguos ? 1 : 0),
+                      itemCount: _mensajes.length + (_hayMasAntiguos ? 1 : 0),
                       itemBuilder: (_, i) {
                         if (_hayMasAntiguos && i == 0) {
                           return BotonCargarMasMensajes(
@@ -493,6 +503,7 @@ class _PantallaChatSquadState extends State<PantallaChatSquad> {
                         color: Colors.white.withValues(alpha: 0.07),
                         borderRadius: BorderRadius.circular(18),
                       ),
+                      textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _enviar(),
                     ),
                   ),
@@ -613,7 +624,8 @@ class _BurbujaMensajeSquad extends StatelessWidget {
                       style: GoogleFonts.baloo2(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w900,
-                        color: colorAutor ?? Colors.white.withValues(alpha: 0.62),
+                        color:
+                            colorAutor ?? Colors.white.withValues(alpha: 0.62),
                       ),
                     ),
                   ),

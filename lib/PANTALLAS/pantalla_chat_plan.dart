@@ -3,7 +3,6 @@ library;
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -272,10 +271,19 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
     });
   }
 
+  void _mantenerComposerActivo() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focus.requestFocus();
+      _bajar();
+    });
+  }
+
   Future<void> _enviar() async {
     final texto = _ctrl.text.trim();
     if (texto.isEmpty || _enviando) return;
     _ctrl.clear();
+    _mantenerComposerActivo();
     setState(() {
       _queryMencion = null;
       _inicioMencion = null;
@@ -332,7 +340,10 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _enviando = false);
+      if (mounted) {
+        setState(() => _enviando = false);
+        _mantenerComposerActivo();
+      }
     }
   }
 
@@ -340,27 +351,26 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
     Navigator.push(
       context,
       CupertinoPageRoute(
-        builder: (_) => PantallaVerPlan(
-          idPlan: widget.plan.id,
-          inicial: widget.plan,
-        ),
+        builder: (_) =>
+            PantallaVerPlan(idPlan: widget.plan.id, inicial: widget.plan),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
-    final bottomGap = kIsWeb
-        ? (keyboard > 0 ? 8.0 : safeBottom)
-        : (keyboard > 0 ? keyboard : safeBottom);
+    final tecladoAbierto = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final bottomGap = tecladoAbierto
+        ? 0.0
+        : (safeBottom == 0 ? 8.0 : safeBottom);
     final candidatos = _queryMencion != null
         ? _candidatos
         : const <_CandidatoMencion>[];
     return CupertinoPageScaffold(
       backgroundColor: ColoresApp.fondoPrincipal,
       child: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             EncabezadoChat(
@@ -375,10 +385,10 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                 (widget.plan.beneficioEstado == 'aceptado' ||
                     widget.plan.beneficioEstado == 'contraoferta') &&
                 ((widget.plan.beneficioLocal ??
-                            widget.plan.beneficioContraoferta ??
-                            '')
-                        .trim()
-                        .isNotEmpty))
+                        widget.plan.beneficioContraoferta ??
+                        '')
+                    .trim()
+                    .isNotEmpty))
               Container(
                 margin: const EdgeInsets.fromLTRB(12, 6, 12, 4),
                 padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
@@ -444,9 +454,10 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                   ? const Center(child: FernecitoLoader.inline(size: 26))
                   : ListView.builder(
                       controller: _scroll,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                      itemCount:
-                          _mensajes.length + (_hayMasAntiguos ? 1 : 0),
+                      itemCount: _mensajes.length + (_hayMasAntiguos ? 1 : 0),
                       itemBuilder: (_, i) {
                         if (_hayMasAntiguos && i == 0) {
                           return BotonCargarMasMensajes(
@@ -534,6 +545,7 @@ class _PantallaChatPlanState extends State<PantallaChatPlan> {
                         color: Colors.white.withValues(alpha: 0.07),
                         borderRadius: BorderRadius.circular(18),
                       ),
+                      textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _enviar(),
                     ),
                   ),

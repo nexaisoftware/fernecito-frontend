@@ -3,7 +3,6 @@ library;
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -40,6 +39,7 @@ class _PantallaChatConversacionState extends State<PantallaChatConversacion> {
   final _srv = ServicioConversaciones();
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  final _focus = FocusNode();
 
   List<ConversacionMensaje> _mensajes = const [];
   RealtimeChannel? _canal;
@@ -74,6 +74,7 @@ class _PantallaChatConversacionState extends State<PantallaChatConversacion> {
     final canal = _canal;
     if (canal != null) unawaited(_srv.cerrarCanal(canal));
     _input.dispose();
+    _focus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -91,8 +92,7 @@ class _PantallaChatConversacionState extends State<PantallaChatConversacion> {
           .maybeSingle();
       if (!mounted || row == null) return;
       setState(() {
-        _nombreOtro ??=
-            (row['nombre']?.toString().trim().isNotEmpty ?? false)
+        _nombreOtro ??= (row['nombre']?.toString().trim().isNotEmpty ?? false)
             ? row['nombre'].toString().trim()
             : (row['username']?.toString() ?? 'Alguien');
         _fotoOtro ??= ServicioSupabase().urlAvatar(
@@ -216,10 +216,19 @@ class _PantallaChatConversacionState extends State<PantallaChatConversacion> {
     });
   }
 
+  void _mantenerComposerActivo() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focus.requestFocus();
+      _bajar();
+    });
+  }
+
   Future<void> _enviar() async {
     final texto = _input.text.trim();
     if (texto.isEmpty || _enviando) return;
     _input.clear();
+    _mantenerComposerActivo();
     final idTemp = -(DateTime.now().microsecondsSinceEpoch);
     setState(() {
       _enviando = true;
@@ -276,7 +285,10 @@ class _PantallaChatConversacionState extends State<PantallaChatConversacion> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _enviando = false);
+      if (mounted) {
+        setState(() => _enviando = false);
+        _mantenerComposerActivo();
+      }
     }
   }
 
@@ -299,11 +311,11 @@ class _PantallaChatConversacionState extends State<PantallaChatConversacion> {
 
   @override
   Widget build(BuildContext context) {
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
-    final bottomGap = kIsWeb
-        ? (keyboard > 0 ? 8.0 : safeBottom)
-        : (keyboard > 0 ? keyboard : safeBottom);
+    final tecladoAbierto = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final bottomGap = tecladoAbierto
+        ? 0.0
+        : (safeBottom == 0 ? 8.0 : safeBottom);
     final nombre = (_nombreOtro ?? '').trim().isEmpty
         ? 'Chat'
         : _nombreOtro!.trim();
@@ -359,9 +371,10 @@ class _PantallaChatConversacionState extends State<PantallaChatConversacion> {
                     )
                   : ListView.builder(
                       controller: _scroll,
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-                      itemCount:
-                          _mensajes.length + (_hayMasAntiguos ? 1 : 0),
+                      itemCount: _mensajes.length + (_hayMasAntiguos ? 1 : 0),
                       itemBuilder: (_, i) {
                         if (_hayMasAntiguos && i == 0) {
                           return BotonCargarMasMensajes(
@@ -383,6 +396,7 @@ class _PantallaChatConversacionState extends State<PantallaChatConversacion> {
                   Expanded(
                     child: CupertinoTextField(
                       controller: _input,
+                      focusNode: _focus,
                       minLines: 1,
                       maxLines: 4,
                       placeholder: 'Escribí un mensaje...',
@@ -401,6 +415,7 @@ class _PantallaChatConversacionState extends State<PantallaChatConversacion> {
                         color: ColoresApp.fondoPrincipal,
                         borderRadius: BorderRadius.circular(18),
                       ),
+                      textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _enviar(),
                       onTap: _bajar,
                     ),

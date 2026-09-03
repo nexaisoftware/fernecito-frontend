@@ -13,6 +13,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../widgets/dialogo_fernecito.dart';
 import '../core/constants.dart';
+import '../core/flujo_bloqueo.dart';
+import '../core/flujo_reporte.dart';
 import '../core/preferencias_cartelera.dart';
 import '../core/servicio_match.dart';
 import '../core/supabase_client.dart';
@@ -133,6 +135,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
   final Set<String> _idsVistos = {};
   bool _hayMasCards = true;
   bool _cargandoMas = false;
+
   /// Activa duración en el transform (vuelo al soltar / snap al centro).
   bool _animarArrastre = false;
   static const _duracionVuelo = Duration(milliseconds: 280);
@@ -184,8 +187,8 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       // Modo mirar: re-pedir preview con ciudades nuevas (antes solo
       // actualizaba el pill y quedaban cards de la ubicación anterior).
       if (_modo == 'usuario' && _perfilPublico && _tieneFoto) {
-        final ciudades =
-            PreferenciasCartelera.instancia.ciudadesActivas.toList();
+        final ciudades = PreferenciasCartelera.instancia.ciudadesActivas
+            .toList();
         final preview = await _srv.feedPreview(ciudades: ciudades);
         if (!mounted || gen != _genUbicacion) return;
         setState(() {
@@ -228,10 +231,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       _mazo = [];
     });
     try {
-      final estado = await _srv.miEstado(
-        tipo: _modo,
-        idGrupo: _squad?.idGrupo,
-      );
+      final estado = await _srv.miEstado(tipo: _modo, idGrupo: _squad?.idGrupo);
       final tiene = estado['tiene_plan'] == true;
       _sexoCargado = estado['sexo_cargado'] == true;
       _perfilPublico = estado['perfil_publico'] == true;
@@ -244,10 +244,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       if (!tiene) {
         setState(() => _sinPlan = true);
         // Puede MIRAR sin plan si ya tiene perfil público, foto y edad ≥16.
-        if (_modo == 'usuario' &&
-            _perfilPublico &&
-            _tieneFoto &&
-            _edadOk) {
+        if (_modo == 'usuario' && _perfilPublico && _tieneFoto && _edadOk) {
           final preview = await _srv.feedPreview(
             ciudades: PreferenciasCartelera.instancia.ciudadesActivas.toList(),
           );
@@ -372,7 +369,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     }
     if (!_tieneFoto) {
       await _avisoRequisito(
-        _modo == 'squad' ? '¡El squad necesita portada!' : '¡Necesitás una foto!',
+        _modo == 'squad'
+            ? '¡El squad necesita portada!'
+            : '¡Necesitás una foto!',
         _modo == 'squad'
             ? 'Subí una portada al squad para que puedan reconocerlo en las cards.'
             : 'Para usar Fernecito Match necesitás una foto de perfil.\n\nAndá a Mi perfil → Editar foto y subí una.',
@@ -537,11 +536,11 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
       if (decision == 'recopa') {
         _rePintaDetalle = _sinPlan
             ? (_esModoSquad
-                ? 'Probaron "nos re pinta" 🥂\nArmá el plan del squad para que les llegue de verdad'
-                : 'Probaste "me re pinta" 🥂\nArmá tu plan para que le llegue de verdad')
+                  ? 'Probaron "nos re pinta" 🥂\nArmá el plan del squad para que les llegue de verdad'
+                  : 'Probaste "me re pinta" 🥂\nArmá tu plan para que le llegue de verdad')
             : (_esModoSquad
-                ? 'Les va a llegar que les re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}'
-                : 'Le va a llegar que te re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}');
+                  ? 'Les va a llegar que les re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}'
+                  : 'Le va a llegar que te re pinta su plan\n${card.planEtiqueta} en ${card.lugarTexto}');
       }
     });
     if (decision == 'recopa') {
@@ -572,6 +571,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
           if (decision == 'recopa') _rePintaDetalle = null;
         });
       }
+
       restaurarCard();
 
       if (msg.contains('necesita_plan')) {
@@ -685,7 +685,10 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
                               shape: BoxShape.circle,
                               color: _kAzulRecopa.withValues(alpha: 0.18),
                             ),
-                            child: const Text('🥂', style: TextStyle(fontSize: 28)),
+                            child: const Text(
+                              '🥂',
+                              style: TextStyle(fontSize: 28),
+                            ),
                           ),
                           const SizedBox(height: 12),
                           Text(
@@ -739,35 +742,75 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
     );
   }
 
-  Future<void> _bloquearCardActual(MatchCard card) async {
-    final ok = await showCupertinoModalPopup<bool>(
+  Future<void> _abrirAccionesCard(MatchCard card) async {
+    final accion = await showCupertinoModalPopup<String>(
       context: context,
       builder: (ctx) => CupertinoActionSheet(
         title: Text(
-          card.esSquad ? 'Squad en el mazo' : 'Persona en el mazo',
+          card.esSquad ? 'Squad en Match' : 'Perfil en Match',
           style: GoogleFonts.baloo2(fontWeight: FontWeight.w800),
         ),
         message: Text(
-          'Si bloqueás, no se van a volver a cruzar en Match ni en Social.',
+          'Elegí qué querés hacer con esta card.',
           style: GoogleFonts.baloo2(fontSize: 13),
         ),
         actions: [
           CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(ctx, 'reportar_perfil'),
+            child: Text(
+              card.esSquad ? 'Reportar este squad' : 'Reportar este perfil',
+            ),
+          ),
+          if (card.lugarTipo == 'local' && (card.idLocal ?? '').isNotEmpty)
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.pop(ctx, 'reportar_local'),
+              child: const Text('Reportar este local'),
+            ),
+          CupertinoActionSheetAction(
             isDestructiveAction: true,
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Bloquear'),
+            onPressed: () => Navigator.pop(ctx, 'bloquear'),
+            child: Text(card.esSquad ? 'Bloquear squad' : 'Bloquear usuario'),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(ctx, false),
+          onPressed: () => Navigator.pop(ctx),
           child: const Text('Cancelar'),
         ),
       ),
     );
-    if (ok != true || !mounted) return;
-    final done = await _srv.bloquear(
-      idUsuario: card.esSquad ? null : card.idUsuario,
-      idGrupo: card.esSquad ? card.idGrupo : null,
+
+    if (accion == null || !mounted) return;
+    switch (accion) {
+      case 'reportar_perfil':
+        await mostrarFlujoReporte(
+          context: context,
+          entidad: card.esSquad ? 'este squad' : 'este perfil',
+          targetTipo: card.esSquad ? 'squad' : 'usuario',
+          targetId: card.esSquad
+              ? (card.idGrupo ?? '')
+              : (card.idUsuario ?? ''),
+        );
+        break;
+      case 'reportar_local':
+        await mostrarFlujoReporte(
+          context: context,
+          entidad: 'este local',
+          targetTipo: 'local',
+          targetId: card.idLocal ?? '',
+        );
+        break;
+      case 'bloquear':
+        await _bloquearCardActual(card);
+        break;
+    }
+  }
+
+  Future<void> _bloquearCardActual(MatchCard card) async {
+    final done = await mostrarFlujoBloqueo(
+      context: context,
+      entidad: card.esSquad ? 'este squad' : 'este perfil',
+      targetTipo: card.esSquad ? 'squad' : 'usuario',
+      targetId: card.esSquad ? (card.idGrupo ?? '') : (card.idUsuario ?? ''),
     );
     if (!mounted) return;
     if (done) {
@@ -775,8 +818,6 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
         _mazo = _mazo.where((c) => c.idPlan != card.idPlan).toList();
       });
       if (_mazo.length <= 5) unawaited(_cargarMasCards());
-    } else {
-      await _avisoRequisito('No se pudo bloquear', 'Probá de nuevo en un momento.');
     }
   }
 
@@ -1123,11 +1164,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icono,
-              size: 15,
-              color: Colors.white,
-            ),
+            Icon(icono, size: 15, color: Colors.white),
             const SizedBox(width: 6),
             Text(
               label,
@@ -1214,11 +1251,11 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
           child: Text(
             _pendientes.length == 1
                 ? (_esModoSquad
-                    ? 'A 1 squad le pinta su plan · tocá para matchear'
-                    : 'A 1 le pinta tu plan · tocá para matchear')
+                      ? 'A 1 squad le pinta su plan · tocá para matchear'
+                      : 'A 1 le pinta tu plan · tocá para matchear')
                 : (_esModoSquad
-                    ? 'A ${_pendientes.length} squads les pinta su plan · tocá para matchear'
-                    : 'A ${_pendientes.length} les pinta tu plan · tocá para matchear'),
+                      ? 'A ${_pendientes.length} squads les pinta su plan · tocá para matchear'
+                      : 'A ${_pendientes.length} les pinta tu plan · tocá para matchear'),
             style: GoogleFonts.baloo2(
               color: ColoresApp.textoSecundario,
               fontWeight: FontWeight.w800,
@@ -1266,7 +1303,9 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: p.esRecopa ? _kAzulRecopa : ColoresApp.principalMarca,
+                    color: p.esRecopa
+                        ? _kAzulRecopa
+                        : ColoresApp.principalMarca,
                     width: 2.3,
                   ),
                   boxShadow: p.esRecopa
@@ -1537,9 +1576,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
         esMePinta
             ? (_esModoSquad ? 'NOS PINTA 💜' : 'ME PINTA 💜')
             : (_esModoSquad ? 'NO NOS PINTA ✋' : 'NO ME PINTA ✋'),
-        esMePinta
-            ? const Color(0xFF27AE60)
-            : const Color(0xFFEB5757),
+        esMePinta ? const Color(0xFF27AE60) : const Color(0xFFEB5757),
       );
       // Se mantiene la lógica anterior (aunque parezca invertida):
       // dx>0 -> izquierda, dx<0 -> derecha.
@@ -1569,7 +1606,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
               GestureDetector(
                 onLongPress: _swipeando
                     ? null
-                    : () => _bloquearCardActual(_mazo.first),
+                    : () => _abrirAccionesCard(_mazo.first),
                 onPanUpdate: _swipeando
                     ? null
                     : (d) => setState(() {
@@ -1613,6 +1650,7 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
                         card: _mazo.first,
                         swipeStamp: stamp,
                         swipeStampPos: stampPos,
+                        onAcciones: () => _abrirAccionesCard(_mazo.first),
                       ),
                     ],
                   ),
@@ -1712,15 +1750,17 @@ class _PantallaFernecitoMatchState extends State<PantallaFernecitoMatch> {
 /// Card del deck: FOTO (con nombre y edad encima) + card de info abajita
 /// (blanca, letras oscuras) con el plan y el lugar.
 class _MatchCardVisual extends StatelessWidget {
-  _MatchCardVisual({
+  const _MatchCardVisual({
     required this.card,
     this.swipeStamp,
     this.swipeStampPos,
+    this.onAcciones,
   });
 
   final MatchCard card;
   final Widget? swipeStamp;
   final _SwipeStampPos? swipeStampPos;
+  final VoidCallback? onAcciones;
 
   /// Solo el primer nombre para usuarios ("Santiago Medrano" → "Santiago").
   String get _nombreCorto {
@@ -1873,7 +1913,7 @@ class _MatchCardVisual extends StatelessWidget {
                     ),
                   Positioned(
                     left: 16,
-                    right: 16,
+                    right: 58,
                     bottom: 12,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1911,11 +1951,37 @@ class _MatchCardVisual extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (onAcciones != null)
+                    Positioned(
+                      right: 12,
+                      bottom: 14,
+                      child: _BotonAccionesCardMatch(onTap: onAcciones!),
+                    ),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _BotonAccionesCardMatch extends StatelessWidget {
+  const _BotonAccionesCardMatch({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(38, 38),
+      onPressed: onTap,
+      child: Icon(
+        CupertinoIcons.ellipsis,
+        size: 24,
+        color: Colors.white.withValues(alpha: 0.78),
       ),
     );
   }
@@ -2131,7 +2197,7 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
 
   (int?, int?) get _edades => switch (_rangoEdad) {
     '16_24' => (16, 24),
-    '18_24' => (16, 24),
+    '18_24' => (18, 24),
     '25_29' => (25, 29),
     '30_39' => (30, 39),
     '40_49' => (40, 49),
@@ -2204,7 +2270,9 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
   /// Qué le falta completar (null = todo listo). Para avisar en vez de
   /// dejar un botón muerto.
   String? get _queFalta {
-    if (widget.pedirSexo && _sexo == null) return 'Contanos cómo te identificás 🙋';
+    if (widget.pedirSexo && _sexo == null) {
+      return 'Contanos cómo te identificás 🙋';
+    }
     if (_planKey == null) return 'Elegí un plan ✨';
     if (_lugarTipo == 'custom') {
       if (_customCtrl.text.trim().length < 2) {
@@ -2334,9 +2402,11 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                         ? 'Edad y género se calculan con el promedio del otro squad. "Todas / cualquiera" deja de filtrar.'
                         : 'Filtran el mazo: primero quienes más coinciden con vos.',
                     hijos: [
-                      _titulo(_esSquad
-                          ? 'Género del otro squad'
-                          : 'Género que te interesa'),
+                      _titulo(
+                        _esSquad
+                            ? 'Género del otro squad'
+                            : 'Género que te interesa',
+                      ),
                       _chips(
                         opciones: const [
                           ('todos', '✨ Todos'),
@@ -2348,7 +2418,9 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                         destacada: 'todos',
                       ),
                       const SizedBox(height: 14),
-                      _titulo(_esSquad ? 'Edad promedio del otro squad' : 'Edad'),
+                      _titulo(
+                        _esSquad ? 'Edad promedio del otro squad' : 'Edad',
+                      ),
                       _chips(
                         opciones: const [
                           ('todos', '✨ Todas'),
@@ -2387,155 +2459,159 @@ class _SheetConfigMatchState extends State<_SheetConfigMatch> {
                   const SizedBox(height: 16),
                   // ── Card 2: MI PLAN (se guarda con el botón) ──
                   _subCard(
-                    titulo: _esSquad ? 'Plan y lugar del squad' : 'Mis planes y preferencias',
+                    titulo: _esSquad
+                        ? 'Plan y lugar del squad'
+                        : 'Mis planes y preferencias',
                     detalle: _esSquad
                         ? 'Cualquier miembro puede cambiar el plan y el lugar. La ciudad del squad sale de su perfil.'
                         : 'Indicá tu plan y tu lugar para que puedan coincidir mejor con vos.',
                     hijos: [
-                  _titulo('El plan'),
-                  _chips(
-                    opciones: _kPlanes
-                        .map((p) => (p.$1, '${p.$3} ${p.$2}'))
-                        .toList(),
-                    valor: _planKey,
-                    onTap: (v) => setState(() => _planKey = v),
-                  ),
-                  const SizedBox(height: 18),
-                  _titulo('¿Dónde?'),
-                  _chips(
-                    opciones: const [
-                      ('local', '🍸 Un local'),
-                      ('evento', '🎟️ Un evento'),
-                      ('custom', '📍 Otro lugar'),
-                    ],
-                    valor: _lugarTipo,
-                    onTap: (v) => setState(() {
-                      _lugarTipo = v;
-                      _idLocal = null;
-                      _idEvento = null;
-                      _lugarNombre = null;
-                      _resultados = const [];
-                      _busquedaCtrl.clear();
-                    }),
-                  ),
-                  const SizedBox(height: 10),
-                  if (_lugarTipo == 'custom')
-                    _campo(
-                      _customCtrl,
-                      'Ej: mi casa, plaza San Martín...',
-                      onChanged: (_) => setState(() {}),
-                    )
-                  else ...[
-                    if (_lugarNombre != null)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: ColoresApp.principalMarca.withValues(
-                            alpha: 0.18,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: ColoresApp.principalMarca),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '📍 $_lugarNombre',
-                                style: GoogleFonts.baloo2(
-                                  color: ColoresApp.textoPrincipal,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () => setState(() {
-                                _idLocal = null;
-                                _idEvento = null;
-                                _lugarNombre = null;
-                              }),
-                              child: const Icon(
-                                CupertinoIcons.xmark_circle_fill,
-                                size: 20,
-                                color: Colors.white54,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else ...[
-                      _campo(
-                        _busquedaCtrl,
-                        _lugarTipo == 'local'
-                            ? 'Buscá el local...'
-                            : 'Buscá el evento...',
-                        onChanged: (v) {
-                          if (v.trim().length >= 2) _buscar(v);
-                        },
+                      _titulo('El plan'),
+                      _chips(
+                        opciones: _kPlanes
+                            .map((p) => (p.$1, '${p.$3} ${p.$2}'))
+                            .toList(),
+                        valor: _planKey,
+                        onTap: (v) => setState(() => _planKey = v),
                       ),
-                      if (_buscando)
-                        const Padding(
-                          padding: EdgeInsets.all(10),
-                          child: CupertinoActivityIndicator(),
-                        ),
-                      ..._resultados.map(
-                        (r) => GestureDetector(
-                          onTap: () => setState(() {
-                            if (_lugarTipo == 'local') {
-                              _idLocal = r['id']?.toString();
-                              _lugarNombre = r['nombre_local']?.toString();
-                            } else {
-                              _idEvento = r['id_evento']?.toString();
-                              _lugarNombre = r['titulo_evento']?.toString();
-                            }
-                            _resultados = const [];
-                          }),
-                          child: Container(
-                            margin: const EdgeInsets.only(top: 6),
+                      const SizedBox(height: 18),
+                      _titulo('¿Dónde?'),
+                      _chips(
+                        opciones: const [
+                          ('local', '🍸 Un local'),
+                          ('evento', '🎟️ Un evento'),
+                          ('custom', '📍 Otro lugar'),
+                        ],
+                        valor: _lugarTipo,
+                        onTap: (v) => setState(() {
+                          _lugarTipo = v;
+                          _idLocal = null;
+                          _idEvento = null;
+                          _lugarNombre = null;
+                          _resultados = const [];
+                          _busquedaCtrl.clear();
+                        }),
+                      ),
+                      const SizedBox(height: 10),
+                      if (_lugarTipo == 'custom')
+                        _campo(
+                          _customCtrl,
+                          'Ej: mi casa, plaza San Martín...',
+                          onChanged: (_) => setState(() {}),
+                        )
+                      else ...[
+                        if (_lugarNombre != null)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
-                              vertical: 11,
+                              vertical: 10,
                             ),
                             decoration: BoxDecoration(
-                              color: ColoresApp.fondoSuperficie,
+                              color: ColoresApp.principalMarca.withValues(
+                                alpha: 0.18,
+                              ),
                               borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: ColoresApp.principalMarca,
+                              ),
                             ),
                             child: Row(
                               children: [
-                                // Avatar real del local (la copa queda solo
-                                // como respaldo si todavía no tiene foto).
-                                if (_lugarTipo == 'local')
-                                  _AvatarLocal(
-                                    url: ServicioSupabase().urlAvatar(
-                                      r['foto_perfil_url']?.toString(),
-                                    ),
-                                    size: 26,
-                                  ),
-                                if (_lugarTipo == 'local')
-                                  const SizedBox(width: 9),
                                 Expanded(
                                   child: Text(
-                                    _lugarTipo == 'local'
-                                        ? '${r['nombre_local']}${(r['ciudad'] ?? '').toString().isNotEmpty ? ' · ${r['ciudad']}' : ''}'
-                                        : '🎟️ ${r['titulo_evento']}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                    '📍 $_lugarNombre',
                                     style: GoogleFonts.baloo2(
                                       color: ColoresApp.textoPrincipal,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w800,
                                     ),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => setState(() {
+                                    _idLocal = null;
+                                    _idEvento = null;
+                                    _lugarNombre = null;
+                                  }),
+                                  child: const Icon(
+                                    CupertinoIcons.xmark_circle_fill,
+                                    size: 20,
+                                    color: Colors.white54,
                                   ),
                                 ),
                               ],
                             ),
+                          )
+                        else ...[
+                          _campo(
+                            _busquedaCtrl,
+                            _lugarTipo == 'local'
+                                ? 'Buscá el local...'
+                                : 'Buscá el evento...',
+                            onChanged: (v) {
+                              if (v.trim().length >= 2) _buscar(v);
+                            },
                           ),
-                        ),
-                      ),
-                    ],
-                  ],
+                          if (_buscando)
+                            const Padding(
+                              padding: EdgeInsets.all(10),
+                              child: CupertinoActivityIndicator(),
+                            ),
+                          ..._resultados.map(
+                            (r) => GestureDetector(
+                              onTap: () => setState(() {
+                                if (_lugarTipo == 'local') {
+                                  _idLocal = r['id']?.toString();
+                                  _lugarNombre = r['nombre_local']?.toString();
+                                } else {
+                                  _idEvento = r['id_evento']?.toString();
+                                  _lugarNombre = r['titulo_evento']?.toString();
+                                }
+                                _resultados = const [];
+                              }),
+                              child: Container(
+                                margin: const EdgeInsets.only(top: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 11,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: ColoresApp.fondoSuperficie,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Avatar real del local (la copa queda solo
+                                    // como respaldo si todavía no tiene foto).
+                                    if (_lugarTipo == 'local')
+                                      _AvatarLocal(
+                                        url: ServicioSupabase().urlAvatar(
+                                          r['foto_perfil_url']?.toString(),
+                                        ),
+                                        size: 26,
+                                      ),
+                                    if (_lugarTipo == 'local')
+                                      const SizedBox(width: 9),
+                                    Expanded(
+                                      child: Text(
+                                        _lugarTipo == 'local'
+                                            ? '${r['nombre_local']}${(r['ciudad'] ?? '').toString().isNotEmpty ? ' · ${r['ciudad']}' : ''}'
+                                            : '🎟️ ${r['titulo_evento']}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.baloo2(
+                                          color: ColoresApp.textoPrincipal,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                       const SizedBox(height: 14),
                       _titulo('¿Cuándo?'),
                       _chips(
@@ -2781,11 +2857,11 @@ class _TarjetaPendiente extends StatelessWidget {
                         child: Text(
                           recopa
                               ? (esSquad
-                                  ? '🥂 ¡Les RE pinta el plan!'
-                                  : '🥂 ¡Le RE pinta tu plan!')
+                                    ? '🥂 ¡Les RE pinta el plan!'
+                                    : '🥂 ¡Le RE pinta tu plan!')
                               : (esSquad
-                                  ? '💜 ¡Les pinta el plan!'
-                                  : '💜 ¡Le pinta tu plan!'),
+                                    ? '💜 ¡Les pinta el plan!'
+                                    : '💜 ¡Le pinta tu plan!'),
                           style: GoogleFonts.baloo2(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
@@ -2817,9 +2893,7 @@ class _TarjetaPendiente extends StatelessWidget {
                                 child: Text(
                                   esSquad
                                       ? card.nombre
-                                      : card.nombre
-                                          .split(RegExp(r'\s+'))
-                                          .first,
+                                      : card.nombre.split(RegExp(r'\s+')).first,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.baloo2(
@@ -2959,9 +3033,7 @@ class _AvatarLocal extends StatelessWidget {
             : null,
       ),
       alignment: Alignment.center,
-      child: tiene
-          ? null
-          : Text('🍸', style: TextStyle(fontSize: size * 0.55)),
+      child: tiene ? null : Text('🍸', style: TextStyle(fontSize: size * 0.55)),
     );
   }
 }

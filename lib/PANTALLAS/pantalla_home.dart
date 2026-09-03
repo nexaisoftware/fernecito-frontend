@@ -23,6 +23,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/app_navigator.dart';
@@ -35,6 +36,7 @@ import '../core/secciones_impresion.dart';
 import '../core/servicio_estado_cuenta.dart';
 import '../core/servicio_impresiones.dart';
 import '../core/servicio_cartelera_locales.dart';
+import '../core/servicio_busqueda_cartelera.dart';
 import '../core/mezcla_cartelera_locales.dart';
 import '../core/servicio_planes.dart';
 import '../models/local_cartelera_card.dart';
@@ -49,6 +51,7 @@ import '../core/preferencias_cartelera.dart';
 import '../core/servicio_ubicacion_dispositivo.dart';
 import '../core/sexo_perfil.dart';
 import '../core/tema_fernecito.dart';
+import '../core/textos_legales.dart';
 import '../core/ubicaciones_data.dart';
 import '../widgets/avatar_local.dart';
 import '../widgets/cards_cartelera.dart';
@@ -165,6 +168,7 @@ class _PantallaHomeState extends State<PantallaHome>
   /// Se incrementa al entrar al tab Actividad para forzar `_cargarActividad` (IndexedStack no recrea el hijo).
   int _actividadReloadTick = 0;
   int _perfilReloadTick = 0;
+  int _perfilAbrirTerminosTick = 0;
 
   /// Se incrementa al entrar al tab Notificaciones para forzar recarga
   /// (IndexedStack no recrea el hijo).
@@ -172,6 +176,7 @@ class _PantallaHomeState extends State<PantallaHome>
   int _socialNavToken = 0;
   int? _socialAbrirAmigosSquadsTab;
   bool _mostrandoSalida = false;
+  bool _avisoTerminosMostradoEnSesion = false;
 
   final _srvNotificaciones = ServicioNotificacionesUsuarios();
 
@@ -287,6 +292,9 @@ class _PantallaHomeState extends State<PantallaHome>
     _cargarFotoPerfil();
     _verificarCuentaPausada();
     _srvNotificaciones.refrescarContador();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_mostrarAvisoTerminosSiCorresponde());
+    });
   }
 
   @override
@@ -321,6 +329,42 @@ class _PantallaHomeState extends State<PantallaHome>
     // Solo refresca el switch; el gate de AppFernecito (builder) toma el
     // control y muestra la pantalla bloqueante si quedó suspendida.
     await ServicioEstadoCuenta.instancia.refrescar();
+  }
+
+  Future<void> _mostrarAvisoTerminosSiCorresponde() async {
+    if (_avisoTerminosMostradoEnSesion || !mounted) return;
+    _avisoTerminosMostradoEnSesion = true;
+
+    final prefs = await SharedPreferences.getInstance();
+    final yaVisto = prefs.getBool(claveAvisoTerminosVistoFernecito) == true;
+    if (yaVisto || !mounted) return;
+
+    await showFernecitoDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => DialogoFernecito(
+        title: const Text('¡Bienvenido de nuevo!'),
+        content: Text(
+          'Fernecito App $versionAvisoTerminosFernecito trae muchas novedades: '
+          'nuevos matches, planes, cartelera y más.\n\n'
+          'También actualizamos nuestros Términos y la Política de Privacidad. '
+          'Revisalos para seguir usando Fernecito con toda la información clara.',
+        ),
+        actions: [
+          AccionDialogoFernecito(
+            onPressed: () async {
+              await prefs.setBool(claveAvisoTerminosVistoFernecito, true);
+              if (!ctx.mounted) return;
+              Navigator.of(ctx).pop();
+              if (!mounted) return;
+              _seleccionarTab(4);
+              setState(() => _perfilAbrirTerminosTick++);
+            },
+            child: const Text('Ver términos y privacidad'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _cargarFotoPerfil({bool forzar = false}) async {
@@ -410,8 +454,10 @@ class _PantallaHomeState extends State<PantallaHome>
               ),
               CupertinoTabView(
                 navigatorKey: _tabNavKeys[4],
-                builder: (context) =>
-                    PantallaMiPerfil(reloadTick: _perfilReloadTick),
+                builder: (context) => PantallaMiPerfil(
+                  reloadTick: _perfilReloadTick,
+                  abrirTerminosTick: _perfilAbrirTerminosTick,
+                ),
               ),
             ],
           ),
@@ -921,8 +967,279 @@ class _TabItemState extends State<_TabItem> {
 // CARTELERA — Pantalla principal
 // ============================================================================
 
+class PantallaCarteleraInvitado extends StatelessWidget {
+  const PantallaCarteleraInvitado({super.key, required this.onIrALogin});
+
+  final VoidCallback onIrALogin;
+
+  Future<void> _mostrarModalInvitado(
+    BuildContext context, {
+    String titulo = 'Entrá a Fernecito',
+    String mensaje =
+        'Creá tu cuenta o iniciá sesión para reservar tu QR, hacer amigos, '
+        'conocer personas y usar todo Fernecito App.',
+  }) async {
+    await showFernecitoDialog<void>(
+      context: context,
+      builder: (ctx) => DialogoFernecito(
+        title: Text(titulo),
+        content: Text(mensaje),
+        actions: [
+          AccionDialogoFernecito(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              onIrALogin();
+            },
+            child: const Text('Iniciar sesión'),
+          ),
+          AccionDialogoFernecito(
+            isDefaultAction: true,
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              onIrALogin();
+            },
+            child: const Text('Crear cuenta'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        _PantallaCartelera(
+          modoInvitado: true,
+          onAccionInvitado: (titulo, mensaje) =>
+              _mostrarModalInvitado(context, titulo: titulo, mensaje: mensaje),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _BarraInvitado(onIrALogin: onIrALogin),
+        ),
+      ],
+    );
+  }
+}
+
+class _BarraInvitado extends StatefulWidget {
+  const _BarraInvitado({required this.onIrALogin});
+
+  final VoidCallback onIrALogin;
+
+  @override
+  State<_BarraInvitado> createState() => _BarraInvitadoState();
+}
+
+class _BarraInvitadoState extends State<_BarraInvitado>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _attentionCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _attentionCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _attentionCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    final alto = math.max(MediaQuery.sizeOf(context).height * 0.26, 208.0);
+    return SizedBox(
+      height: alto + bottom,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.0),
+                      Colors.black.withValues(alpha: 0.72),
+                      Colors.black.withValues(alpha: 0.96),
+                      Colors.black.withValues(alpha: 1.0),
+                    ],
+                    stops: const [0.0, 0.28, 0.62, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: math.max(bottom, 12) + 18,
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _AtencionSuaveInvitado(
+                      controller: _attentionCtrl,
+                      inicio: 0.12,
+                      fin: 0.32,
+                      child: _BotonInvitado(
+                        label: 'Iniciar sesión',
+                        icon: CupertinoIcons.person_crop_circle_fill,
+                        destacado: false,
+                        onTap: widget.onIrALogin,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    _AtencionSuaveInvitado(
+                      controller: _attentionCtrl,
+                      inicio: 0.52,
+                      fin: 0.72,
+                      child: _BotonInvitado(
+                        label: 'Crear cuenta',
+                        icon: CupertinoIcons.sparkles,
+                        destacado: true,
+                        onTap: widget.onIrALogin,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AtencionSuaveInvitado extends StatelessWidget {
+  const _AtencionSuaveInvitado({
+    required this.controller,
+    required this.inicio,
+    required this.fin,
+    required this.child,
+  });
+
+  final AnimationController controller;
+  final double inicio;
+  final double fin;
+  final Widget child;
+
+  double _t(double v) {
+    if (v <= inicio || v >= fin) return 0;
+    final local = (v - inicio) / (fin - inicio);
+    return math.sin(local * math.pi);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      child: child,
+      builder: (context, child) {
+        final t = Curves.easeInOutCubic.transform(_t(controller.value));
+        return Transform.scale(scale: 1 + (0.018 * t), child: child);
+      },
+    );
+  }
+}
+
+class _BotonInvitado extends StatefulWidget {
+  const _BotonInvitado({
+    required this.label,
+    required this.icon,
+    required this.destacado,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool destacado;
+  final VoidCallback onTap;
+
+  @override
+  State<_BotonInvitado> createState() => _BotonInvitadoState();
+}
+
+class _BotonInvitadoState extends State<_BotonInvitado> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = TemaFernecito.instancia.colorActual.value;
+    final bg = widget.destacado ? accent : Colors.white;
+    final fg = widget.destacado ? Colors.white : Colors.black;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(17),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.24),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(widget.icon, size: 21, color: fg),
+              const SizedBox(width: 8),
+              Text(
+                widget.label,
+                maxLines: 1,
+                softWrap: false,
+                style: GoogleFonts.baloo2(
+                  color: fg,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PantallaCartelera extends StatefulWidget {
-  const _PantallaCartelera();
+  const _PantallaCartelera({this.modoInvitado = false, this.onAccionInvitado});
+
+  final bool modoInvitado;
+  final void Function(String titulo, String mensaje)? onAccionInvitado;
+
   @override
   State<_PantallaCartelera> createState() => _PantallaCarteleraState();
 }
@@ -970,20 +1287,24 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   void initState() {
     super.initState();
     _seedShuffle = DateTime.now().millisecondsSinceEpoch;
-    ServicioImpresiones.instancia.asegurarTimer();
-    ServicioEnlaceEvento.instancia.cambios.addListener(
-      _consumirEnlaceEventoPendiente,
-    );
+    if (!widget.modoInvitado) {
+      ServicioImpresiones.instancia.asegurarTimer();
+      ServicioEnlaceEvento.instancia.cambios.addListener(
+        _consumirEnlaceEventoPendiente,
+      );
+    }
     _arrancar();
   }
 
   @override
   void dispose() {
     _debounceBusqueda?.cancel();
-    ServicioImpresiones.instancia.alSalirCartelera();
-    ServicioEnlaceEvento.instancia.cambios.removeListener(
-      _consumirEnlaceEventoPendiente,
-    );
+    if (!widget.modoInvitado) {
+      ServicioImpresiones.instancia.alSalirCartelera();
+      ServicioEnlaceEvento.instancia.cambios.removeListener(
+        _consumirEnlaceEventoPendiente,
+      );
+    }
     super.dispose();
   }
 
@@ -1006,7 +1327,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     await PreferenciasCartelera.instancia.cargar();
     await _aplicarModoUbicacionAlArrancar();
     if (!mounted) return;
-    await _asegurarSexoUsuario();
+    if (!widget.modoInvitado) {
+      await _asegurarSexoUsuario();
+    }
     if (!mounted) return;
     await _cargar();
   }
@@ -1048,8 +1371,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     }
   }
 
-  /// Capa previa: si el modo inteligente está guardado, intenta GPS y arma el
-  /// set de ciudades hardcode a ≤20 km. Si falla, mantiene la ciudad del perfil.
+  /// Capa previa: si el modo inteligente está guardado, usa last-known / cache
+  /// (sin prompt GPS: el permiso requiere gesto del usuario). Si no hay fix,
+  /// conserva el set inteligente ya guardado o la ciudad del perfil.
   Future<void> _aplicarModoUbicacionAlArrancar() async {
     final prefs = PreferenciasCartelera.instancia;
     _carteleraInteligente = prefs.inteligenteActiva;
@@ -1061,36 +1385,91 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       return;
     }
 
+    // Prefs ya tienen un radio resuelto → úsalo sin pedir GPS en boot.
+    if (prefs.ciudadesInteligentes.isNotEmpty) {
+      _ciudadesActivas = {...prefs.ciudadesInteligentes};
+      _provinciaActiva = prefs.provinciaActiva ?? _provinciaActiva;
+    }
+
     try {
-      final gps = await ServicioUbicacionDispositivo.instancia
-          .iniciarDesdeGestoUsuario();
-      if (gps.exito && gps.latitud != null && gps.longitud != null) {
-        final cercanas = CoordenadasCiudades.ciudadesCercanas(
-          latitud: gps.latitud!,
-          longitud: gps.longitud!,
-          radioKm: PreferenciasCartelera.radioKmDefault,
-        );
-        if (cercanas.isNotEmpty) {
-          _ciudadesActivas = cercanas.toSet();
-          _provinciaActiva =
-              CoordenadasCiudades.provinciaDeCiudad(cercanas.first) ??
-              _provinciaActiva;
-          // Guarda el set del radio + la más cercana como principal en el perfil.
-          await ServicioUbicacionGlobal.aplicarInteligente(
-            ciudades: _ciudadesActivas,
-            provincia: _provinciaActiva,
-            principal: cercanas.first,
-          );
-          return;
-        }
-      }
+      final pos = await ServicioUbicacionDispositivo.instancia
+          .posicionAproximadaSinPrompt();
+      if (pos == null) return;
+      final cercanas = CoordenadasCiudades.ciudadesCercanas(
+        latitud: pos.latitude,
+        longitud: pos.longitude,
+        radioKm: PreferenciasCartelera.radioKmDefault,
+      );
+      if (cercanas.isEmpty) return;
+      _ciudadesActivas = cercanas.toSet();
+      _provinciaActiva =
+          CoordenadasCiudades.provinciaDeCiudad(cercanas.first) ??
+          _provinciaActiva;
+      await ServicioUbicacionGlobal.aplicarInteligente(
+        ciudades: _ciudadesActivas,
+        provincia: _provinciaActiva,
+        principal: cercanas.first,
+      );
     } catch (e) {
       debugPrint('⚠️ cartelera inteligente al arrancar: $e');
     }
-    // Fallback: queda la ciudad del perfil (ya seteada en _asegurarUbicacionUsuario).
   }
 
   Future<bool> _asegurarUbicacionUsuario() async {
+    if (widget.modoInvitado) {
+      await PreferenciasCartelera.instancia.cargar();
+      final prefs = PreferenciasCartelera.instancia;
+      if (prefs.ciudadesCustom.isNotEmpty) {
+        _provinciaActiva =
+            prefs.provinciaCustom ?? UbicacionesData.provinciaPorDefecto;
+        _ciudadesActivas = {...prefs.ciudadesCustom};
+        _carteleraInteligente = false;
+        return true;
+      }
+      if (prefs.ciudadesInteligentes.isNotEmpty) {
+        _provinciaActiva =
+            prefs.provinciaActiva ?? UbicacionesData.provinciaPorDefecto;
+        _ciudadesActivas = {...prefs.ciudadesInteligentes};
+        _carteleraInteligente = true;
+        return true;
+      }
+      if (!mounted) return false;
+      await _mostrarModalUbicacionRequerida();
+      while (mounted) {
+        if (!context.mounted) return false;
+        // ignore: use_build_context_synchronously
+        final res = await mostrarFiltroUbicacionesSheet(
+          context,
+          provinciaActual: UbicacionesData.provinciaPorDefecto,
+          ciudadesActuales: const <String>{},
+        );
+        if (res != null && res.ciudades.isNotEmpty) {
+          _provinciaActiva = res.provincia;
+          _ciudadesActivas = res.ciudades;
+          _carteleraInteligente = res.carteleraInteligente;
+          if (res.carteleraInteligente) {
+            await PreferenciasCartelera.instancia.setInteligente(true);
+            await PreferenciasCartelera.instancia.setInteligenteResuelto(
+              ciudades: res.ciudades,
+              provincia: res.provincia,
+              principal: res.ciudadPrincipal,
+            );
+          } else {
+            await PreferenciasCartelera.instancia.setInteligente(false);
+            await PreferenciasCartelera.instancia.setFiltroPersonalizado(
+              provincia: res.provincia,
+              ciudades: res.ciudades,
+              principal: res.ciudadPrincipal,
+            );
+          }
+          return true;
+        }
+        if (!mounted) return false;
+        await _mostrarModalUbicacionRequerida();
+      }
+      return false;
+    }
+
     final sb = ServicioSupabase().cliente;
     final uid = ServicioSupabase().usuarioActual?.id;
     if (uid == null) return false;
@@ -1125,6 +1504,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     if (!mounted) return false;
 
     while (mounted) {
+      if (!context.mounted) return false;
+      // ignore: use_build_context_synchronously
       final res = await mostrarFiltroUbicacionesSheet(
         context,
         provinciaActual: UbicacionesData.provinciaPorDefecto,
@@ -1319,7 +1700,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       _consumirEnlaceEventoPendiente();
 
       // Top Ultra y luego modal de reseña sobre la cartelera.
-      if (!_storiesYaMostrado) {
+      if (!_storiesYaMostrado && !widget.modoInvitado) {
         _storiesYaMostrado = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           unawaited(_flujoPostCargaCartelera());
@@ -1395,6 +1776,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     final nowIso = DateTime.now().toUtc().toIso8601String();
     final filtroVigencia =
         'fecha_fin_publicacion.gt.$nowIso,fecha_fin_publicacion.is.null';
+    // Sin filtro de ciudad en SQL: la cartelera filtra en cliente y la búsqueda
+    // usa BusquedaNatural sobre este pool (palabras incompletas + match por local).
     try {
       return await sb
           .from('eventos')
@@ -1457,12 +1840,13 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     List<String> idsPrioritariosCartelera,
   ) async {
     try {
+      final ciudadesOnFire = ServicioCarteleraLocales.expandirCiudadesQuery(
+        _ciudadesActivas,
+      );
       final tendencias = await sb.rpc(
         'cartelera_locales_on_fire',
         params: {
-          'p_ciudades': _ciudadesActivas.isEmpty
-              ? null
-              : _ciudadesActivas.toList(),
+          'p_ciudades': ciudadesOnFire.isEmpty ? null : ciudadesOnFire,
           'p_provincia': _provinciaActiva,
           'p_limite': 5,
         },
@@ -1547,7 +1931,13 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
         };
       }
 
-      // Fallback si ranking no trae nada: primero IDs de cartelera, luego completar.
+      // Fallback si ranking no trae nada: solo locales de las ciudades activas
+      // (nunca rellenar con el país entero).
+      final ciudadesFb = ServicioCarteleraLocales.expandirCiudadesQuery(
+        _ciudadesActivas,
+      );
+      if (ciudadesFb.isEmpty) return const [];
+
       List<Map<String, dynamic>> resultado = [];
       final vistos = <String>{};
 
@@ -1557,6 +1947,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
             .select(sel)
             .inFilter('id', idsPrioritariosCartelera)
             .eq('estado_cuenta', 'activa')
+            .inFilter('ciudad', ciudadesFb)
             .limit(40);
         for (final raw in rows as List) {
           final local = Map<String, dynamic>.from(raw as Map);
@@ -1566,19 +1957,20 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
         }
       }
 
-      if (resultado.length < 24) {
+      if (resultado.length < 5) {
         try {
           final extra = await sb
               .from('perfiles_locales')
               .select(sel)
               .eq('estado_cuenta', 'activa')
-              .limit(60);
+              .inFilter('ciudad', ciudadesFb)
+              .limit(40);
           for (final raw in extra as List) {
             final local = Map<String, dynamic>.from(raw as Map);
             final id = _claveIdLocal(local['id']) ?? '';
             if (id.isEmpty || !vistos.add(id)) continue;
             resultado.add(empacar(local));
-            if (resultado.length >= 36) break;
+            if (resultado.length >= 12) break;
           }
         } catch (_) {}
       }
@@ -1637,10 +2029,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       }
 
       for (final local in localesPopulares) {
-        agregar({
-          ...local,
-          'esNuevo': local['esNuevo'] == true,
-        });
+        agregar({...local, 'esNuevo': local['esNuevo'] == true});
       }
 
       for (final local in poolLocales) {
@@ -1761,10 +2150,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     final cupoMax = row['cupo_lista_max'] as int?;
     final cupoUsados = (row['cupo_lista_usados'] as int?) ?? 0;
     final nombreLocal =
-        (_primerCampoNoVacio(row, const [
-                  'nombre_local',
-                  'local_username',
-                ]) ??
+        (_primerCampoNoVacio(row, const ['nombre_local', 'local_username']) ??
                 '')
             .trim();
     final avatarPath = _primerCampoNoVacio(row, const [
@@ -1806,26 +2192,6 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   // FILTROS
   // ==========================================================================
 
-  bool _coincideQueryEventoBusqueda(Map<String, dynamic> e) {
-    return BusquedaNatural.coincide(_query, [
-      e['titulo'],
-      e['descripcion'],
-      e['tipoEvento'],
-      e['diaSemana'],
-      e['ciudadEvento'],
-      e['tienePromo'] == true ? 'promo promocion descuento' : null,
-    ]);
-  }
-
-  bool _coincideQueryLocalBusqueda(Map<String, dynamic> local) {
-    return BusquedaNatural.coincide(_query, [
-      local['nombre'],
-      local['rubro'],
-      local['ciudad'],
-      local['provincia'],
-    ]);
-  }
-
   bool _coincideQuery(Map<String, dynamic> e) {
     return BusquedaNatural.coincide(_query, [
       e['titulo'],
@@ -1843,121 +2209,68 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
 
   List<Map<String, dynamic>> _lugaresBusquedaFiltrados() {
     if (!_enModoBusqueda) return const [];
-    final resultado = <Map<String, dynamic>>[];
-    final vistos = <String>{};
-
-    void agregar(Map<String, dynamic> local, {required bool exigirMatch}) {
-      final id = _claveIdLocal(local['idLocal']) ?? '';
-      if (id.isEmpty || !vistos.add(id)) return;
-      if (exigirMatch && !_coincideQueryLocalBusqueda(local)) {
-        return;
-      }
-      resultado.add(local);
-    }
-
-    for (final local in _lugaresBusquedaRemote) {
-      agregar(local, exigirMatch: false);
-    }
-    for (final local in [..._exploraLugares, ..._locales]) {
-      agregar(local, exigirMatch: true);
-      if (resultado.length >= 30) break;
-    }
-    if (resultado.length < 30) {
-      for (final local in _poolLocalesCartelera) {
-        agregar(
-          {
-            'idLocal': local.localId,
-            'nombre': local.nombreLocal,
-            'avatar': local.avatarUrl ?? '',
-            'verificado': local.esVerificado,
-            'esPionero': local.esPionero,
-            'rubro': null,
-            'ciudad': local.ciudad,
-            'provincia': local.provincia,
-            'esNuevo': false,
-          },
-          exigirMatch: true,
-        );
-        if (resultado.length >= 30) break;
-      }
-    }
-    return resultado.take(30).toList(growable: false);
+    return _lugaresBusquedaRemote;
   }
 
   List<Map<String, dynamic>> _eventosBusquedaFiltrados() {
     if (!_enModoBusqueda) return const [];
-    final porContenido = <Map<String, dynamic>>[];
-    final porLocal = <Map<String, dynamic>>[];
-    final vistos = <String>{};
+    return _eventosBusquedaRemote;
+  }
 
-    bool agregar(Map<String, dynamic> e, List<Map<String, dynamic>> destino) {
-      final id = e['id']?.toString() ?? '';
-      if (id.isEmpty || !vistos.add(id)) return false;
-      destino.add(e);
-      return true;
-    }
-
-    // Remotos ya vienen ordenados: contenido primero, local después.
-    for (final e in _eventosBusquedaRemote) {
-      final porEvento = _coincideQueryEventoBusqueda(e);
-      agregar(e, porEvento ? porContenido : porLocal);
-    }
-
-    final idsLocalesMatch = <String>{};
-    for (final local in _lugaresBusquedaFiltrados()) {
-      final id = _claveIdLocal(local['idLocal']);
-      if (id != null && id.isNotEmpty) idsLocalesMatch.add(id);
-    }
-
-    for (final e in _eventos) {
-      if (_coincideQueryEventoBusqueda(e)) {
-        agregar(e, porContenido);
-        continue;
-      }
-      final idLocal = _claveIdLocal(e['idLocal']);
-      final localMatch = (idLocal != null && idsLocalesMatch.contains(idLocal)) ||
-          BusquedaNatural.coincide(_query, [
-            e['nombreLocal'],
-          ]);
-      if (localMatch) agregar(e, porLocal);
-    }
-
-    return [...porContenido, ...porLocal];
+  List<Map<String, dynamic>> _memoriaLocalesParaBusqueda() {
+    return <Map<String, dynamic>>[
+      ..._exploraLugares,
+      ..._locales,
+      for (final local in _poolLocalesCartelera)
+        {
+          'idLocal': local.localId,
+          'nombre': local.nombreLocal,
+          'avatar': local.avatarUrl ?? '',
+          'verificado': local.esVerificado,
+          'esPionero': local.esPionero,
+          'rubro': null,
+          'ciudad': local.ciudad,
+          'provincia': local.provincia,
+          'esNuevo': false,
+        },
+    ];
   }
 
   void _onQueryChanged(String q) {
     _debounceBusqueda?.cancel();
+    final trimmed = q.trim();
     setState(() {
+      // Invalidar in-flight sin pisar el requestId del próximo load dos veces.
       _planesBusquedaRequestId++;
       _busquedaCarteleraRequestId++;
       _query = q;
       _visiblesBusquedaEventos = 6;
       _visiblesBusquedaPlanes = 6;
       _cargandoPlanesBusqueda = false;
-      if (q.trim().isEmpty) {
+      if (trimmed.isEmpty) {
         _planesBusqueda = const [];
         _hayMasPlanesBusqueda = false;
         _lugaresBusquedaRemote = const [];
         _eventosBusquedaRemote = const [];
         _cargandoBusquedaCartelera = false;
+      } else if (trimmed.length >= 2) {
+        // Resultado YA desde memoria (BusquedaNatural) mientras llega la DB.
+        final instant = ServicioBusquedaCartelera.rankearDesdeMemoria(
+          query: trimmed,
+          locales: _memoriaLocalesParaBusqueda(),
+          eventos: _eventos,
+        );
+        _lugaresBusquedaRemote = instant.lugares;
+        _eventosBusquedaRemote = instant.eventos;
+        _cargandoBusquedaCartelera = true;
       }
     });
-    if (q.trim().isEmpty) return;
-    _debounceBusqueda = Timer(const Duration(milliseconds: 160), () {
+    if (trimmed.isEmpty) return;
+    _debounceBusqueda = Timer(const Duration(milliseconds: 220), () {
       if (!mounted) return;
       unawaited(_cargarPlanesBusqueda());
       unawaited(_cargarBusquedaCartelera());
     });
-  }
-
-  String _patronIlike(String q) {
-    return q
-        .replaceAll('%', '')
-        .replaceAll('_', '')
-        .replaceAll(',', ' ')
-        .replaceAll('(', '')
-        .replaceAll(')', '')
-        .trim();
   }
 
   Future<void> _cargarBusquedaCartelera() async {
@@ -1972,166 +2285,35 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       }
       return;
     }
-    final requestId = ++_busquedaCarteleraRequestId;
-    setState(() => _cargandoBusquedaCartelera = true);
-    final sb = ServicioSupabase().cliente;
-    final ciudades = ServicioCarteleraLocales.expandirCiudadesQuery(
-      _ciudadesActivas,
-    );
-
-    Future<({List<Map<String, dynamic>> lugares, List<Map<String, dynamic>> eventos})>
-    parsear(dynamic res) async {
-      if (res is! Map) {
-        return (lugares: const <Map<String, dynamic>>[], eventos: const <Map<String, dynamic>>[]);
-      }
-      final localesRaw = res['locales'];
-      final eventosRaw = res['eventos'];
-      final lugares = <Map<String, dynamic>>[];
-      if (localesRaw is List) {
-        for (final raw in localesRaw) {
-          if (raw is! Map) continue;
-          lugares.add(
-            _empacarLocalUi(sb, Map<String, dynamic>.from(raw)),
-          );
-        }
-      }
-      final eventos = <Map<String, dynamic>>[];
-      if (eventosRaw is List) {
-        for (final raw in eventosRaw) {
-          if (raw is! Map) continue;
-          final mapped = _eventoDesdeBusqueda(
-            sb,
-            Map<String, dynamic>.from(raw),
-          );
-          if ((mapped['id']?.toString() ?? '').isEmpty) continue;
-          eventos.add(mapped);
-        }
-      }
-      return (lugares: lugares, eventos: eventos);
-    }
+    final requestId = _busquedaCarteleraRequestId;
+    if (mounted) setState(() => _cargandoBusquedaCartelera = true);
 
     try {
-      var res = await sb.rpc(
-        'cartelera_buscar',
-        params: {
-          'p_q': q,
-          'p_ciudades': ciudades.isEmpty ? null : ciudades,
-          'p_limite_locales': 30,
-          'p_limite_eventos': 40,
-        },
+      final res = await ServicioBusquedaCartelera.instancia.buscar(
+        query: q,
+        ciudadesActivas: _ciudadesActivas,
+        empacarLocal: _empacarLocalUi,
+        empacarEvento: _eventoDesdeBusqueda,
+        perfilEmbedded: _perfilEmbeddedDesdeFila,
+        memoriaLocales: _memoriaLocalesParaBusqueda(),
+        memoriaEventos: _eventos,
       );
-      var parsed = await parsear(res);
-
-      if (parsed.lugares.isEmpty && ciudades.isNotEmpty) {
-        final resLoc = await sb.rpc(
-          'cartelera_buscar',
-          params: {
-            'p_q': q,
-            'p_ciudades': null,
-            'p_limite_locales': 30,
-            'p_limite_eventos': 0,
-          },
-        );
-        parsed = (
-          lugares: (await parsear(resLoc)).lugares,
-          eventos: parsed.eventos,
-        );
-      }
-
-      if (parsed.eventos.isEmpty && ciudades.isNotEmpty) {
-        final resEv = await sb.rpc(
-          'cartelera_buscar',
-          params: {
-            'p_q': q,
-            'p_ciudades': null,
-            'p_limite_locales': 0,
-            'p_limite_eventos': 40,
-          },
-        );
-        parsed = (
-          lugares: parsed.lugares,
-          eventos: (await parsear(resEv)).eventos,
-        );
-      }
-
       if (!mounted || requestId != _busquedaCarteleraRequestId) return;
       setState(() {
-        _lugaresBusquedaRemote = parsed.lugares;
-        _eventosBusquedaRemote = parsed.eventos;
+        // Si DB/RPC vino vacío, no borrar lo que ya mostró la memoria.
+        if (res.lugares.isNotEmpty) _lugaresBusquedaRemote = res.lugares;
+        if (res.eventos.isNotEmpty) _eventosBusquedaRemote = res.eventos;
         _cargandoBusquedaCartelera = false;
       });
-    } catch (e) {
-      debugPrint('⚠️ cartelera_buscar: $e');
-      try {
-        final like = _patronIlike(q);
-        if (like.isEmpty) throw e;
-        var localesQ = sb
-            .from('perfiles_locales')
-            .select(
-              'id, nombre_local, local_username, local_verificado, es_pionero, foto_perfil_url, '
-              'url_foto_banner, foto_local_1, foto_local_2, foto_local_3, rubro, ciudad, provincia, fecha_creacion',
-            )
-            .eq('estado_cuenta', 'activa');
-        if (ciudades.isNotEmpty) {
-          localesQ = localesQ.inFilter('ciudad', ciudades);
-        }
-        final localesRaw = await localesQ
-            .or('nombre_local.ilike.%$like%,local_username.ilike.%$like%')
-            .limit(30);
-
-        var eventosQ = sb
-            .from('eventos')
-            .select(
-              'id_evento, titulo_evento, descripcion_evento, url_flyer, fecha_inicio, fecha_fin, '
-              'jerarquia, tipo_evento, tiene_promo, cupo_lista_max, cupo_lista_usados, modo_lista, '
-              'id_local, ciudad_evento, provincia_evento, dia_semana, '
-              'perfiles_locales!eventos_id_local_fkey!inner('
-              'nombre_local, local_username, local_verificado, es_pionero, foto_perfil_url, '
-              'url_foto_banner, foto_local_1, foto_local_2, foto_local_3, rubro, ciudad, estado_cuenta'
-              ')',
-            )
-            .eq('estado_publicacion', 'publicado')
-            .eq('perfiles_locales.estado_cuenta', 'activa');
-        if (ciudades.isNotEmpty) {
-          eventosQ = eventosQ.inFilter('ciudad_evento', ciudades);
-        }
-        final eventosRaw = await eventosQ
-            .or(
-              'titulo_evento.ilike.%$like%,descripcion_evento.ilike.%$like%,tipo_evento.ilike.%$like%',
-            )
-            .limit(40);
-        if (!mounted || requestId != _busquedaCarteleraRequestId) return;
-        final lugares = <Map<String, dynamic>>[];
-        for (final raw in (localesRaw as List)) {
-          lugares.add(
-            _empacarLocalUi(sb, Map<String, dynamic>.from(raw as Map)),
-          );
-        }
-        final eventos = <Map<String, dynamic>>[];
-        for (final raw in (eventosRaw as List)) {
-          final row = Map<String, dynamic>.from(raw as Map);
-          final perfil = _perfilEmbeddedDesdeFila(row) ?? const <String, dynamic>{};
-          eventos.add(
-            _eventoDesdeBusqueda(sb, {
-              ...row,
-              ...perfil,
-            }),
-          );
-        }
-        setState(() {
-          _lugaresBusquedaRemote = lugares;
-          _eventosBusquedaRemote = eventos;
-          _cargandoBusquedaCartelera = false;
-        });
-      } catch (e2) {
-        debugPrint('⚠️ buscar cartelera fallback: $e2');
-        if (!mounted || requestId != _busquedaCarteleraRequestId) return;
-        setState(() => _cargandoBusquedaCartelera = false);
-      }
+    } catch (e, st) {
+      debugPrint('⚠️ buscar cartelera: $e\n$st');
+      if (!mounted || requestId != _busquedaCarteleraRequestId) return;
+      setState(() => _cargandoBusquedaCartelera = false);
     }
   }
 
   Future<void> _cargarPlanesBusqueda({bool cargarMas = false}) async {
+    if (widget.modoInvitado) return;
     final q = _query.trim();
     if (q.isEmpty) return;
     if (_cargandoPlanesBusqueda) return;
@@ -2146,16 +2328,26 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       modo: 'explorar',
       q: q,
     );
-    if (!mounted || requestId != _planesBusquedaRequestId || q != _query.trim()) {
+    if (!mounted ||
+        requestId != _planesBusquedaRequestId ||
+        q != _query.trim()) {
       if (mounted && requestId == _planesBusquedaRequestId) {
         setState(() => _cargandoPlanesBusqueda = false);
       }
       return;
     }
+    final rankeados = ServicioBusquedaCartelera.rankearPlanes<PlanComunidad>(
+      q,
+      res.items,
+      titulo: (p) => p.titulo,
+      lugar: (p) =>
+          [p.ciudad, p.nombreLocal].where((s) => s.trim().isNotEmpty).join(' '),
+      extraNombre: (p) => p.nombreOrganizador,
+    );
     setState(() {
       _planesBusqueda = cargarMas
-          ? [..._planesBusqueda, ...res.items]
-          : res.items;
+          ? [..._planesBusqueda, ...rankeados]
+          : rankeados;
       _hayMasPlanesBusqueda = res.hayMas;
       _cargandoPlanesBusqueda = false;
     });
@@ -2258,6 +2450,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   }
 
   void _abrirPlanBusqueda(PlanComunidad plan) {
+    if (_pedirLoginSiInvitado()) return;
     Navigator.of(context).push(
       CupertinoPageRoute(
         builder: (_) => PantallaVerPlan(idPlan: plan.id, inicial: plan),
@@ -2291,7 +2484,23 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       });
 
       // Unifica: guarda el set local + sincroniza la ciudad principal al perfil.
-      if (res.carteleraInteligente) {
+      if (widget.modoInvitado) {
+        if (res.carteleraInteligente) {
+          await PreferenciasCartelera.instancia.setInteligente(true);
+          await PreferenciasCartelera.instancia.setInteligenteResuelto(
+            ciudades: res.ciudades,
+            provincia: res.provincia,
+            principal: res.ciudadPrincipal,
+          );
+        } else {
+          await PreferenciasCartelera.instancia.setInteligente(false);
+          await PreferenciasCartelera.instancia.setFiltroPersonalizado(
+            provincia: res.provincia,
+            ciudades: res.ciudades,
+            principal: res.ciudadPrincipal,
+          );
+        }
+      } else if (res.carteleraInteligente) {
         await ServicioUbicacionGlobal.aplicarInteligente(
           ciudades: res.ciudades,
           provincia: res.provincia,
@@ -2304,29 +2513,35 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           principal: res.ciudadPrincipal,
         );
       }
-      await _recargarPoolLocales();
+      await _cargar(refrescando: true);
     }
-  }
-
-  Future<void> _recargarPoolLocales() async {
-    if (_ciudadesActivas.isEmpty) {
-      if (mounted) setState(() => _poolLocalesCartelera = const []);
-      return;
-    }
-    final pool = await ServicioCarteleraLocales.instancia.obtenerPorCiudades(
-      _ciudadesActivas,
-    );
-    if (mounted) setState(() => _poolLocalesCartelera = pool);
   }
 
   Future<void> _abrirMatchDesdeCartelera() async {
+    if (_pedirLoginInvitado(
+      titulo: 'Fernecito Match te está esperando',
+      mensaje:
+          'Descubrí gente con tu misma vibra, cruzá likes y armá salidas reales '
+          'con personas que también están buscando planes cerca tuyo.',
+    )) {
+      return;
+    }
     if (!mounted) return;
-    await Navigator.of(context, rootNavigator: true).push(
-      CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()),
-    );
+    await Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push(CupertinoPageRoute(builder: (_) => const PantallaFernecitoMatch()));
   }
 
   Future<void> _abrirPlanesDesdeCartelera() async {
+    if (_pedirLoginInvitado(
+      titulo: 'Planes para no quedarte afuera',
+      mensaje:
+          'Sumate a juntadas, previas y salidas creadas por la comunidad. '
+          'Entrá para reservar tu lugar, ver quiénes van y convertir una noche cualquiera en planazo.',
+    )) {
+      return;
+    }
     if (!mounted) return;
     await Navigator.of(context, rootNavigator: true).push(
       CupertinoPageRoute(
@@ -2337,6 +2552,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   }
 
   Future<void> _abrirTopUltraStories() async {
+    if (widget.modoInvitado) return;
     final ultras = _eventos
         .where(
           (e) =>
@@ -2371,6 +2587,10 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   }
 
   Future<void> _abrirCercaTuyo() async {
+    if (widget.modoInvitado) {
+      await _abrirFiltroUbicaciones();
+      return;
+    }
     final res = await Navigator.of(context).push<ResultadoFiltroUbicacion>(
       CupertinoPageRoute(
         builder: (_) => PantallaMapa(
@@ -2388,10 +2608,11 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       _ciudadesActivas = Set<String>.from(res.ciudades);
       _carteleraInteligente = res.carteleraInteligente;
     });
-    await _recargarPoolLocales();
+    await _cargar(refrescando: true);
   }
 
   void _irAEvento(String idEvento) {
+    if (_pedirLoginSiInvitado()) return;
     final ev = _eventos.firstWhere(
       (e) => e['id'] == idEvento,
       orElse: () => <String, dynamic>{},
@@ -2423,6 +2644,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           avatarUrl: local['avatar']?.toString() ?? '',
           nombreLocal: local['nombre']?.toString() ?? 'Local',
           idLocal: local['idLocal']?.toString(),
+          modoInvitado: widget.modoInvitado,
+          onAccionInvitado: _pedirLoginSiInvitado,
         ),
       ),
     );
@@ -2435,9 +2658,26 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           avatarUrl: local.avatarUrl ?? '',
           nombreLocal: local.nombreLocal,
           idLocal: local.localId,
+          modoInvitado: widget.modoInvitado,
+          onAccionInvitado: _pedirLoginSiInvitado,
         ),
       ),
     );
+  }
+
+  bool _pedirLoginSiInvitado() {
+    return _pedirLoginInvitado(
+      titulo: 'Entrá a Fernecito',
+      mensaje:
+          'Creá tu cuenta o iniciá sesión para reservar tu QR, hacer amigos, '
+          'conocer personas y usar todo Fernecito App.',
+    );
+  }
+
+  bool _pedirLoginInvitado({required String titulo, required String mensaje}) {
+    if (!widget.modoInvitado) return false;
+    widget.onAccionInvitado?.call(titulo, mensaje);
+    return true;
   }
 
   // ==========================================================================
@@ -2448,6 +2688,12 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   Widget build(BuildContext context) {
     // El splash full-screen lo pinta [PantallaHome]; acá solo el contenido.
     if (_cargando) {
+      if (widget.modoInvitado) {
+        return const ColoredBox(
+          color: ColoresApp.fondoPrincipal,
+          child: Center(child: IsotipoFernecitoLoader(size: 88)),
+        );
+      }
       return const ColoredBox(color: kVerdeSplashFernecito);
     }
     return Scaffold(
@@ -2464,14 +2710,15 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
                   onRefresh: _onPullToRefresh,
                   slivers: _buildSlivers(),
                 ),
-                Positioned(
-                  right: 16,
-                  bottom: homeFabBottomOffset(context),
-                  child: _PillMapaYQr(
-                    onMapa: _abrirCercaTuyo,
-                    onQr: _abrirScannerInvitacion,
+                if (!widget.modoInvitado)
+                  Positioned(
+                    right: 16,
+                    bottom: homeFabBottomOffset(context),
+                    child: _PillMapaYQr(
+                      onMapa: _abrirCercaTuyo,
+                      onQr: _abrirScannerInvitacion,
+                    ),
                   ),
-                ),
               ],
             );
           },
@@ -2510,7 +2757,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
       JerarquiasData.recomendadoFernecito.slug,
     );
     // top_ultra también entra al carrusel TOP (además de stories)
-    final ultras = _porJerarquia(filtrados, JerarquiasData.topUltra.slug);
+    final ultras = widget.modoInvitado
+        ? <Map<String, dynamic>>[]
+        : _porJerarquia(filtrados, JerarquiasData.topUltra.slug);
     final topsTotales = [...ultras, ...tops]
       ..shuffle(math.Random(_seedShuffle));
     final normales = _porJerarquia(filtrados, JerarquiasData.normal.slug);
@@ -2569,11 +2818,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
         const SliverPadding(padding: EdgeInsets.only(top: 8)),
         _buildSeccionBusquedaLugares(lugaresBusqueda),
         _buildSeccionBusquedaEventos(eventosBusqueda),
-        _buildSeccionBusquedaPlanes(),
+        if (!widget.modoInvitado) _buildSeccionBusquedaPlanes(),
         SliverPadding(
-          padding: EdgeInsets.only(
-            bottom: homeCarteleraScrollBottomPadding(context),
-          ),
+          padding: EdgeInsets.only(bottom: _bottomPaddingCartelera()),
         ),
       ];
     }
@@ -2587,7 +2834,7 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           padding: const EdgeInsets.fromLTRB(20, 10, 16, 0),
           child: Row(
             children: [
-              if (tieneTopUltra)
+              if (tieneTopUltra && !widget.modoInvitado)
                 TopUltraBadgeCartelera(onTap: _abrirTopUltraStories),
               const Spacer(),
               AtajoCarteleraBadge(
@@ -2600,6 +2847,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
                 label: 'Planes',
                 icono: Icons.nightlife_rounded,
                 onTap: _abrirPlanesDesdeCartelera,
+                // Después de Match: mismo ritmo cada 3s, desfasado.
+                delayInicial: const Duration(milliseconds: 1100),
               ),
             ],
           ),
@@ -2653,11 +2902,14 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           localesPop.isEmpty)
         _buildEmptyState(),
       SliverPadding(
-        padding: EdgeInsets.only(
-          bottom: homeCarteleraScrollBottomPadding(context),
-        ),
+        padding: EdgeInsets.only(bottom: _bottomPaddingCartelera()),
       ),
     ];
+  }
+
+  double _bottomPaddingCartelera() {
+    if (!widget.modoInvitado) return homeCarteleraScrollBottomPadding(context);
+    return 168 + MediaQuery.paddingOf(context).bottom;
   }
 
   List<Map<String, dynamic>> _porJerarquia(
@@ -2775,13 +3027,15 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
           onTiposChanged: (s) => setState(() => _tiposSeleccionados = s),
           filtroTiempo: _filtroTiempo,
           onFiltroTiempoChanged: (f) => setState(() => _filtroTiempo = f),
-          onBusquedaIa: (texto) {
-            mostrarBusquedaIaSheet(
-              context,
-              ciudades: _ciudadesActivas,
-              preguntaInicial: texto.isEmpty ? null : texto,
-            );
-          },
+          onBusquedaIa: widget.modoInvitado
+              ? null
+              : (texto) {
+                  mostrarBusquedaIaSheet(
+                    context,
+                    ciudades: _ciudadesActivas,
+                    preguntaInicial: texto.isEmpty ? null : texto,
+                  );
+                },
         ),
       ),
     );
@@ -2804,7 +3058,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     final filasVisibles = (paginar && !_verMasNormal)
         ? inicialesFilas.take(CapacidadCartelera.normalFilasIniciales).toList()
         : inicialesFilas;
-    final hayMas = paginar &&
+    final hayMas =
+        paginar &&
         inicialesFilas.length > CapacidadCartelera.normalFilasIniciales;
 
     return SliverToBoxAdapter(
@@ -2976,16 +3231,32 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     );
   }
 
-  /// El RPC ya filtró por ciudades activas (+ alias). No re-filtrar por string
-  /// exacto: "Córdoba" vs "Córdoba capital" vaciaba la sección.
+  /// Defensa en profundidad: RPC/fallback ya filtran por ciudad; revalidamos
+  /// con aliases (Córdoba ↔ Córdoba capital) por si la lista quedó stale.
+  bool _coincideCiudadLocalUi(Map<String, dynamic> local) {
+    if (_ciudadesActivas.isEmpty) return false;
+    final c = (local['ciudad']?.toString().trim() ?? '');
+    if (c.isEmpty) return true; // cards sin ciudad (pool) ya vinieron filtradas
+    if (_ciudadesActivas.contains(c)) return true;
+    return ServicioCarteleraLocales.expandirCiudadesQuery(
+      _ciudadesActivas,
+    ).contains(c);
+  }
+
   List<Map<String, dynamic>> _localesPopularesFiltrados() {
     if (_locales.isEmpty) return const [];
-    return _locales.take(5).toList(growable: false);
+    return _locales
+        .where(_coincideCiudadLocalUi)
+        .take(5)
+        .toList(growable: false);
   }
 
   List<Map<String, dynamic>> _exploraLugaresFiltrados() {
     if (_exploraLugares.isEmpty) return const [];
-    return _exploraLugares.take(30).toList(growable: false);
+    return _exploraLugares
+        .where(_coincideCiudadLocalUi)
+        .take(30)
+        .toList(growable: false);
   }
 
   // ---- Sección TOP 5 LOCALES TENDENCIA ----
@@ -3106,7 +3377,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   }
 
   Widget _buildSeccionBusquedaEventos(List<Map<String, dynamic>> eventos) {
-    final visibles = eventos.take(_visiblesBusquedaEventos).toList(growable: false);
+    final visibles = eventos
+        .take(_visiblesBusquedaEventos)
+        .toList(growable: false);
     final hayMas = eventos.length > _visiblesBusquedaEventos;
     return SliverToBoxAdapter(
       child: Padding(
@@ -3161,7 +3434,8 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
                 child: OutlinedButton.icon(
-                  onPressed: () => setState(() => _visiblesBusquedaEventos += 6),
+                  onPressed: () =>
+                      setState(() => _visiblesBusquedaEventos += 6),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: ColoresApp.textoPrincipal,
                     side: BorderSide(
@@ -3189,7 +3463,9 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
   }
 
   Widget _buildSeccionBusquedaPlanes() {
-    final visibles = _planesBusqueda.take(_visiblesBusquedaPlanes).toList(growable: false);
+    final visibles = _planesBusqueda
+        .take(_visiblesBusquedaPlanes)
+        .toList(growable: false);
     final hayMasVisibles = _planesBusqueda.length > _visiblesBusquedaPlanes;
     return SliverToBoxAdapter(
       child: Padding(
@@ -3844,10 +4120,7 @@ class _ExploraLugarItem extends StatelessWidget {
 }
 
 class _PlanBusquedaCard extends StatelessWidget {
-  const _PlanBusquedaCard({
-    required this.plan,
-    required this.onTap,
-  });
+  const _PlanBusquedaCard({required this.plan, required this.onTap});
 
   final PlanComunidad plan;
   final VoidCallback onTap;

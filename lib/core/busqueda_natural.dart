@@ -278,7 +278,9 @@ class BusquedaNatural {
     if (tok.isEmpty) return true;
     if (tok.length < 2) return false;
 
-    if (tok.length >= 4) {
+    // Prefijo desde 2 letras: "vi" / "vid" → "vidon".
+    // Antes solo desde 4, por eso parecía que “había que llegar a 4”.
+    if (tok.length >= 3) {
       if (hay.contains(tok) ||
           hay.replaceAll(' ', '').contains(tok.replaceAll(' ', ''))) {
         return true;
@@ -287,15 +289,14 @@ class BusquedaNatural {
 
     final raizTok = raiz(tok);
     for (final w in _palabras(hay)) {
-      if (tok.length <= 3) {
-        if (w == tok) return true;
-        continue;
-      }
-      if (tok.length >= 4 && w.length >= tok.length && w.startsWith(tok)) {
+      if (w == tok) return true;
+      if (w.length >= tok.length && w.startsWith(tok)) return true;
+      if (raizTok.length >= 2 && raiz(w) == raizTok) return true;
+      if (raizTok.length >= 2 &&
+          w.length >= raizTok.length &&
+          w.startsWith(raizTok)) {
         return true;
       }
-      if (raiz(w) == raizTok) return true;
-      if (raizTok.length >= 4 && w.startsWith(raizTok)) return true;
     }
     return false;
   }

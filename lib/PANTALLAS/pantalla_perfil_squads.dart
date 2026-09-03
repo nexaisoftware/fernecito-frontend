@@ -210,18 +210,21 @@ class _PantallaPerfilSquadsState extends State<PantallaPerfilSquads> {
         break;
       case EstadoRelacionSquad.solicitudEnviada:
         ok = await _srv.salir(_idGrupo);
-        if (ok && mounted)
+        if (ok && mounted) {
           setState(() => _estado = EstadoRelacionSquad.ninguno);
+        }
         break;
       case EstadoRelacionSquad.solicitudPendiente:
         ok = await _srv.responderInvitacion(_idGrupo, aceptar: true);
-        if (ok && mounted)
+        if (ok && mounted) {
           setState(() => _estado = EstadoRelacionSquad.miembro);
+        }
         break;
       case EstadoRelacionSquad.miembro:
         ok = await _srv.salir(_idGrupo);
-        if (ok && mounted)
+        if (ok && mounted) {
           setState(() => _estado = EstadoRelacionSquad.ninguno);
+        }
         break;
     }
     if (mounted) {

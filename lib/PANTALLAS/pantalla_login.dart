@@ -28,6 +28,8 @@ import '../core/tema_fernecito.dart';
 import '../core/supabase_client.dart';
 import '../core/auth_redirect.dart';
 import '../core/auth_errors.dart';
+import '../core/app_navigator.dart';
+import 'pantalla_home.dart';
 import 'pantalla_singup.dart';
 import 'pantalla_nueva_contrasena.dart';
 import '../widgets/fernecito_loader.dart';
@@ -349,6 +351,8 @@ class _PantallaLoginState extends State<PantallaLogin>
                               _construirSeparador(),
                               const SizedBox(height: 22),
                               _construirLinkRegistro(),
+                              const SizedBox(height: 14),
+                              _construirBotonInvitado(),
                             ],
                           ),
                         ),
@@ -647,6 +651,46 @@ class _PantallaLoginState extends State<PantallaLogin>
           ),
         );
       },
+    );
+  }
+
+  Widget _construirBotonInvitado() {
+    void volverALogin() {
+      final nav = navigatorKey.currentState ?? Navigator.of(context);
+      nav.pushAndRemoveUntil(
+        CupertinoPageRoute(builder: (_) => const PantallaLogin()),
+        (route) => false,
+      );
+    }
+
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: () {
+        Navigator.of(context).push(
+          CupertinoPageRoute(
+            builder: (_) => PantallaCarteleraInvitado(onIrALogin: volverALogin),
+          ),
+        );
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            CupertinoIcons.ticket,
+            size: 18,
+            color: ColoresApp.textoPrincipal,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Explorar cartelera',
+            style: GoogleFonts.baloo2(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: ColoresApp.textoPrincipal,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

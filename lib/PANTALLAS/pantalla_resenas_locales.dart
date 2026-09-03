@@ -165,10 +165,12 @@ class _PantallaResenasLocalesState extends State<PantallaResenasLocales> {
       return 'Ya publicaste varias reseñas hoy. Volvé a intentar en unas horas (máximo 5 por día).';
     }
     if (s.contains('invalid_stars')) return 'Elegí una calificación de 1 a 5.';
-    if (s.contains('comment_too_long'))
+    if (s.contains('comment_too_long')) {
       return 'El comentario es muy largo (máx 500 caracteres).';
-    if (s.contains('local_not_found'))
+    }
+    if (s.contains('local_not_found')) {
       return 'Este local ya no está disponible.';
+    }
     if (s.contains('duplicate_review')) {
       return 'No pudimos publicar: parece un duplicado. Probá de nuevo en unos segundos.';
     }

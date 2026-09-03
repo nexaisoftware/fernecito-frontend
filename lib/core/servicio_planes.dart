@@ -878,8 +878,8 @@ class ServicioPlanes {
         'p_contacto_modo': contactoModo == null
             ? null
             : ((contactoModo == 'vaquita' || contactoModo == 'colaborar')
-                ? 'vaquita'
-                : 'contactar'),
+                  ? 'vaquita'
+                  : 'contactar'),
         'p_limpiar_contacto': limpiarContacto,
       },
     );
@@ -919,9 +919,12 @@ class ServicioPlanes {
     Map<String, dynamic> borrador,
   ) async {
     try {
+      final session = _c.auth.currentSession;
+      if (session == null) return null;
       final res = await _c.functions.invoke(
         'asistente_plan_comunidad',
         body: {'intent': 'siguiente_paso', 'borrador': borrador},
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
       );
       final data = res.data;
       if (data is Map) return Map<String, dynamic>.from(data);

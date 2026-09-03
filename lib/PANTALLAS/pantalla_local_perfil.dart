@@ -84,7 +84,12 @@ class PantallaLocalPerfil extends StatefulWidget {
     required this.nombreLocal,
     this.idLocal,
     this.abrirCartaAlInicio = false,
+    this.modoInvitado = false,
+    this.onAccionInvitado,
   });
+
+  final bool modoInvitado;
+  final VoidCallback? onAccionInvitado;
 
   @override
   State<PantallaLocalPerfil> createState() => _PantallaLocalPerfilState();
@@ -435,6 +440,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   }
 
   Future<void> _cargarMegusta() async {
+    if (widget.modoInvitado) return;
     final id = widget.idLocal?.trim();
     if (id == null || id.isEmpty || _bloqueado) return;
     final est = await ServicioLocalesMegusta.instancia.estado(id);
@@ -446,6 +452,10 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   }
 
   Future<void> _onToggleMegusta() async {
+    if (widget.modoInvitado) {
+      widget.onAccionInvitado?.call();
+      return;
+    }
     final id = widget.idLocal?.trim();
     if (id == null || id.isEmpty || _toggleMegusta || _bloqueado) return;
     if (ServicioSupabase().usuarioActual == null) return;
@@ -503,6 +513,10 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   }
 
   void _abrirEvento(Map<String, dynamic> eventoRow) {
+    if (widget.modoInvitado) {
+      widget.onAccionInvitado?.call();
+      return;
+    }
     final id = eventoRow['id_evento']?.toString() ?? '';
     if (id.isEmpty) return;
     Navigator.of(context).push(
@@ -513,6 +527,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   }
 
   Future<void> _abrirUbicacion(BuildContext context) async {
+    if (_pedirLoginSiInvitado()) return;
     // Si el local cargó url_maps, lo usamos directo (Google Maps / Maps app).
     if (_urlMaps != null && _urlMaps!.isNotEmpty) {
       final u = Uri.tryParse(_urlMaps!);
@@ -533,6 +548,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   }
 
   Future<void> _abrirUrl(String urlString) async {
+    if (_pedirLoginSiInvitado()) return;
     var normalizada = urlString.trim();
     if (normalizada.isEmpty) return;
     if (!normalizada.startsWith('http://') &&
@@ -549,6 +565,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   }
 
   Future<void> _abrirWhatsappLocal() async {
+    if (_pedirLoginSiInvitado()) return;
     final telefono = (_telefonoWhatsapp ?? '').replaceAll(RegExp(r'\D'), '');
     if (telefono.length < 10) return;
     final mensaje =
@@ -587,6 +604,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   }
 
   void _mostrarCartaLocal(BuildContext context) {
+    if (_pedirLoginSiInvitado()) return;
     _mostrarCartaLocalSheet(
       context: context,
       nombreLocal: widget.nombreLocal,
@@ -596,6 +614,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
 
   /// Menú "3 puntitos" del local. Por ahora solo Reportar (oculto a la vista).
   void _abrirMenuLocal() {
+    if (_pedirLoginSiInvitado()) return;
     showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => CupertinoActionSheet(
@@ -626,18 +645,18 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   }
 
   Future<void> _compartirLocal() async {
+    if (_pedirLoginSiInvitado()) return;
     final nombre = widget.nombreLocal.trim().isEmpty
         ? 'este local'
         : widget.nombreLocal.trim();
     final base = kAuthRedirectWebProduccion.replaceAll(RegExp(r'/$'), '');
     await SharePlus.instance.share(
-      ShareParams(
-        text: 'Mirá $nombre en Fernecito 🍸\n$base',
-      ),
+      ShareParams(text: 'Mirá $nombre en Fernecito 🍸\n$base'),
     );
   }
 
   Future<void> _reportarLocal() async {
+    if (_pedirLoginSiInvitado()) return;
     final id = widget.idLocal;
     if (id == null || id.isEmpty) return;
     await mostrarFlujoReporte(
@@ -649,6 +668,7 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
   }
 
   Future<void> _bloquearLocal() async {
+    if (_pedirLoginSiInvitado()) return;
     final id = widget.idLocal;
     if (id == null || id.isEmpty) return;
     final bloqueado = await mostrarFlujoBloqueo(
@@ -659,6 +679,12 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
     );
     // Al bloquear, volvemos atrás: ya no deberías ver este local.
     if (bloqueado && mounted) Navigator.of(context).maybePop();
+  }
+
+  bool _pedirLoginSiInvitado() {
+    if (!widget.modoInvitado) return false;
+    widget.onAccionInvitado?.call();
+    return true;
   }
 
   Widget _buildLocalBloqueado(BuildContext context) {
@@ -995,9 +1021,10 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                         _sitioWebUrl != null &&
                                         _sitioWebUrl!.isNotEmpty;
                                     final ubiOk =
-                                        _ubicacionTextoComputed.isNotEmpty ||
-                                        (_direccion ?? '').isNotEmpty ||
-                                        (_urlMaps ?? '').isNotEmpty;
+                                        !_esOrganizadorEventos &&
+                                        (_ubicacionTextoComputed.isNotEmpty ||
+                                            (_direccion ?? '').isNotEmpty ||
+                                            (_urlMaps ?? '').isNotEmpty);
                                     return Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
@@ -1050,6 +1077,12 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                         ),
                       ),
                     ),
+                    if (_esOrganizadorEventos)
+                      Positioned(
+                        top: padding.top + 14,
+                        left: horizontalPadding,
+                        child: const _BadgeOrganizadorEventos(),
+                      ),
                     Positioned(
                       top: padding.top + 6,
                       right: horizontalPadding - 4,
@@ -1090,8 +1123,9 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                           child: BotonMegustaLocalHero(
                             cantidad: _cantidadMegusta,
                             activo: _yoMegusta,
-                            habilitado:
-                                ServicioSupabase().usuarioActual != null,
+                            habilitado: widget.modoInvitado
+                                ? true
+                                : ServicioSupabase().usuarioActual != null,
                             cargando: _toggleMegusta,
                             onTap: _onToggleMegusta,
                           ),
@@ -1149,12 +1183,8 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                              if (_esPionero) ...[
+                            if (_esPionero) ...[
                               _BadgeBestChoicePerfil(),
-                              const SizedBox(height: 12),
-                            ],
-                            if (_esOrganizadorEventos) ...[
-                              const _BadgeOrganizadorEventos(),
                               const SizedBox(height: 12),
                             ],
                             if (_descripcion != null &&
@@ -1193,8 +1223,9 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                                   ? null
                                   : () => _mostrarCartaLocal(context),
                             ),
-                            if (_ubicacionTextoComputed.isNotEmpty ||
-                                (_direccion ?? '').isNotEmpty) ...[
+                            if (!_esOrganizadorEventos &&
+                                (_ubicacionTextoComputed.isNotEmpty ||
+                                    (_direccion ?? '').isNotEmpty)) ...[
                               const SizedBox(height: 12),
                               Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1483,6 +1514,8 @@ class _PantallaLocalPerfilState extends State<PantallaLocalPerfil> {
                             esPionero: loc['esPionero'] == true,
                             rubro: loc['rubro'] as String? ?? '',
                             ciudad: loc['ciudad'] as String? ?? '',
+                            modoInvitado: widget.modoInvitado,
+                            onAccionInvitado: widget.onAccionInvitado,
                           ),
                         ),
                     ],
@@ -1647,6 +1680,8 @@ class _CardLugarPopular extends StatelessWidget {
   final bool esPionero;
   final String rubro;
   final String ciudad;
+  final bool modoInvitado;
+  final VoidCallback? onAccionInvitado;
 
   const _CardLugarPopular({
     required this.idLocal,
@@ -1656,6 +1691,8 @@ class _CardLugarPopular extends StatelessWidget {
     required this.esPionero,
     required this.rubro,
     required this.ciudad,
+    this.modoInvitado = false,
+    this.onAccionInvitado,
   });
 
   static const _doradoPionero = Color(0xFFE0B800);
@@ -1677,6 +1714,8 @@ class _CardLugarPopular extends StatelessWidget {
               avatarUrl: avatar,
               nombreLocal: nombre,
               idLocal: idLocal.isEmpty ? null : idLocal,
+              modoInvitado: modoInvitado,
+              onAccionInvitado: onAccionInvitado,
             ),
           ),
         );
@@ -2309,39 +2348,39 @@ class _BadgeEstadoHorarioPublico extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                      Text(
-                        estado.titulo,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.baloo2(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w900,
-                          color: estado.abierto
-                              ? color
-                              : ColoresApp.textoPrincipal,
-                          height: 1.05,
-                        ),
+                    Text(
+                      estado.titulo,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.baloo2(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w900,
+                        color: estado.abierto
+                            ? color
+                            : ColoresApp.textoPrincipal,
+                        height: 1.05,
                       ),
-                      Text(
-                        estado.detalle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.baloo2(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: ColoresApp.textoSecundario,
-                          height: 1.1,
-                        ),
+                    ),
+                    Text(
+                      estado.detalle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.baloo2(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: ColoresApp.textoSecundario,
+                        height: 1.1,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 5),
-                Icon(
-                  CupertinoIcons.chevron_up_chevron_down,
-                  size: 12,
-                  color: ColoresApp.textoSecundario,
-                ),
+              ),
+              const SizedBox(width: 5),
+              Icon(
+                CupertinoIcons.chevron_up_chevron_down,
+                size: 12,
+                color: ColoresApp.textoSecundario,
+              ),
             ],
           ),
         ),

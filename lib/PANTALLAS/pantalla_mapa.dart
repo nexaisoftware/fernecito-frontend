@@ -7,9 +7,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
-
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show Color;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/constants.dart';
 import '../core/coordenadas_ciudades.dart';
@@ -576,6 +574,30 @@ class _PantallaMapaState extends State<PantallaMapa>
                 activo: _ubicacionActiva,
                 cargando: _obteniendoUbicacion,
                 onTap: _obteniendoUbicacion ? null : _tapBotonUbicacion,
+              ),
+            ),
+
+            Positioned(
+              left: 10,
+              bottom: switchBottom + 66,
+              child: GestureDetector(
+                onTap: () => launchUrl(
+                  Uri.parse('https://carto.com/attributions/'),
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color(0x990D0D0F),
+                    borderRadius: BorderRadius.all(Radius.circular(5)),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    child: Text(
+                      '© OpenStreetMap  © CARTO',
+                      style: TextStyle(color: Color(0xFFBDBDC2), fontSize: 9),
+                    ),
+                  ),
+                ),
               ),
             ),
 

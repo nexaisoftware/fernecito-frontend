@@ -34,6 +34,12 @@ import 'social_ui.dart';
 
 const _calculadorDistancia = Distance();
 
+const _cartoBasemapsKey = String.fromEnvironment('CARTO_BASEMAPS_KEY');
+
+String get _urlTilesMapa =>
+    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    '?key=${Uri.encodeQueryComponent(_cartoBasemapsKey)}';
+
 String? textoDistanciaDesdeUsuario(LatLng? usuario, LatLng destino) {
   if (usuario == null) return null;
   final metros = _calculadorDistancia(usuario, destino);
@@ -72,8 +78,7 @@ class CapaTilesMapaConTema extends StatelessWidget {
         return ColorFiltered(
           colorFilter: _filtroCallesMapaTematizado(accent),
           child: TileLayer(
-            urlTemplate:
-                'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            urlTemplate: _urlTilesMapa,
             subdomains: const ['a', 'b', 'c', 'd'],
             retinaMode: RetinaMode.isHighDensity(context),
             userAgentPackageName: 'com.nexaisoftware.fernecitoapp',
@@ -368,7 +373,10 @@ class PinClusterMapa extends StatelessWidget {
             offset: const Offset(0, 2),
           ),
         ],
-        border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 2),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.85),
+          width: 2,
+        ),
       ),
       child: Text(
         label,
