@@ -12,13 +12,17 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../core/constants.dart';
 import '../core/flujo_reporte.dart';
 import '../core/lanzador_externo.dart';
+import '../core/layout_navbar.dart';
+import '../core/promos_hot.dart';
 import '../core/servicio_actividad_usuario.dart';
 import '../core/servicio_impresiones.dart';
+import '../core/servicio_reservar_promocion.dart';
 import '../core/servicio_squads.dart';
 import '../core/supabase_client.dart';
 import '../widgets/avatar_local.dart';
 import '../widgets/boton_compartir_evento.dart';
 import '../widgets/fernecito_loader.dart';
+import '../widgets/flyer_red_con_fallback.dart';
 import 'pantalla_actividad.dart';
 import 'pantalla_local_perfil.dart';
 import 'pantalla_pools.dart';
@@ -49,6 +53,9 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
   List<Map<String, dynamic>> _squadsUsuario = [];
   bool _enviandoReserva = false;
   List<Map<String, dynamic>> _promos = [];
+  final Map<String, String> _tokensPromo = {};
+  final Map<String, String> _estadoTokenPromo = {};
+  bool _obteniendoHot = false;
   Map<String, dynamic>? _miToken;
   Map<String, dynamic>? _infoLocal;
   String? _localAvatarResuelto;
@@ -310,6 +317,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
               )
               .toList();
           debugPrint('🎁 Promos activas finales: ${_promos.length}');
+          await _cargarTokensPromoUsuario();
         } catch (e, st) {
           debugPrint('⚠️ Error cargando promos del evento $eventoId: $e\n$st');
           _promos = [];
@@ -440,6 +448,64 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
     return m;
   }
 
+  bool get _eventoMarcadoHot {
+    final tipo = (_tipoEventoCargado ?? widget.evento['tipoEvento'] ?? '')
+        .toString()
+        .toLowerCase();
+    final modo = (_modoEventoCargado ?? '').toLowerCase();
+    return tipo.contains('hot') || modo.contains('hot');
+  }
+
+  List<Map<String, dynamic>> get _promosHot {
+    return _promos
+        .where((p) => esPromoHot(p) || !requiereAsistenciaPromo(p))
+        .toList();
+  }
+
+  Map<String, dynamic>? get _promoHotUnica {
+    if (_promos.length == 1 &&
+        (esPromoHot(_promos.first) ||
+            !requiereAsistenciaPromo(_promos.first) ||
+            _eventoMarcadoHot)) {
+      return _promos.first;
+    }
+    if (_promosHot.length == 1 && _promos.length == 1) return _promosHot.first;
+    return null;
+  }
+
+  bool get _ctaHotDirecta => _promoHotUnica != null;
+
+  Future<void> _cargarTokensPromoUsuario() async {
+    _tokensPromo.clear();
+    _estadoTokenPromo.clear();
+    final sb = ServicioSupabase().cliente;
+    final userId = sb.auth.currentUser?.id;
+    if (userId == null || _promos.isEmpty) return;
+    final ids = _promos
+        .map((p) => p['id_promocion']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (ids.isEmpty) return;
+    try {
+      final rows = await sb
+          .from('tokens_promociones')
+          .select('id_promocion, token_codigo, estado_token')
+          .eq('id_usuario', userId)
+          .inFilter('id_promocion', ids)
+          .inFilter('estado_token', kEstadosTokenPromoUsuario);
+      for (final t in (rows as List)) {
+        final idP = t['id_promocion']?.toString() ?? '';
+        final codigo = t['token_codigo']?.toString() ?? '';
+        if (idP.isEmpty || codigo.isEmpty) continue;
+        _tokensPromo[idP] = codigo;
+        _estadoTokenPromo[idP] =
+            t['estado_token']?.toString().toLowerCase() ?? 'activo';
+      }
+    } catch (e) {
+      debugPrint('⚠️ tokens promo ver evento: $e');
+    }
+  }
+
   /// Normaliza el cuerpo de error de una Edge (Map o JSON en string).
   Map<String, dynamic>? _detallesEdge(dynamic details) {
     if (details == null) return null;
@@ -558,43 +624,10 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                             borderRadius: BorderRadius.circular(16),
                             child: AspectRatio(
                               aspectRatio: 9 / 16,
-                              child: flyerUrl.isNotEmpty
-                                  ? CachedNetworkImage(
-                                      imageUrl: flyerUrl,
-                                      fit: BoxFit.cover,
-                                      placeholder: (_, __) => Container(
-                                        color: ColoresApp.fondoSuperficie,
-                                        child: const Center(
-                                          child: FernecitoLoader.inline(
-                                            size: 16,
-                                          ),
-                                        ),
-                                      ),
-                                      errorWidget: (_, __, ___) => Image.asset(
-                                        flyerAsset,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => Container(
-                                          color: ColoresApp.fondoSuperficie,
-                                          child: const Icon(
-                                            CupertinoIcons.photo,
-                                            size: 64,
-                                            color: ColoresApp.textoSecundario,
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                  : Image.asset(
-                                      flyerAsset,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        color: ColoresApp.fondoSuperficie,
-                                        child: const Icon(
-                                          CupertinoIcons.photo,
-                                          size: 64,
-                                          color: ColoresApp.textoSecundario,
-                                        ),
-                                      ),
-                                    ),
+                              child: FlyerRedConFallback(
+                                url: flyerUrl,
+                                assetFallback: flyerAsset,
+                              ),
                             ),
                           ),
                         ),
@@ -606,7 +639,12 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
 
               // —— 2) Info: tarjeta título + descripción, tarjeta reserva+promos, tarjeta del local ——
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  20,
+                  20,
+                  paddingBottomDetalleSobreNav(context),
+                ),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     // Tarjeta evento: título, descripción, fecha inicio + chips info
@@ -645,12 +683,25 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                           ? () => _abrirUrlExterna(_urlCompraEntradas!)
                           : null,
                       enviandoReserva: _enviandoReserva,
+                      obteniendoHot: _obteniendoHot,
                       promosCount: _promos.length,
                       mostrarBotonPromos:
                           !_esModoInvitacion &&
                           (_promos.isNotEmpty ||
                               _tienePromoCargado ||
                               widget.evento['tienePromo'] == true),
+                      esHotSeSale: _ctaHotDirecta || _eventoMarcadoHot,
+                      cuposPromoLibres: _promoHotUnica != null
+                          ? cuposLibresPromo(_promoHotUnica!)
+                          : null,
+                      yaTieneCuponHot: _promoHotUnica != null &&
+                          (_tokensPromo[_promoHotUnica!['id_promocion']
+                                      ?.toString() ??
+                                  '']
+                              ?.isNotEmpty ??
+                          false),
+                      ocultarListaPorHot: _ctaHotDirecta &&
+                          !requiereAsistenciaPromo(_promoHotUnica!),
                     ),
                     if (!_esModoInvitacion) ...[
                       const SizedBox(height: 16),
@@ -702,7 +753,7 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
                         idEventoActual: idEvActual.isEmpty ? null : idEvActual,
                       ),
                     ],
-                    const SizedBox(height: 84),
+                    SizedBox(height: paddingBottomDetalleSobreNav(context)),
                   ]),
                 ),
               ),
@@ -1430,12 +1481,24 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
   }
 
   void _abrirBottomSheetPromos() {
+    final unica = _promoHotUnica;
+    if (unica != null) {
+      unawaited(_obtenerOMostrarHot(unica));
+      return;
+    }
     // Mismo sheet que Mi Actividad: si tu lista está aceptada podés OBTENER la
     // promo y ver su QR; si no, lectura. Carga las promos fresh de Supabase.
-    final puedeObtenerPromos = listaPermitePromosUsuario(
+    final puedeObtenerPromos = listaPermiteObtenerPromos(
       _miToken?['estado_token']?.toString(),
     );
     final eventoId = _idEventoClave();
+    final precarga = <String, SnapshotTokenPromo>{};
+    for (final e in _tokensPromo.entries) {
+      precarga[e.key] = SnapshotTokenPromo(
+        codigo: e.value,
+        estadoToken: _estadoTokenPromo[e.key] ?? 'activo',
+      );
+    }
     showCupertinoModalPopup<void>(
       context: context,
       builder: (ctx) => BottomSheetPromos(
@@ -1445,8 +1508,49 @@ class _PantallaVerEventoState extends State<PantallaVerEvento> {
         },
         idEvento: eventoId,
         puedeObtenerPromos: puedeObtenerPromos,
-        promoTokensPrecarga: const <String, SnapshotTokenPromo>{},
+        promoTokensPrecarga: precarga,
         onReloadActividadDesdePromos: _cargarDatos,
+      ),
+    );
+  }
+
+  Future<void> _obtenerOMostrarHot(Map<String, dynamic> promo) async {
+    final idPromo = promo['id_promocion']?.toString() ?? '';
+    final codigo = _tokensPromo[idPromo] ?? '';
+    if (codigo.isNotEmpty) {
+      _mostrarQrPromo(codigo, tituloVisiblePromo(promo));
+      return;
+    }
+    if (_obteniendoHot) return;
+    setState(() => _obteniendoHot = true);
+    final r = await ServicioReservarPromocion.instancia.reservar(
+      idPromocion: idPromo,
+      idEvento: _idEventoClave(),
+    );
+    if (!mounted) return;
+    setState(() => _obteniendoHot = false);
+    if (r.ok) {
+      HapticFeedback.mediumImpact();
+      if ((r.codigo ?? '').isNotEmpty) {
+        setState(() {
+          _tokensPromo[idPromo] = r.codigo!;
+          _estadoTokenPromo[idPromo] = r.estadoToken ?? 'activo';
+        });
+        _mostrarQrPromo(r.codigo!, tituloVisiblePromo(promo));
+      } else {
+        await _cargarDatos();
+      }
+      return;
+    }
+    _mostrarError(r.errorMensaje ?? 'Intentá de nuevo en unos momentos.');
+  }
+
+  void _mostrarQrPromo(String codigo, String titulo) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => _BottomSheetMiQR(
+        codigo: codigo,
+        tituloEvento: titulo,
       ),
     );
   }
@@ -1707,10 +1811,15 @@ class _TarjetaReservaYPromos extends StatelessWidget {
   final VoidCallback? onVerQR;
   final VoidCallback? onComprarEntradas;
   final bool enviandoReserva;
+  final bool obteniendoHot;
   final int promosCount;
   final bool mostrarBotonPromos;
   final bool esModoInvitacion;
   final bool esModoSimple;
+  final bool esHotSeSale;
+  final int? cuposPromoLibres;
+  final bool yaTieneCuponHot;
+  final bool ocultarListaPorHot;
 
   const _TarjetaReservaYPromos({
     required this.evento,
@@ -1721,9 +1830,14 @@ class _TarjetaReservaYPromos extends StatelessWidget {
     this.onVerQR,
     this.onComprarEntradas,
     this.enviandoReserva = false,
+    this.obteniendoHot = false,
     this.promosCount = 0,
     this.mostrarBotonPromos = false,
     this.esModoInvitacion = false,
+    this.esHotSeSale = false,
+    this.cuposPromoLibres,
+    this.yaTieneCuponHot = false,
+    this.ocultarListaPorHot = false,
   });
 
   @override
@@ -1794,7 +1908,7 @@ class _TarjetaReservaYPromos extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Chip FOMO: solo mostrar si cupo limitado (no en invitación)
-          if (cupoLimitado && !esModoInvitacion) ...[
+          if (cupoLimitado && !esModoInvitacion && !ocultarListaPorHot) ...[
             Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1876,7 +1990,10 @@ class _TarjetaReservaYPromos extends StatelessWidget {
             ],
           ],
 
-          if (puedeReservarDeNuevo && esPaseLibre && !esModoInvitacion) ...[
+          if (puedeReservarDeNuevo &&
+              esPaseLibre &&
+              !esModoInvitacion &&
+              !ocultarListaPorHot) ...[
             Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -1910,7 +2027,61 @@ class _TarjetaReservaYPromos extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-          if (puedeReservarDeNuevo)
+          if (ocultarListaPorHot) ...[
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: ColoresApp.fondoSuperficie,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Sin lista · solo cupón QR',
+                  style: GoogleFonts.baloo2(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: ColoresApp.textoSecundario,
+                  ),
+                ),
+              ),
+            ),
+            if (cuposPromoLibres != null) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: ColoresApp.peligroMarca.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        CupertinoIcons.flame_fill,
+                        size: 11,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Quedan $cuposPromoLibres cupones',
+                        style: GoogleFonts.baloo2(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+          ],
+          if (puedeReservarDeNuevo && !ocultarListaPorHot)
             CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed: enviandoReserva ? null : onReservaLista,
@@ -1963,14 +2134,15 @@ class _TarjetaReservaYPromos extends StatelessWidget {
                 ),
               ),
             ),
-          if (puedeReservarDeNuevo) const SizedBox(height: 12),
+          if (puedeReservarDeNuevo && !ocultarListaPorHot)
+            const SizedBox(height: 12),
 
           // Botón promos: aparece si el evento tiene promo (flag local) o ya cargamos rows.
-          // El sheet se encarga del empty state.
+          // El sheet se encarga del empty state. Hot de una sola promo obtiene directo.
           if (mostrarBotonPromos)
             CupertinoButton(
               padding: EdgeInsets.zero,
-              onPressed: onVerPromos,
+              onPressed: obteniendoHot ? null : onVerPromos,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1989,14 +2161,25 @@ class _TarjetaReservaYPromos extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      CupertinoIcons.gift_fill,
-                      size: 18,
-                      color: Colors.white,
-                    ),
+                    if (obteniendoHot)
+                      const FernecitoLoader.inline(size: 18, color: Colors.white)
+                    else
+                      Icon(
+                        yaTieneCuponHot
+                            ? CupertinoIcons.qrcode
+                            : CupertinoIcons.gift_fill,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                     const SizedBox(width: 8),
                     Text(
-                      promosCount > 0
+                      obteniendoHot
+                          ? 'Obteniendo…'
+                          : yaTieneCuponHot && esHotSeSale
+                          ? 'Ver mi QR'
+                          : esHotSeSale
+                          ? 'Obtener promo'
+                          : promosCount > 0
                           ? 'Ver promos ($promosCount)'
                           : 'Ver promos del evento',
                       style: GoogleFonts.baloo2(
@@ -2009,7 +2192,11 @@ class _TarjetaReservaYPromos extends StatelessWidget {
                 ),
               ),
             ),
-          if (mostrarBotonPromos && !tokenAceptado && !yaReservado) ...[
+          if (mostrarBotonPromos &&
+              !tokenAceptado &&
+              !yaReservado &&
+              !ocultarListaPorHot &&
+              !esHotSeSale) ...[
             const SizedBox(height: 6),
             Center(
               child: Text(
