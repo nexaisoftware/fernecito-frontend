@@ -19,17 +19,10 @@ import '../core/ubicaciones_data.dart';
 import '../widgets/filtro_ubicaciones_sheet.dart';
 import '../widgets/fernecito_loader.dart';
 import '../widgets/mapa_ui.dart';
+import '../core/layout_navbar.dart';
 import '../widgets/dialogo_fernecito.dart';
 import 'pantalla_local_perfil.dart';
 import 'pantalla_ver_evento.dart';
-
-const _kHomeTabBarHeight = 66.0;
-
-double _homeTabBarBottomInset(BuildContext context) {
-  final safe = MediaQuery.paddingOf(context).bottom;
-  if (safe <= 10) return safe;
-  return (safe * 0.35).clamp(10.0, 14.0);
-}
 
 class PantallaMapa extends StatefulWidget {
   const PantallaMapa({
@@ -420,7 +413,7 @@ class _PantallaMapaState extends State<PantallaMapa>
     final padding = MediaQuery.paddingOf(context);
     final cardTop = padding.top + 52;
     final switchBottom =
-        _homeTabBarBottomInset(context) + _kHomeTabBarHeight + 14;
+        homeTabBarBottomInset(context) + kHomeTabBarHeight + 14;
 
     return PopScope(
       canPop: false,

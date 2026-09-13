@@ -30,6 +30,7 @@ import '../core/app_navigator.dart';
 import '../core/bootstrap_cartelera.dart';
 import '../core/busqueda_natural.dart';
 import '../core/constants.dart';
+import '../core/layout_navbar.dart';
 import '../core/servicio_resena_post_visita.dart';
 import '../core/jerarquias_data.dart';
 import '../core/secciones_impresion.dart';
@@ -68,6 +69,7 @@ import '../widgets/top_ultra_stories_overlay.dart';
 import '../widgets/mapa_ui.dart';
 import 'pantalla_actividad.dart';
 import 'pantalla_fernecito_match.dart';
+import 'pantalla_hot_se_sale.dart';
 import 'pantalla_local_perfil.dart';
 import 'pantalla_mapa.dart';
 import 'pantalla_mi_perfil.dart';
@@ -115,35 +117,6 @@ String? _claveIdLocal(dynamic raw) {
 // ============================================================================
 // PantallaHome (tabs)
 // ============================================================================
-
-/// Altura de la navbar inferior (sin safe area del home indicator).
-const double kHomeTabBarHeight = 66.0;
-
-/// Inset inferior del navbar: en iPhone no usar todo el safe area (queda mucho vacío).
-double homeTabBarBottomInset(BuildContext context) {
-  final safe = MediaQuery.paddingOf(context).bottom;
-  if (safe <= 10) return safe;
-  return (safe * 0.35).clamp(10.0, 14.0);
-}
-
-/// Espacio entre el pill flotante y el borde superior de la navbar.
-const double kHomeFabGapSobreNav = 14.0;
-
-/// Ancho del pill vertical (mapa + QR).
-const double kHomeFabPillWidth = 52.0;
-
-/// Alto del pill: dos zonas táctiles compactas.
-const double kHomeFabPillHeight = 92.0;
-
-double homeFabBottomOffset(BuildContext context) {
-  return kHomeTabBarHeight +
-      homeTabBarBottomInset(context) +
-      kHomeFabGapSobreNav;
-}
-
-double homeCarteleraScrollBottomPadding(BuildContext context) {
-  return homeFabBottomOffset(context) + kHomeFabPillHeight + 12;
-}
 
 class PantallaHome extends StatefulWidget {
   const PantallaHome({super.key});
@@ -2517,6 +2490,21 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
     }
   }
 
+  Future<void> _abrirHotSeSale() async {
+    if (_pedirLoginInvitado(
+      titulo: 'Hot Se Sale',
+      mensaje:
+          'Entrá para ver las promos flash, obtener tu cupón QR y no perderte '
+          'los 2x1 que se acaban.',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.of(context, rootNavigator: true).push(
+      CupertinoPageRoute(builder: (_) => const PantallaHotSeSale()),
+    );
+  }
+
   Future<void> _abrirMatchDesdeCartelera() async {
     if (_pedirLoginInvitado(
       titulo: 'Fernecito Match te está esperando',
@@ -2836,6 +2824,15 @@ class _PantallaCarteleraState extends State<_PantallaCartelera> {
             children: [
               if (tieneTopUltra && !widget.modoInvitado)
                 TopUltraBadgeCartelera(onTap: _abrirTopUltraStories),
+              if (!widget.modoInvitado) ...[
+                if (tieneTopUltra) const SizedBox(width: 8),
+                AtajoCarteleraBadge(
+                  label: 'Hot',
+                  icono: CupertinoIcons.flame_fill,
+                  onTap: _abrirHotSeSale,
+                  delayInicial: const Duration(milliseconds: 400),
+                ),
+              ],
               const Spacer(),
               AtajoCarteleraBadge(
                 label: 'Matchs',

@@ -9,15 +9,16 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show FunctionException;
 
 import '../core/compartir_evento.dart' show origenCompartirDesdeContexto;
 import '../core/compartir_plan.dart';
 import '../core/constants.dart';
 import '../core/flujo_reporte.dart';
 import '../core/lanzador_externo.dart';
+import '../core/promos_hot.dart';
 import '../core/servicio_actividad_usuario.dart';
 import '../core/servicio_planes.dart';
+import '../core/servicio_reservar_promocion.dart';
 import '../core/supabase_client.dart';
 import '../widgets/avatar_local.dart';
 import '../widgets/boton_compartir_evento.dart';
@@ -29,13 +30,7 @@ import 'pantalla_pools.dart';
 import 'pantalla_ver_plan.dart';
 
 /// Estados de `tokens_promociones` que tratamos como “tenés la promo” en listados.
-const _kEstadosTokenPromoUsuario = <String>[
-  'activo',
-  'canjeado',
-  'pendiente',
-  'reservada',
-  'reservado',
-];
+const _kEstadosTokenPromoUsuario = kEstadosTokenPromoUsuario;
 
 /// Snapshot de token de promo por `id_promocion` (precarga desde Mi Actividad).
 class SnapshotTokenPromo {
@@ -76,21 +71,10 @@ String _formatearFechaPromoActividad(String? iso) {
 
 /// Lista aceptada o pase ya canjeado → el usuario puede reservar / ver QR de promos.
 bool listaPermitePromosUsuario(String? estadoToken) {
-  final e = estadoToken?.trim().toLowerCase() ?? '';
-  return e == 'aceptada' || e == 'canjeada';
+  return listaPermiteObtenerPromos(estadoToken);
 }
 
-bool _promoVigente(Map<String, dynamic> promo) {
-  final finRaw = promo['fecha_fin']?.toString();
-  if (finRaw == null || finRaw.isEmpty) return true;
-  try {
-    final fin = DateTime.parse(finRaw).toUtc();
-    return DateTime.now().toUtc().millisecondsSinceEpoch <=
-        fin.millisecondsSinceEpoch;
-  } catch (_) {
-    return true;
-  }
-}
+bool _promoVigente(Map<String, dynamic> promo) => promoVigente(promo);
 
 class PantallaActividad extends StatefulWidget {
   /// Incrementado desde [PantallaHome] al seleccionar el tab Actividad (IndexedStack).
@@ -1718,10 +1702,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
 
       final res = await sb
           .from('promociones')
-          .select(
-            'id_promocion, id_evento, id_local, titulo_promocion, descripcion_promocion, '
-            'fecha_inicio, fecha_fin, cupos_totales, cupos_usados, modo_uso, estado_promocion',
-          )
+          .select('*')
           .eq('id_evento', widget.idEvento);
       final lista = List<Map<String, dynamic>>.from(res as List);
       final activas = lista
@@ -1777,86 +1758,8 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
     }
   }
 
-  String _mensajeEdgePromo(dynamic details) {
-    if (details is Map) {
-      final m = Map<String, dynamic>.from(details);
-      return m['error']?.toString() ??
-          m['message']?.toString() ??
-          'No se pudo obtener la promo';
-    }
-    if (details is String && details.isNotEmpty) return details;
-    return 'No se pudo obtener la promo';
-  }
-
-  bool _errorPromoDuplicada(Object? details) {
-    final String s;
-    if (details == null) {
-      s = '';
-    } else if (details is String) {
-      s = details.toLowerCase();
-    } else if (details is Map) {
-      s = _mensajeEdgePromo(details).toLowerCase();
-    } else {
-      s = details.toString().toLowerCase();
-    }
-    return s.contains('ya ') ||
-        s.contains('duplicate') ||
-        s.contains('409') ||
-        s.contains('activa') ||
-        s.contains('reservad');
-  }
-
   String _mensajePromoAmigable(Object? details, int? httpStatus) {
-    final combined = [
-      if (details != null) details.toString(),
-      if (httpStatus != null) '$httpStatus',
-    ].join(' ').toLowerCase();
-
-    if (combined.contains('socket') ||
-        combined.contains('network') ||
-        combined.contains('connection refused') ||
-        combined.contains('timeout') ||
-        combined.contains('failed host lookup') ||
-        combined.contains('handshake')) {
-      return 'Sin conexión o el servidor tardó demasiado. Revisá tu internet e intentá de nuevo.';
-    }
-
-    final msg = _mensajeEdgePromo(details).toLowerCase();
-    if (msg.contains('expir') ||
-        msg.contains('venc') ||
-        msg.contains('promo_expired') ||
-        msg.contains('finaliz')) {
-      return 'Esta promo ya no está disponible: la fecha de fin venció.';
-    }
-    if (msg.contains('promo_not_started') || msg.contains('aún no')) {
-      return 'Esta promo todavía no está disponible.';
-    }
-    if (msg.contains('attendance') ||
-        msg.contains('asistencia') ||
-        msg.contains('lista')) {
-      return 'Necesitás tener la lista aceptada en el local para obtener esta promo.';
-    }
-    if (msg.contains('cupo') ||
-        msg.contains('agot') ||
-        msg.contains('sin cupo')) {
-      return 'No quedan cupos para esta promo.';
-    }
-    if (msg.contains('403') ||
-        combined.contains('403') ||
-        msg.contains('no autorizado')) {
-      return 'No podés obtener esta promo con tu cuenta actual.';
-    }
-    if (httpStatus == 429 || combined.contains('429')) {
-      return 'Demasiados intentos. Esperá un momento y probá de nuevo.';
-    }
-
-    final readable = details is String
-        ? details.replaceAll('Exception: ', '')
-        : _mensajeEdgePromo(details);
-    if (readable.isNotEmpty && readable != 'No se pudo obtener la promo') {
-      return readable;
-    }
-    return 'No pudimos obtener la promo. Intentá de nuevo en unos momentos.';
+    return mensajePromoAmigable(details, httpStatus);
   }
 
   Future<void> _dialogoPromo(String titulo, String mensaje) async {
@@ -1880,43 +1783,6 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
     );
   }
 
-  /// Hace SELECT del token recién creado, con hasta 3 reintentos (180ms, 400ms, 800ms).
-  /// La edge inserta con service_role, pero el cliente lee con su JWT — a veces hay
-  /// pequeño lag de replicación o caché. Reintentos garantizan visibilidad.
-  Future<Map<String, dynamic>?> _fetchTokenPromoConRetry(String idPromo) async {
-    final sb = ServicioSupabase().cliente;
-    final userId = sb.auth.currentUser?.id;
-    if (userId == null) return null;
-    const delays = [
-      Duration(milliseconds: 180),
-      Duration(milliseconds: 400),
-      Duration(milliseconds: 800),
-    ];
-    for (var intento = 0; intento < delays.length; intento++) {
-      try {
-        final res = await sb
-            .from('tokens_promociones')
-            .select('id_promocion, token_codigo, estado_token')
-            .eq('id_usuario', userId)
-            .eq('id_promocion', idPromo)
-            .inFilter('estado_token', _kEstadosTokenPromoUsuario)
-            .order('fecha_creacion', ascending: false)
-            .limit(1);
-        final lista = List<Map<String, dynamic>>.from(res as List);
-        debugPrint(
-          '[Actividad Promos] fetch token intento ${intento + 1}: ${lista.length} rows',
-        );
-        if (lista.isNotEmpty) return lista.first;
-      } catch (e) {
-        debugPrint(
-          '[Actividad Promos] fetch token error intento ${intento + 1}: $e',
-        );
-      }
-      if (intento < delays.length - 1) await Future.delayed(delays[intento]);
-    }
-    return null;
-  }
-
   Future<void> _obtenerPromo(Map<String, dynamic> promo) async {
     final idPromo = promo['id_promocion']?.toString() ?? '';
     if (idPromo.isEmpty) return;
@@ -1926,109 +1792,61 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
     _timersObtenerPromo[idPromo]?.cancel();
     _timersObtenerPromo.remove(idPromo);
 
-    final sb = ServicioSupabase().cliente;
     setState(() {
       _faseObtenerPromo[idPromo] = _FaseBotonObtenerPromo.cargando;
     });
 
-    // ── FASE 1: invocar edge ──
-    try {
-      final edgeResponse = await sb.functions.invoke(
-        'reservar_promocion',
-        body: {'id_promocion': idPromo},
-      );
-      debugPrint(
-        '[Actividad Promos] reservar_promocion status=${edgeResponse.status}'
-        ' data=${edgeResponse.data}',
-      );
-    } on FunctionException catch (fe) {
-      debugPrint(
-        '[Actividad Promos] FunctionException status=${fe.status} details=${fe.details}',
-      );
-      if (!mounted) return;
-      // Si es "duplicate" y ya teníamos token, simplemente ocultamos el botón
-      final dup = _errorPromoDuplicada(fe.details);
-      if (dup) {
-        // Recargar tokens para reflejar el estado real
-        final token = await _fetchTokenPromoConRetry(idPromo);
-        if (!mounted) return;
-        if (token != null) {
-          setState(() {
-            _misTokens[idPromo] = token['token_codigo']?.toString() ?? '';
-            _estadoTokenPromo[idPromo] =
-                token['estado_token']?.toString().toLowerCase() ?? 'activo';
-            _faseObtenerPromo.remove(idPromo);
-            _qrExpandido.add(idPromo);
-          });
-          HapticFeedback.lightImpact();
-          unawaited(widget.onReloadActividadDesdePromos?.call());
-          return;
-        }
-      }
-      setState(() => _faseObtenerPromo.remove(idPromo));
-      await _dialogoPromo(
-        'No se pudo obtener la promo',
-        _mensajePromoAmigable(fe.details, fe.status),
-      );
-      return;
-    } catch (e, st) {
-      debugPrint('[Actividad Promos] _obtenerPromo invoke error: $e\n$st');
-      if (!mounted) return;
-      setState(() => _faseObtenerPromo.remove(idPromo));
-      await _dialogoPromo(
-        'No se pudo obtener la promo',
-        _mensajePromoAmigable(e, null),
-      );
-      return;
-    }
-
-    // ── FASE 2: edge devolvió 200 — leer el token recién creado ──
-    HapticFeedback.mediumImpact();
-    final token = await _fetchTokenPromoConRetry(idPromo);
-
+    final r = await ServicioReservarPromocion.instancia.reservar(
+      idPromocion: idPromo,
+      idEvento: widget.idEvento,
+    );
     if (!mounted) return;
 
-    if (token != null) {
-      // ÉXITO TOTAL: cambiar a "Mostrar QR" + auto-expandir + actualizar contador cupos
-      setState(() {
-        _misTokens[idPromo] = token['token_codigo']?.toString() ?? '';
-        _estadoTokenPromo[idPromo] =
-            token['estado_token']?.toString().toLowerCase() ?? 'activo';
-        _qrExpandido.add(idPromo);
-        _faseObtenerPromo.remove(idPromo);
-        // Bump local de cupos_usados para reflejar inmediatamente el cambio
-        final idx = _promos.indexWhere(
-          (p) => p['id_promocion']?.toString() == idPromo,
-        );
-        if (idx != -1) {
-          final actual = _promos[idx];
-          final usados = (actual['cupos_usados'] as int?) ?? 0;
-          _promos[idx] = {...actual, 'cupos_usados': usados + 1};
-        }
+    if (r.ok) {
+      HapticFeedback.mediumImpact();
+      if ((r.codigo ?? '').isNotEmpty) {
+        setState(() {
+          _misTokens[idPromo] = r.codigo!;
+          _estadoTokenPromo[idPromo] = r.estadoToken ?? 'activo';
+          _qrExpandido.add(idPromo);
+          _faseObtenerPromo.remove(idPromo);
+          if (!r.yaTenia) {
+            final idx = _promos.indexWhere(
+              (p) => p['id_promocion']?.toString() == idPromo,
+            );
+            if (idx != -1) {
+              final actual = _promos[idx];
+              final usados = (actual['cupos_usados'] as int?) ?? 0;
+              _promos[idx] = {...actual, 'cupos_usados': usados + 1};
+            }
+          }
+        });
+        unawaited(widget.onReloadActividadDesdePromos?.call());
+        return;
+      }
+      setState(
+        () => _faseObtenerPromo[idPromo] = _FaseBotonObtenerPromo.exitoCheck,
+      );
+      _timersObtenerPromo[idPromo] = Timer(const Duration(seconds: 2), () async {
+        await widget.onReloadActividadDesdePromos?.call();
+        if (!mounted) return;
+        await _cargarPromos();
+        if (!mounted) return;
+        setState(() {
+          _faseObtenerPromo.remove(idPromo);
+          if (_misTokens[idPromo]?.isNotEmpty == true) {
+            _qrExpandido.add(idPromo);
+          }
+        });
       });
-      // Best-effort: refrescar padre (no bloquea ni rompe nada)
-      unawaited(widget.onReloadActividadDesdePromos?.call());
       return;
     }
 
-    // ── Caso raro: edge OK pero no podemos leer el token (lag/RLS) ──
-    // Mostramos estado "obtenida" 2s y luego forzamos reload completo.
-    setState(
-      () => _faseObtenerPromo[idPromo] = _FaseBotonObtenerPromo.exitoCheck,
+    setState(() => _faseObtenerPromo.remove(idPromo));
+    await _dialogoPromo(
+      r.errorTitulo ?? 'No se pudo obtener la promo',
+      r.errorMensaje ?? _mensajePromoAmigable(null, null),
     );
-    _timersObtenerPromo[idPromo] = Timer(const Duration(seconds: 2), () async {
-      await widget.onReloadActividadDesdePromos?.call();
-      if (!mounted) return;
-      await _cargarPromos();
-      if (!mounted) return;
-      setState(() {
-        _faseObtenerPromo.remove(idPromo);
-        // Si vino el token tras reload, auto-expandir
-        if (_misTokens[idPromo]?.isNotEmpty == true) {
-          _qrExpandido.add(idPromo);
-        }
-      });
-    });
   }
 
   @override
@@ -2109,42 +1927,53 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
               if (!_cargando && _errorMsg == null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: widget.puedeObtenerPromos
-                          ? const Color(0xFF34C759).withOpacity(0.12)
-                          : ColoresApp.promoMarca.withOpacity(0.14),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          widget.puedeObtenerPromos
-                              ? CupertinoIcons.checkmark_seal_fill
-                              : CupertinoIcons.clock_fill,
-                          size: 18,
-                          color: widget.puedeObtenerPromos
-                              ? const Color(0xFF34C759)
-                              : ColoresApp.promoMarca,
+                  child: Builder(
+                    builder: (context) {
+                      final hayHotSinLista = _promos.any(
+                        (p) => !requiereAsistenciaPromo(p),
+                      );
+                      final ok =
+                          widget.puedeObtenerPromos || hayHotSinLista;
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: ok
+                              ? const Color(0xFF34C759).withOpacity(0.12)
+                              : ColoresApp.promoMarca.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            widget.puedeObtenerPromos
-                                ? 'Tu lista está confirmada. Podés obtener cada promo hasta su fecha de fin.'
-                                : 'Tu lista está pendiente. Cuando el local la acepte vas a poder obtener tus promos.',
-                            style: GoogleFonts.baloo2(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: ColoresApp.textoPrincipal,
-                              height: 1.35,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              ok
+                                  ? CupertinoIcons.checkmark_seal_fill
+                                  : CupertinoIcons.clock_fill,
+                              size: 18,
+                              color: ok
+                                  ? const Color(0xFF34C759)
+                                  : ColoresApp.promoMarca,
                             ),
-                          ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                widget.puedeObtenerPromos
+                                    ? 'Tu lista está confirmada. Podés obtener cada promo hasta su fecha de fin.'
+                                    : hayHotSinLista
+                                    ? 'Hot Se Sale no pide lista: podés obtener el cupón QR directo.'
+                                    : 'Tu lista está pendiente. Cuando el local la acepte vas a poder obtener tus promos.',
+                                style: GoogleFonts.baloo2(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: ColoresApp.textoPrincipal,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                 ),
               // Contenido
@@ -2279,6 +2108,12 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                               ? cupoTotal - cupoUsados
                               : null;
                           final promoVigente = _promoVigente(p);
+                          final puedeEsta = puedeObtenerEstaPromo(
+                            promo: p,
+                            estadoLista: widget.puedeObtenerPromos
+                                ? 'aceptada'
+                                : null,
+                          );
 
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 14),
@@ -2468,7 +2303,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                                           ),
                                         ],
                                         const SizedBox(height: 14),
-                                        if (!widget.puedeObtenerPromos)
+                                        if (!puedeEsta)
                                           Container(
                                             width: double.infinity,
                                             padding: const EdgeInsets.symmetric(
@@ -2729,9 +2564,7 @@ class BottomSheetPromosState extends State<BottomSheetPromos> {
                                       ],
                                     ),
                                   ),
-                                  if (widget.puedeObtenerPromos &&
-                                      yaGuardada &&
-                                      qrVisible)
+                                  if (puedeEsta && yaGuardada && qrVisible)
                                     Padding(
                                       padding: const EdgeInsets.fromLTRB(
                                         16,
